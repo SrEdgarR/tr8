@@ -9,6 +9,7 @@ import TasksView from './TasksView';
 import Workspace from './Workspace';
 
 const project: Project = {
+  workspace_id: 'workspace-a',
   id: '6cefdb36-f3ea-4bf2-9897-c99ac817c875',
   owner_id: 'personal-owner',
   code: 'P-6CEFDB36F3EA',
@@ -22,6 +23,7 @@ const project: Project = {
   updated_at: '2026-10-22T12:00:00Z',
 };
 const task: Task = {
+  workspace_id: 'workspace-a',
   id: 'd4bf169b-6d3b-4a27-a14b-ed6fead520af',
   owner_id: project.owner_id,
   project_id: project.id,
@@ -69,6 +71,82 @@ function workspaceProps(overrides: Partial<WorkspaceProps> = {}): WorkspaceProps
     ...overrides,
   };
 }
+
+describe('espacios y equipos', () => {
+  const personal = { id: 'workspace-a', kind: 'personal' as const, name: 'Personal', owner_id: 'personal-owner', version: 1, permissions: [] };
+  const team = { id: 'team-a', kind: 'team' as const, name: 'Equipo editorial', owner_id: 'personal-owner', version: 1, permissions: [] };
+
+  it('permite elegir un equipo sin mezclar los proyectos cargados', async () => {
+    const onSelectWorkspace = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Workspace {...workspaceProps({ workspace: personal, workspaces: [personal, team], onSelectWorkspace })} />
+      </MemoryRouter>,
+    );
+    await user.selectOptions(screen.getByLabelText('Espacio de trabajo'), 'team-a');
+    expect(onSelectWorkspace).toHaveBeenCalledWith('team-a');
+    expect(screen.getByLabelText('Espacio de trabajo')).toHaveValue('workspace-a');
+  });
+
+  it('muestra miembros sin exponer correos y mantiene las invitaciones externas desactivadas', () => {
+    render(
+      <MemoryRouter initialEntries={['/team?workspace=team-a']}>
+        <Workspace
+          {...workspaceProps({
+            workspace: team,
+            workspaces: [personal, team],
+            projects: [],
+            tasks: [],
+            members: [{ id: 'member-a', user_id: 'personal-owner', display_name: 'Edgar', status: 'active', version: 1, is_owner: true, roles: [] }],
+          })}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Edgar')).toBeInTheDocument();
+    expect(screen.getByText('Propietario')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Invitar miembro' })).toBeDisabled();
+    expect(screen.getByText(/remitente verificado/)).toBeInTheDocument();
+    expect(screen.queryByText('owner@example.com')).not.toBeInTheDocument();
+  });
+
+  it('conserva el nombre e identificador de un equipo al reintentar y espera confirmación real', async () => {
+    const user = userEvent.setup();
+    const result = deferred<typeof team>();
+    const onCreateTeam = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Sin conexión'))
+      .mockImplementationOnce(() => result.promise);
+    render(
+      <MemoryRouter>
+        <Workspace {...workspaceProps({ workspace: personal, workspaces: [personal], onCreateTeam })} />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Crear equipo' }));
+    await user.type(screen.getByLabelText('Nombre del equipo'), 'Editorial');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Crear equipo' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sin conexión');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Crear equipo' }));
+    expect(onCreateTeam.mock.calls[1]).toEqual(onCreateTeam.mock.calls[0]);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await act(async () => result.resolve(team));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('permite consultar una tarea de solo lectura sin editarla o borrarla', async () => {
+    const props = workspaceProps({ readOnly: true });
+    render(
+      <MemoryRouter initialEntries={[`/projects/${project.id}?task=${task.id}`]}>
+        <Workspace {...props} />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByLabelText('Título')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Eliminar' })).toBeDisabled();
+    expect(props.onUpdateTask).not.toHaveBeenCalled();
+  });
+});
 
 describe('formularios con guardado remoto', () => {
   it('conserva el proyecto y reintenta con el mismo requestId; solo confirma al resolver el guardado', async () => {

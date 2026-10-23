@@ -1,5 +1,7 @@
 # Personal application database
 
+> Historical record of the personal deliverable. Stage 1 supersedes the table names, authorization rules, signup flow and RPCs below. See [the current workspace contract and verification](stage-1/README.md). Applied migrations remain immutable; do not run historical fixture suites against the new schema or production.
+
 ## TR8 migration
 
 Apply the historical initial migration first, then

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import {
   Archive,
   ArrowRight,
@@ -17,6 +17,7 @@ import {
   Search,
   ShieldCheck,
   UserRound,
+  Users,
   X,
 } from 'lucide-react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -29,14 +30,14 @@ import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon, StatusDot } from '.
 import { errorMessage, localDate } from './helpers';
 import './workspace.css';
 
-type ProjectActions = { onEdit: (project: Project) => void; onArchive: (project: Project) => void; pending: boolean };
+type ProjectActions = { onEdit: (project: Project) => void; onArchive: (project: Project) => void; pending: boolean; readOnly?: boolean; scopeSearch?: string };
 
-function ProjectCard({ project, tasks, pending, onEdit, onArchive }: ProjectActions & { project: Project; tasks: Task[] }) {
+function ProjectCard({ project, tasks, pending, readOnly, scopeSearch = '', onEdit, onArchive }: ProjectActions & { project: Project; tasks: Task[] }) {
   const complete = tasks.filter(task => task.status === 'done').length;
   const progress = tasks.length ? Math.round((complete / tasks.length) * 100) : 0;
   return (
     <article className="pcard pw-project-card">
-      <Link to={`/projects/${project.id}`} className="pw-project-main">
+      <Link to={`/projects/${project.id}${scopeSearch}`} className="pw-project-main">
         <div className="row">
           <ProjectIcon color={project.color} />
           <h2>{project.name}</h2>
@@ -60,13 +61,13 @@ function ProjectCard({ project, tasks, pending, onEdit, onArchive }: ProjectActi
           {complete}/{tasks.length} tareas
         </span>
         <div className="sp" />
-        <button className="ibtn ibtn-xs" aria-label={`Editar ${project.name}`} disabled={pending} onClick={() => onEdit(project)}>
+        <button className="ibtn ibtn-xs" aria-label={`Editar ${project.name}`} disabled={pending || readOnly} onClick={() => onEdit(project)}>
           <Pencil size={13} aria-hidden="true" />
         </button>
         <button
           className="ibtn ibtn-xs"
           aria-label={`${project.archived_at ? 'Restaurar' : 'Archivar'} ${project.name}`}
-          disabled={pending}
+          disabled={pending || readOnly}
           onClick={() => onArchive(project)}
         >
           {project.archived_at ? <RefreshCw size={13} aria-hidden="true" /> : <Archive size={13} aria-hidden="true" />}
@@ -99,16 +100,16 @@ function HomePage({
     <div className="page pw-home">
       <div className="ph">
         <div>
-          <div className="eyebrow">Tu espacio personal</div>
+          <div className="eyebrow">Tu espacio de trabajo</div>
           <h1>Todo en su lugar.</h1>
           <p>Una vista clara de tus proyectos y de lo que sigue.</p>
         </div>
         <div className="acts">
-          <button className="btn btn-secondary" disabled={actions.pending} onClick={onNewProject}>
+          <button className="btn btn-secondary" disabled={actions.pending || actions.readOnly} onClick={onNewProject}>
             <Plus size={14} aria-hidden="true" />
             Nuevo proyecto
           </button>
-          <button className="btn btn-primary" disabled={actions.pending || !activeProjects.length} onClick={onNewTask}>
+          <button className="btn btn-primary" disabled={actions.pending || actions.readOnly || !activeProjects.length} onClick={onNewTask}>
             <Plus size={14} aria-hidden="true" />
             Nueva tarea
           </button>
@@ -123,7 +124,7 @@ function HomePage({
       <section className="pw-home-section">
         <div className="pw-section-head">
           <h2 className="sec">Tus proyectos</h2>
-          <Link to="/projects" className="pw-text-link">
+          <Link to={`/projects${actions.scopeSearch ?? ''}`} className="pw-text-link">
             Ver todos
             <ArrowRight size={13} aria-hidden="true" />
           </Link>
@@ -138,7 +139,7 @@ function HomePage({
           <EmptyState
             title="Dale espacio a tu primer proyecto"
             action={
-              <button className="btn btn-primary" disabled={actions.pending} onClick={onNewProject}>
+              <button className="btn btn-primary" disabled={actions.pending || actions.readOnly} onClick={onNewProject}>
                 <Plus size={14} aria-hidden="true" />
                 Crear proyecto
               </button>
@@ -151,7 +152,7 @@ function HomePage({
       <section className="pw-home-section">
         <div className="pw-section-head">
           <h2 className="sec">Próximos vencimientos</h2>
-          <Link to="/tasks" className="pw-text-link">
+          <Link to={`/tasks${actions.scopeSearch ?? ''}`} className="pw-text-link">
             Ver tareas
             <ArrowRight size={13} aria-hidden="true" />
           </Link>
@@ -209,7 +210,7 @@ function ProjectsPage({ projects, tasks, onNew, ...actions }: ProjectActions & {
           <p>Un lugar para cada idea y cada objetivo.</p>
         </div>
         <div className="acts">
-          <button className="btn btn-primary" disabled={actions.pending} onClick={onNew}>
+          <button className="btn btn-primary" disabled={actions.pending || actions.readOnly} onClick={onNew}>
             <Plus size={14} aria-hidden="true" />
             Nuevo proyecto
           </button>
@@ -246,7 +247,7 @@ function ProjectsPage({ projects, tasks, onNew, ...actions }: ProjectActions & {
               </button>
             ) : (
               !archived && (
-                <button className="btn btn-primary" disabled={actions.pending} onClick={onNew}>
+                <button className="btn btn-primary" disabled={actions.pending || actions.readOnly} onClick={onNew}>
                   Crear proyecto
                 </button>
               )
@@ -286,7 +287,7 @@ function ProjectPage({
         <EmptyState
           title="Proyecto no encontrado"
           action={
-            <Link to="/projects" className="btn btn-primary">
+            <Link to={`/projects${actions.scopeSearch ?? ''}`} className="btn btn-primary">
               Ver mis proyectos
             </Link>
           }
@@ -305,16 +306,16 @@ function ProjectPage({
             <h1>{project.name}</h1>
             <p className="pw-project-description">{project.description || 'Organiza las tareas de este proyecto.'}</p>
           </div>
-          <button className="btn btn-secondary" disabled={actions.pending} onClick={() => actions.onEdit(project)}>
+          <button className="btn btn-secondary" disabled={actions.pending || actions.readOnly} onClick={() => actions.onEdit(project)}>
             <Pencil size={13} aria-hidden="true" />
             Editar
           </button>
-          <button className="btn btn-ghost" disabled={actions.pending} onClick={() => actions.onArchive(project)}>
+          <button className="btn btn-ghost" disabled={actions.pending || actions.readOnly} onClick={() => actions.onArchive(project)}>
             <Archive size={14} aria-hidden="true" />
             {project.archived_at ? 'Restaurar' : 'Archivar'}
           </button>
           {!project.archived_at && (
-            <button className="btn btn-primary" disabled={actions.pending} onClick={() => onNewTask(project)}>
+            <button className="btn btn-primary" disabled={actions.pending || actions.readOnly} onClick={() => onNewTask(project)}>
               <Plus size={14} aria-hidden="true" />
               Nueva tarea
             </button>
@@ -338,12 +339,133 @@ function ProjectPage({
         tasks={projectTasks}
         projects={projects}
         pending={actions.pending}
-        readOnly={Boolean(project.archived_at)}
+        readOnly={Boolean(project.archived_at) || actions.readOnly}
         onCreate={status => onNewTask(project, status)}
         onOpen={onOpen}
         onMove={onMove}
       />
     </div>
+  );
+}
+
+function TeamPage({ workspace, members = [], invitations = [], directoryLoading, directoryError }: WorkspaceProps) {
+  if (workspace?.kind !== 'team')
+    return (
+      <div className="page">
+        <EmptyState title="Este es tu espacio personal">Crea un equipo desde el selector de espacios para organizar trabajo compartido.</EmptyState>
+      </div>
+    );
+  return (
+    <div className="page pw-team-page">
+      <div className="ph">
+        <div>
+          <div className="eyebrow">Equipo</div>
+          <h1>{workspace.name}</h1>
+          <p>Los proyectos son privados y requieren acceso explícito. El propietario puede consultar todos los proyectos de su equipo.</p>
+        </div>
+      </div>
+      <section className="pw-account-card" aria-labelledby="team-members-title">
+        <h2 id="team-members-title">Miembros</h2>
+        {directoryError ? (
+          <ErrorNotice>{directoryError}</ErrorNotice>
+        ) : directoryLoading ? (
+          <Busy />
+        ) : (
+          <ul className="pw-member-list">
+            {members.map(member => (
+              <li key={member.id}>
+                <span className="pw-avatar small">{member.display_name.charAt(0).toUpperCase()}</span>
+                <span className="grow">
+                  <strong>{member.display_name}</strong>
+                  <small>{member.is_owner ? 'Propietario' : member.roles.map(role => role.name).join(', ') || 'Miembro'}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {!directoryError && !directoryLoading && !members.length && <p className="faint">No hay miembros disponibles para mostrar.</p>}
+      </section>
+      <section className="pw-account-card" aria-labelledby="team-invitations-title">
+        <div className="row">
+          <h2 id="team-invitations-title" className="grow">
+            Invitaciones
+          </h2>
+          <button className="btn btn-secondary" disabled aria-describedby="team-invitation-help">
+            <Plus size={14} aria-hidden="true" />
+            Invitar miembro
+          </button>
+        </div>
+        <p id="team-invitation-help" className="pw-info">
+          Las altas externas están desactivadas hasta conectar un proveedor de correo con remitente verificado. Puedes preparar tu equipo y sus proyectos.
+        </p>
+        {invitations.length > 0 && (
+          <ul className="pw-member-list">
+            {invitations.map(invitation => (
+              <li key={invitation.id}>
+                <span className="grow">{invitation.email}</span>
+                <span className="faint">{invitation.status}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <p className="faint">La edición de roles y permisos de proyectos se incorporará en la siguiente etapa.</p>
+    </div>
+  );
+}
+
+function CreateTeamDialog({ onCreate, onClose }: { onCreate: NonNullable<WorkspaceProps['onCreateTeam']>; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [requestId] = useState(() => crypto.randomUUID());
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const locked = useRef(false);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (locked.current || !name.trim()) return;
+    locked.current = true;
+    setPending(true);
+    setError(null);
+    try {
+      await onCreate(name.trim(), requestId);
+      onClose();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      locked.current = false;
+      setPending(false);
+    }
+  }
+  return (
+    <Dialog title="Crear equipo" busy={pending} onClose={onClose}>
+      <form className="pw-form" onSubmit={event => void submit(event)}>
+        <div className="pw-form-body">
+          {error && <ErrorNotice>{error}</ErrorNotice>}
+          <label className="pw-field" htmlFor="team-name">
+            Nombre del equipo
+            <input
+              id="team-name"
+              data-initial-focus
+              required
+              maxLength={120}
+              disabled={pending}
+              value={name}
+              onChange={event => setName(event.target.value)}
+              placeholder="Por ejemplo, Horizon Studios"
+            />
+          </label>
+          <p className="faint">Tu espacio personal seguirá siendo privado. Los proyectos del equipo estarán separados de tus proyectos personales.</p>
+        </div>
+        <div className="pw-form-footer">
+          <button type="button" className="btn btn-secondary" disabled={pending} onClick={onClose}>
+            Cancelar
+          </button>
+          <button className="btn btn-primary" disabled={pending || !name.trim()}>
+            {pending ? 'Creando…' : 'Crear equipo'}
+          </button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 
@@ -388,7 +510,7 @@ function AccountPage({ email, pending, onSignOut, onPasswordReset }: Pick<Worksp
         </div>
         <div className="pw-account-detail">
           <ShieldCheck size={17} aria-hidden="true" />
-          <span>Solo tu cuenta puede acceder a tus proyectos y tareas.</span>
+          <span>Tu espacio personal es privado. Los proyectos de equipo respetan sus permisos de acceso.</span>
         </div>
         {error && <ErrorNotice>{error}</ErrorNotice>}
         {notice && (
@@ -439,11 +561,22 @@ export default function Workspace(props: WorkspaceProps) {
   const [mobileNav, setMobileNav] = useState(false);
   const [projectEditor, setProjectEditor] = useState<{ project?: Project } | null>(null);
   const [newTask, setNewTask] = useState<{ projectId?: string; status?: TaskStatus } | null>(null);
+  const [creatingTeam, setCreatingTeam] = useState(false);
+  useEffect(() => {
+    if (props.accessUnavailable) {
+      setProjectEditor(null);
+      setNewTask(null);
+      setCreatingTeam(false);
+    }
+  }, [props.accessUnavailable]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
   const actionLock = useRef(false);
   const pending = props.pending || actionBusy;
+  const readOnly = props.readOnly ?? false;
+  const workspaceName = props.workspace?.kind === 'personal' ? 'Mi espacio personal' : (props.workspace?.name ?? 'Mi espacio');
+  const scopeSearch = props.workspace ? `?workspace=${props.workspace.id}` : '';
   const activeProjects = props.projects.filter(project => !project.archived_at);
   const activeProjectIds = useMemo(() => new Set(props.projects.filter(project => !project.archived_at).map(project => project.id)), [props.projects]);
   const activeTasks = props.tasks.filter(task => activeProjectIds.has(task.project_id));
@@ -458,7 +591,9 @@ export default function Workspace(props: WorkspaceProps) {
         ? 'Mis tareas'
         : location.pathname === '/account'
           ? 'Mi cuenta'
-          : 'Inicio');
+          : location.pathname === '/team'
+            ? 'Equipo'
+            : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -478,7 +613,7 @@ export default function Workspace(props: WorkspaceProps) {
   }
 
   async function moveTask(task: Task, status: TaskStatus) {
-    if (task.status === status) return;
+    if (readOnly || task.status === status) return;
     await action(() => props.onUpdateTask(task, { status, position: Date.now() }), 'Estado de la tarea guardado.');
   }
 
@@ -499,7 +634,15 @@ export default function Workspace(props: WorkspaceProps) {
   function createTask(project?: Project, status?: TaskStatus) {
     setNewTask({ projectId: project?.id, status });
   }
-  const projectActions: ProjectActions = { pending, onEdit: project => setProjectEditor({ project }), onArchive: archiveProject };
+  const projectActions: ProjectActions = {
+    pending,
+    readOnly,
+    scopeSearch,
+    onEdit: project => {
+      if (!readOnly) setProjectEditor({ project });
+    },
+    onArchive: archiveProject,
+  };
   const openNewProject = () => setProjectEditor({});
   const openNewTask = () => createTask(currentProject);
   const navClass = ({ isActive }: { isActive: boolean }) => `sitem${isActive ? ' on' : ''}`;
@@ -517,43 +660,68 @@ export default function Workspace(props: WorkspaceProps) {
       {mobileNav && <button className="side-scrim" aria-label="Cerrar navegación" onClick={() => setMobileNav(false)} />}
       <aside className="side" aria-label="Navegación principal">
         <div className="side-top">
-          <Link to="/" className="ws" aria-label="Inicio de TR8" onClick={() => setMobileNav(false)}>
+          <Link to={`/${scopeSearch}`} className="ws" aria-label="Inicio de TR8" onClick={() => setMobileNav(false)}>
             <span className="ws-logo brand">
               <img src="/favicon.svg" width="22" height="22" alt="" />
             </span>
             <span className="ws-name">TR8</span>
-            <span className="pw-personal-label">Personal</span>
+            <span className="pw-personal-label">{props.workspace?.kind === 'team' ? 'Equipo' : 'Personal'}</span>
           </Link>
         </div>
+        {props.workspace && props.workspaces && (
+          <div className="pw-workspace-picker">
+            <label className="sr" htmlFor="workspace-select">
+              Espacio de trabajo
+            </label>
+            <select id="workspace-select" value={props.workspace.id} disabled={pending} onChange={event => props.onSelectWorkspace?.(event.target.value)}>
+              {props.workspaces.map(space => (
+                <option key={space.id} value={space.id}>
+                  {space.kind === 'personal' ? 'Mi espacio personal' : space.name}
+                </option>
+              ))}
+            </select>
+            {props.onCreateTeam && (
+              <button className="ibtn" aria-label="Crear equipo" disabled={pending} onClick={() => setCreatingTeam(true)}>
+                <Plus size={15} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
         <div className="side-scroll">
           <nav onClick={() => setMobileNav(false)}>
             <div className="sgroup">
-              <div className="sgroup-h">Mi espacio</div>
-              <NavLink to="/" end className={navClass}>
+              <div className="sgroup-h">{workspaceName}</div>
+              <NavLink to={`/${scopeSearch}`} end className={navClass}>
                 <Home className="i" size={16} aria-hidden="true" />
                 <span>Inicio</span>
               </NavLink>
-              <NavLink to="/projects" className={navClass}>
+              <NavLink to={`/projects${scopeSearch}`} className={navClass}>
                 <LayoutGrid className="i" size={16} aria-hidden="true" />
                 <span>Proyectos</span>
                 <span className="ct">{activeProjects.length}</span>
               </NavLink>
-              <NavLink to="/tasks" className={navClass}>
+              <NavLink to={`/tasks${scopeSearch}`} className={navClass}>
                 <ListTodo className="i" size={16} aria-hidden="true" />
-                <span>Mis tareas</span>
+                <span>{props.workspace?.kind === 'team' ? 'Tareas del equipo' : 'Mis tareas'}</span>
                 <span className="ct">{activeTasks.filter(task => task.status !== 'done').length}</span>
               </NavLink>
+              {props.workspace?.kind === 'team' && (
+                <NavLink to={`/team${scopeSearch}`} className={navClass}>
+                  <Users className="i" size={16} aria-hidden="true" />
+                  <span>Equipo</span>
+                </NavLink>
+              )}
             </div>
             <div className="sgroup">
               <div className="sgroup-h">
                 <span>Proyectos activos</span>
                 <span className="sp" />
-                <button className="ibtn ibtn-xs" aria-label="Crear proyecto" disabled={pending || props.loading} onClick={openNewProject}>
+                <button className="ibtn ibtn-xs" aria-label="Crear proyecto" disabled={pending || props.loading || readOnly} onClick={openNewProject}>
                   <Plus size={13} aria-hidden="true" />
                 </button>
               </div>
               {activeProjects.slice(0, 10).map(project => (
-                <NavLink key={project.id} to={`/projects/${project.id}`} className={navClass}>
+                <NavLink key={project.id} to={`/projects/${project.id}${scopeSearch}`} className={navClass}>
                   <span className="pico" style={{ '--c': project.color } as CSSProperties}>
                     <FolderClosed size={12} aria-hidden="true" />
                   </span>
@@ -565,7 +733,7 @@ export default function Workspace(props: WorkspaceProps) {
           </nav>
         </div>
         <div className="side-bot">
-          <NavLink to="/account" className={navClass} onClick={() => setMobileNav(false)}>
+          <NavLink to={`/account${scopeSearch}`} className={navClass} onClick={() => setMobileNav(false)}>
             <span className="pw-avatar small">{props.email.charAt(0).toUpperCase()}</span>
             <span className="trunc">{props.email}</span>
             <UserRound size={13} className="faint" aria-hidden="true" />
@@ -583,7 +751,7 @@ export default function Workspace(props: WorkspaceProps) {
             {mobileNav ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
           </button>
           <div className="crumbs">
-            <Link to="/">Mi espacio</Link>
+            <Link to={`/${scopeSearch}`}>{workspaceName}</Link>
             <ChevronRight size={12} className="faint" aria-hidden="true" />
             <span className="cur trunc">{pageName}</span>
           </div>
@@ -596,7 +764,7 @@ export default function Workspace(props: WorkspaceProps) {
             ) : (
               <>
                 <ShieldCheck size={12} aria-hidden="true" />
-                Privado
+                {props.workspace?.kind === 'team' ? 'Acceso por proyecto' : 'Privado'}
               </>
             )}
           </span>
@@ -665,7 +833,7 @@ export default function Workspace(props: WorkspaceProps) {
                         <p>Todas tus tareas, una vista clara.</p>
                       </div>
                       <div className="acts">
-                        <button className="btn btn-primary" disabled={pending || !activeProjects.length} onClick={openNewTask}>
+                        <button className="btn btn-primary" disabled={pending || readOnly || !activeProjects.length} onClick={openNewTask}>
                           <Plus size={14} aria-hidden="true" />
                           Nueva tarea
                         </button>
@@ -676,6 +844,7 @@ export default function Workspace(props: WorkspaceProps) {
                         tasks={activeTasks}
                         projects={props.projects}
                         pending={pending}
+                        readOnly={readOnly}
                         onCreate={status => createTask(undefined, status)}
                         onOpen={openTask}
                         onMove={moveTask}
@@ -684,7 +853,7 @@ export default function Workspace(props: WorkspaceProps) {
                       <EmptyState
                         title="Primero, un proyecto"
                         action={
-                          <button className="btn btn-primary" disabled={pending} onClick={openNewProject}>
+                          <button className="btn btn-primary" disabled={pending || readOnly} onClick={openNewProject}>
                             Crear proyecto
                           </button>
                         }
@@ -695,6 +864,7 @@ export default function Workspace(props: WorkspaceProps) {
                   </div>
                 }
               />
+              <Route path="/team" element={<TeamPage {...props} />} />
               <Route
                 path="/account"
                 element={<AccountPage email={props.email} pending={pending} onSignOut={props.onSignOut} onPasswordReset={props.onPasswordReset} />}
@@ -723,7 +893,7 @@ export default function Workspace(props: WorkspaceProps) {
           {announcement}
         </span>
       </div>
-      {projectEditor && (
+      {projectEditor && !props.accessUnavailable && (
         <ProjectForm
           key={projectEditor.project?.id ?? 'new-project'}
           project={projectEditor.project}
@@ -735,11 +905,11 @@ export default function Workspace(props: WorkspaceProps) {
             const isNew = !projectEditor.project;
             setProjectEditor(null);
             setAnnouncement('Proyecto guardado.');
-            if (isNew) navigate(`/projects/${project.id}`);
+            if (isNew) navigate(`/projects/${project.id}${scopeSearch}`);
           }}
         />
       )}
-      {(newTask || selectedTask) && !props.loading && (
+      {(newTask || selectedTask) && !props.loading && !props.accessUnavailable && (
         <TaskForm
           key={selectedTask?.id ?? 'new-task'}
           task={newTask ? undefined : selectedTask}
@@ -747,13 +917,14 @@ export default function Workspace(props: WorkspaceProps) {
           initialStatus={newTask?.status}
           projects={props.projects}
           pending={pending}
+          readOnly={readOnly}
           onCreate={props.onCreateTask}
           onUpdate={props.onUpdateTask}
           onDelete={props.onDeleteTask}
           onClose={closeTask}
         />
       )}
-      {taskId && !selectedTask && !newTask && !props.loading && !props.error && (
+      {taskId && !selectedTask && !newTask && !props.loading && !props.error && !props.accessUnavailable && (
         <Dialog title="Tarea no encontrada" onClose={closeTask}>
           <div className="pw-form-body">
             <p>Esta tarea no está disponible en tu cuenta o fue eliminada.</p>
@@ -763,6 +934,7 @@ export default function Workspace(props: WorkspaceProps) {
           </div>
         </Dialog>
       )}
+      {creatingTeam && props.onCreateTeam && <CreateTeamDialog onClose={() => setCreatingTeam(false)} onCreate={props.onCreateTeam} />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 export interface AppConfiguration {
   url: string;
   publishableKey: string;
+  /** Optional initial email only; authorization always comes from the server. */
   ownerEmail: string;
 }
 
@@ -8,7 +9,7 @@ export function readConfiguration(values: Record<string, string | undefined>): A
   const url = values.VITE_SUPABASE_URL?.trim() ?? '';
   const publishableKey = values.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? '';
   const ownerEmail = values.VITE_OWNER_EMAIL?.trim().toLowerCase() ?? '';
-  if (!url || !publishableKey || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) return null;
+  if (!url || !publishableKey) return null;
   try {
     const parsed = new URL(url);
     const local = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);

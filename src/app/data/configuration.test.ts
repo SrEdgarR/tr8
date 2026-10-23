@@ -13,13 +13,13 @@ function legacyKey(role: string) {
 }
 
 describe('configuración pública de Supabase', () => {
-  it.each(['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_OWNER_EMAIL'])('impide arrancar con %s ausente o en blanco', variable => {
+  it.each(['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY'])('impide arrancar con %s ausente o en blanco', variable => {
     expect(readConfiguration({ ...valid, [variable]: undefined })).toBeNull();
     expect(readConfiguration({ ...valid, [variable]: '  ' })).toBeNull();
   });
 
-  it.each(['owner', 'owner@example', 'owner@@example.com', 'owner name@example.com'])('rechaza el correo de propietario inválido %s', email => {
-    expect(readConfiguration({ ...valid, VITE_OWNER_EMAIL: email })).toBeNull();
+  it.each([undefined, '', 'owner', 'member@example.com'])('no usa el correo inicial como requisito de autorización (%s)', email => {
+    expect(readConfiguration({ ...valid, VITE_OWNER_EMAIL: email })).not.toBeNull();
   });
 
   it.each([

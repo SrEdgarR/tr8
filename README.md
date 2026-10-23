@@ -1,6 +1,6 @@
-# TR8 · Personal
+# TR8
 
-Aplicación personal de proyectos y tareas con React, TypeScript y Supabase. Conserva los colores, la tipografía, la navegación y los componentes visuales del prototipo original de [Gr8r Studio](https://github.com/gr8rstudio/gr8r-studio).
+Aplicación de proyectos y tareas con espacio personal y equipos, construida con React, TypeScript y Supabase. Conserva los colores, la tipografía, la navegación y los componentes visuales del prototipo original de [Gr8r Studio](https://github.com/gr8rstudio/gr8r-studio).
 
 La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 `tr8.studio` es el dominio previsto para una compra futura.
@@ -9,16 +9,25 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 
 ![TR8](docs/preview.png)
 
-## Primer entregable
+## Funciones actuales · Etapa 1
 
-- Cuenta personal: registro, confirmación del correo, inicio/cierre de sesión y recuperación de contraseña con Supabase Auth.
+- Cuenta confirmada con Supabase Auth: inicio/cierre de sesión y recuperación de contraseña. El registro público está cerrado.
+- Espacio personal privado, varios equipos, selector de espacio y directorio mínimo de miembros.
 - Proyectos: crear, editar, archivar y restaurar.
 - Tareas: crear, editar, eliminar, completar y cambiar de estado; descripción, prioridad y fechas opcionales.
 - Lista y tablero sobre los mismos datos, con búsqueda y filtros. El tablero permite arrastrar tareas entre estados; el selector ofrece una alternativa con teclado.
 - Inicio con resumen y próximos vencimientos. Los datos se guardan en Postgres y se recuperan al volver a entrar.
-- Acceso restringido al propietario confirmado, también en la base de datos mediante RLS.
+- Acceso por identidad habilitada, membresía, permisos y proyecto, aplicado en Postgres mediante RLS y RPC verificadas. La caché está separada por usuario y espacio.
 
-Esta versión se centra en el uso personal. Equipos, archivos adjuntos, calendario, notificaciones y colaboración quedan fuera de este entregable.
+Las altas e invitaciones externas permanecen desactivadas, por decisión del propietario, hasta disponer de correo y provisión de cuentas adecuados. Los roles personalizados, la asignación de tareas y la administración del acceso por proyecto pertenecen a la etapa 2. Calendario, notificaciones, Google y Pulso son etapas posteriores.
+
+## Especificación y evolución
+
+La [especificación técnica y el plan por etapas](docs/stage-0/README.md) documentan
+la evolución acordada hacia espacios personales, equipos, roles, calendarios,
+avisos opcionales y Pulso privado. La etapa 0 prepara contratos y condiciones
+de verificación. La [entrega de etapa 1](docs/stage-1/README.md) describe el contrato actual y sus comprobaciones. El [presupuesto gratuito](docs/stage-0/free-tier-budget.md) identifica
+las dependencias externas antes de activar correo, Google o finanzas.
 
 ## Desarrollo local
 
@@ -29,7 +38,7 @@ npm ci
 cp .env.example .env.local
 ```
 
-En PowerShell, el segundo comando puede escribirse como `Copy-Item .env.example .env.local`. Completa las variables de `.env.local` con la URL y la clave **publishable** del proyecto de Supabase, y el correo del propietario. Este archivo está ignorado por Git. Las variables `VITE_*` llegan al navegador: nunca pongas allí una clave `service_role`, `sb_secret_*` ni una contraseña.
+En PowerShell, el segundo comando puede escribirse como `Copy-Item .env.example .env.local`. Completa las variables de `.env.local` con la URL y la clave **publishable** del proyecto de Supabase. Este archivo está ignorado por Git. Las variables `VITE_*` llegan al navegador: nunca pongas allí una clave `service_role`, `sb_secret_*` ni una contraseña. `VITE_OWNER_EMAIL` ya no es necesaria ni autoriza acceso.
 
 ```bash
 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
@@ -51,8 +60,8 @@ npm run preview       # sirve la compilación local
 
 El entorno de este entregable usa el proyecto `tr8` de la organización **Horizon Studios**. Para instalarlo en otro proyecto:
 
-1. Aplica las migraciones de `supabase/migrations/` en orden mediante Supabase CLI o una conexión administrativa. La primera crea el esquema original y `20261023031426_rename_personal_app_to_tr8.sql` cambia sus identificadores a TR8 conservando los datos y permisos.
-2. Configura el propietario desde una conexión de confianza, con su correo en minúsculas:
+1. Aplica las dos migraciones históricas iniciales mediante Supabase CLI o una conexión administrativa. Antes de la migración de etapa 1, provisiona y confirma la cuenta inicial mediante Supabase Auth, sin insertar contraseñas reales con SQL. Mantén el registro público cerrado.
+2. Configura el propietario inicial desde una conexión de confianza, con su correo en minúsculas:
 
    ```sql
    update tr8_private.app_config
@@ -60,11 +69,11 @@ El entorno de este entregable usa el proyecto `tr8` de la organización **Horizo
    where singleton;
    ```
 
-3. Configura el mismo correo en `VITE_OWNER_EMAIL`. Esta variable adapta la interfaz; la autorización real se decide en Postgres.
+3. Aplica las migraciones de etapa 1 en orden. El bootstrap solo habilita la cuenta confirmada de la configuración histórica; después la autoridad es `tr8_private.app_users`, no una coincidencia de correo ni metadatos editables. Un inicio de sesión no habilita por sí solo una cuenta nueva.
 4. En **Authentication → URL Configuration**, usa `http://127.0.0.1:5173` como Site URL y autoriza las redirecciones exactas de inicio y recuperación descritas en [docs/database.md](docs/database.md).
-5. Mantén activa la confirmación de correo. Crea la cuenta desde la aplicación y confirma el mensaje de Supabase. Después, desactiva los registros nuevos para mantener el espacio personal.
+5. Mantén activa la confirmación de correo y desactivados los registros e invitaciones externas. Consulta [la operación de etapa 1](docs/stage-1/README.md) antes de habilitar colaboradores.
 
-El esquema comienza con acceso denegado hasta configurar al propietario. No expongas el esquema privado a la Data API. El proyecto `tr8` está publicado en Vercel dentro de **Horizon Studios**, conectado a `SrEdgarR/tr8` y su rama `main`. Las tres variables públicas están configuradas solo para producción. `vercel.json` contiene las reglas de la SPA y sus cabeceras de seguridad.
+El esquema comienza con acceso denegado hasta habilitar una identidad de confianza. No expongas el esquema privado a la Data API. El proyecto `tr8` está publicado en Vercel dentro de **Horizon Studios**, conectado a `SrEdgarR/tr8` y su rama `main`. Producción y pruebas usan bases de Supabase separadas. `vercel.json` contiene las reglas de la SPA y sus cabeceras de seguridad.
 
 Supabase usa `https://tr8.vercel.app` como Site URL y permite las redirecciones exactas `https://tr8.vercel.app/` y `https://tr8.vercel.app/?auth=recovery`. Las URLs locales se conservan para desarrollo. Cada dispositivo inicia sesión con la misma cuenta y lee los mismos datos. Para mayor volumen de correos hace falta configurar un servicio SMTP adecuado.
 
@@ -76,11 +85,11 @@ Interfaz React → React Query → repositorio → Supabase Auth / Data API
                                       Postgres + RLS + funciones SQL
 ```
 
-`App.tsx` comprueba la sesión y carga los proyectos y tareas de esa cuenta. React Query conserva una caché en memoria, vuelve a consultar al recuperar el foco y cada 30 segundos, y la limpia al salir o cambiar de usuario. El navegador conserva la sesión de Auth para volver a entrar; no usa el antiguo almacén de datos de demostración.
+`App.tsx` comprueba la sesión, obtiene los espacios autorizados y carga únicamente los proyectos y tareas visibles del espacio seleccionado. React Query conserva una caché en memoria separada por usuario y espacio, vuelve a consultar al recuperar el foco y cada 30 segundos, y retira los datos al salir, cambiar de espacio o recibir una denegación. El navegador conserva la sesión de Auth para volver a entrar; no usa el antiguo almacén de datos de demostración. Los enlaces existentes a proyectos resuelven su espacio mediante una consulta sujeta a RLS.
 
 Los formularios llaman al repositorio. Una escritura solo se considera guardada cuando Supabase devuelve el registro persistido. Un UUID estable evita duplicar un alta al reintentar tras un fallo de red. Las modificaciones incluyen la versión leída: si otra pestaña ya cambió el registro, el servidor rechaza la escritura antigua y la interfaz conserva el formulario para revisarlo. El archivado bloquea nuevas tareas y cambios hasta restaurar el proyecto.
 
-La base de datos valida propietarios, relación proyecto/tarea, estados, prioridades y fechas. Los códigos, números de tarea, versiones y marcas de tiempo se gestionan en el servidor. Consulta [el contrato y las pruebas de la base de datos](docs/database.md).
+La base de datos valida identidad, acceso al espacio/proyecto, relación proyecto/tarea, estados, prioridades y fechas. Los códigos, números de tarea, versiones y marcas de tiempo se gestionan en el servidor. Las escrituras directas están denegadas; las RPC `tr8_v2_*` verifican permisos y versión. Consulta [el contrato actual](docs/stage-1/README.md) y [el registro histórico](docs/database.md).
 
 ## Estructura
 

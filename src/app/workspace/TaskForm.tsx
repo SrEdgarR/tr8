@@ -11,13 +11,14 @@ interface Props {
   initialStatus?: TaskStatus;
   projects: Project[];
   pending: boolean;
+  readOnly?: boolean;
   onCreate: WorkspaceProps['onCreateTask'];
   onUpdate: WorkspaceProps['onUpdateTask'];
   onDelete: WorkspaceProps['onDeleteTask'];
   onClose: () => void;
 }
 
-export default function TaskForm({ task, projectId, initialStatus, projects, pending, onCreate, onUpdate, onDelete, onClose }: Props) {
+export default function TaskForm({ task, projectId, initialStatus, projects, pending, readOnly = false, onCreate, onUpdate, onDelete, onClose }: Props) {
   const prefix = useId();
   const [selectedProject, setSelectedProject] = useState(task?.project_id ?? projectId ?? projects.find(project => !project.archived_at)?.id ?? '');
   const [title, setTitle] = useState(task?.title ?? '');
@@ -33,7 +34,7 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
   const lock = useRef(false);
   const busy = pending || submitting;
   const archived = Boolean(projects.find(project => project.id === selectedProject)?.archived_at);
-  const disabled = busy || archived;
+  const disabled = busy || archived || readOnly;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -111,6 +112,7 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
         <div className="pw-form-body">
           {error && <ErrorNotice>{error}</ErrorNotice>}
           {archived && <div className="pw-info">Este proyecto está archivado. Restáuralo para editar sus tareas.</div>}
+          {readOnly && <div className="pw-info">Tienes acceso de lectura a las tareas de este espacio.</div>}
           {task && (
             <span className="eyebrow">
               {projects.find(project => project.id === task.project_id)?.code ?? 'TAREA'}-{task.task_number}
@@ -231,7 +233,7 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
         </div>
         <div className="pw-form-footer">
           {task && !archived && (
-            <button type="button" className="btn btn-danger-ghost pw-delete" disabled={busy} onClick={() => setConfirmDelete(true)}>
+            <button type="button" className="btn btn-danger-ghost pw-delete" disabled={disabled} onClick={() => setConfirmDelete(true)}>
               <Trash2 size={14} aria-hidden="true" />
               Eliminar
             </button>
@@ -240,7 +242,7 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
             {archived ? 'Cerrar' : 'Cancelar'}
           </button>
           {!archived && (
-            <button className="btn btn-primary" type="submit" disabled={busy || confirmDelete || !selectedProject}>
+            <button className="btn btn-primary" type="submit" disabled={disabled || confirmDelete || !selectedProject}>
               {submitting ? 'Guardando…' : task ? 'Guardar cambios' : 'Crear tarea'}
             </button>
           )}

@@ -4,6 +4,7 @@ export type ProjectStatus = 'planning' | 'active' | 'hold' | 'complete';
 
 export interface Project {
   id: string;
+  workspace_id: string;
   owner_id: string;
   code: string;
   name: string;
@@ -18,6 +19,7 @@ export interface Project {
 
 export interface Task {
   id: string;
+  workspace_id: string;
   owner_id: string;
   project_id: string;
   task_number: number;
@@ -52,7 +54,52 @@ export interface TaskInput {
 
 export type TaskPatch = Partial<Omit<TaskInput, 'project_id'>> & { position?: number };
 
+export interface WorkspaceSummary {
+  id: string;
+  kind: 'personal' | 'team';
+  name: string;
+  owner_id: string;
+  version: number;
+  permissions: string[];
+}
+
+export interface AppContext {
+  contract_version: 2;
+  personal_workspace_id: string;
+  workspaces: WorkspaceSummary[];
+  external_invites_enabled: boolean;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  user_id: string;
+  display_name: string;
+  status: string;
+  version: number;
+  is_owner: boolean;
+  roles: { id: string; name: string; template_key: string | null }[];
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  email: string;
+  status: string;
+  expires_at: string;
+  version: number;
+  created_at: string;
+}
+
 export interface WorkspaceProps {
+  workspace?: WorkspaceSummary;
+  workspaces?: WorkspaceSummary[];
+  readOnly?: boolean;
+  accessUnavailable?: boolean;
+  members?: WorkspaceMember[];
+  invitations?: WorkspaceInvitation[];
+  directoryLoading?: boolean;
+  directoryError?: string | null;
+  onSelectWorkspace?: (id: string) => void;
+  onCreateTeam?: (name: string, requestId: string) => Promise<WorkspaceSummary>;
   projects: Project[];
   tasks: Task[];
   email: string;

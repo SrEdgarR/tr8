@@ -33,18 +33,17 @@ afterEach(() => {
 });
 
 describe('autenticación personal', () => {
-  it('solo crea la cuenta con un envío explícito y contraseñas válidas', async () => {
+  it('permite entrar con otra cuenta habilitada y no ofrece altas externas', async () => {
     const config = setup();
     const user = show(config);
-    expect(screen.getByLabelText('Correo electrónico')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Correo electrónico')).not.toHaveAttribute('readonly');
     expect(config.auth.signUp).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Crear mi cuenta' }));
-    expect(config.auth.signUp).not.toHaveBeenCalled();
-    await user.type(screen.getByLabelText('Nueva contraseña'), 'corta');
-    await user.type(screen.getByLabelText('Repite la contraseña'), 'otra');
-    await user.click(screen.getByRole('button', { name: 'Crear mi cuenta' }));
-    expect(screen.getByText('Usa al menos 10 caracteres.')).toBeInTheDocument();
-    expect(screen.getByText('Las contraseñas no coinciden.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crear mi cuenta' })).not.toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Correo electrónico'));
+    await user.type(screen.getByLabelText('Correo electrónico'), 'member@example.com');
+    await user.type(screen.getByLabelText('Contraseña', { exact: true }), 'su-contraseña');
+    await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+    expect(config.auth.signInWithPassword).toHaveBeenCalledWith({ email: 'member@example.com', password: 'su-contraseña' });
     expect(config.auth.signUp).not.toHaveBeenCalled();
   });
 
@@ -59,20 +58,12 @@ describe('autenticación personal', () => {
     expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeEnabled();
   });
 
-  it('espera confirmación por correo cuando el registro no devuelve sesión', async () => {
-    const config = setup();
-    const user = show(config);
-    await user.click(screen.getByRole('button', { name: 'Crear mi cuenta' }));
-    await user.type(screen.getByLabelText('Nueva contraseña'), 'una-contraseña-larga');
-    await user.type(screen.getByLabelText('Repite la contraseña'), 'una-contraseña-larga');
-    await user.click(screen.getByRole('button', { name: 'Crear mi cuenta' }));
-    expect(await screen.findByRole('heading', { name: 'Confirma tu correo' })).toBeInTheDocument();
-    expect(config.auth.signUp).toHaveBeenCalledWith({
-      email: ownerEmail,
-      password: 'una-contraseña-larga',
-      options: { emailRedirectTo: `${window.location.origin}/` },
-    });
-    expect(config.auth.signInWithPassword).not.toHaveBeenCalled();
+  it('recupera la cuenta verificada por el servidor aunque no coincida con el correo inicial', async () => {
+    const config = setup(true);
+    config.auth.getUser.mockResolvedValue({ data: { user: { id: 'member', email: 'member@example.com' } }, error: null });
+    show(config);
+    expect(await screen.findByLabelText('Nueva contraseña')).toBeInTheDocument();
+    expect(screen.getByLabelText('Correo electrónico')).toHaveValue('member@example.com');
   });
 
   it('no informa un correo enviado si Supabase rechaza la solicitud', async () => {

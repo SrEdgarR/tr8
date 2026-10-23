@@ -12,12 +12,12 @@ export interface AuthScreenProps {
   onRecoveryComplete: () => void;
 }
 
-type Mode = 'login' | 'signup' | 'forgot' | 'verify' | 'sent';
+type Mode = 'login' | 'forgot' | 'sent';
 type RecoveryStatus = 'checking' | 'ready' | 'invalid' | 'updated';
 type FieldErrors = { password?: string; confirmation?: string };
 
 export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryComplete }: AuthScreenProps) {
-  const email = ownerEmail.trim().toLowerCase();
+  const [email, setEmail] = useState(ownerEmail.trim().toLowerCase());
   const configured = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const [mode, setMode] = useState<Mode>('login');
   const [password, setPassword] = useState('');
@@ -52,11 +52,12 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
       .getUser()
       .then(({ data, error: sessionError }) => {
         if (!active) return;
-        if (sessionError || !data.user || data.user.email?.toLowerCase() !== email) {
+        if (sessionError || !data.user?.email) {
           setRecoveryStatus('invalid');
           setError('El enlace de recuperación no es válido o ha caducado. Solicita uno nuevo.');
           return;
         }
+        setEmail(data.user.email.toLowerCase());
         setRecoveryStatus('ready');
       })
       .catch(cause => {
@@ -67,7 +68,7 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
     return () => {
       active = false;
     };
-  }, [client, email, recovery]);
+  }, [client, recovery]);
 
   function switchMode(next: Mode) {
     if (busy.current) return;
@@ -108,7 +109,7 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
     setError(null);
     setNotice(null);
     const errors: FieldErrors = {};
-    if (recovery || mode === 'signup') {
+    if (recovery) {
       if (password.length < 10) errors.password = 'Usa al menos 10 caracteres.';
       if (password !== confirmation) errors.confirmation = 'Las contraseñas no coinciden.';
     } else if (mode === 'login' && !password) {
@@ -139,17 +140,6 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
         if (loginError) throw loginError;
         if (!data.session) throw new Error('No se pudo iniciar la sesión. Vuelve a intentarlo.');
         setPassword('');
-      } else if (mode === 'signup') {
-        const { data, error: signupError } = await client.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: `${window.location.origin}/` },
-        });
-        if (signupError) throw signupError;
-        if (data.user?.identities?.length === 0) throw new Error('Esta cuenta ya existe. Inicia sesión o recupera tu contraseña.');
-        setPassword('');
-        setConfirmation('');
-        if (!data.session) setMode('verify');
       } else if (mode === 'forgot') {
         const { error: resetError } = await client.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/?auth=recovery`,
@@ -165,8 +155,8 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
     }
   }
 
-  const isPasswordForm = recovery ? recoveryStatus === 'ready' : mode === 'login' || mode === 'signup';
-  const needsConfirmation = recovery || mode === 'signup';
+  const isPasswordForm = recovery ? recoveryStatus === 'ready' : mode === 'login';
+  const needsConfirmation = recovery;
   const heading = recovery
     ? recoveryStatus === 'invalid'
       ? 'Necesitas un nuevo enlace'
@@ -175,9 +165,7 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
         : 'Elige una nueva contraseña'
     : {
         login: 'Bienvenido de nuevo',
-        signup: 'Crea tu cuenta personal',
         forgot: 'Recupera tu contraseña',
-        verify: 'Confirma tu correo',
         sent: 'Revisa tu correo',
       }[mode];
   const description = recovery
@@ -186,9 +174,7 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
       : 'Recupera el acceso a tu espacio personal.'
     : {
         login: 'Tus proyectos y tareas, en un solo lugar.',
-        signup: 'Configura tu contraseña para empezar.',
         forgot: 'Te enviaremos un enlace para elegir una contraseña nueva.',
-        verify: 'Revisa tu bandeja de entrada y abre el enlace de confirmación. Después podrás iniciar sesión.',
         sent: 'Si tu cuenta está creada, recibirás un enlace de recuperación. Revisa también la carpeta de spam.',
       }[mode];
 
@@ -199,7 +185,7 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
           <Brand />
         </span>
         <span className="personal-auth-private">
-          <LockKeyhole size={13} aria-hidden="true" /> Espacio personal
+          <LockKeyhole size={13} aria-hidden="true" /> Acceso privado
         </span>
       </header>
       <main className="auth-c">
@@ -211,7 +197,7 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
               ) : (
                 <KeyRound size={26} aria-hidden="true" />
               )
-            ) : mode === 'verify' || mode === 'sent' ? (
+            ) : mode === 'sent' ? (
               <MailCheck size={26} aria-hidden="true" />
             ) : (
               <Brand height={30} />
@@ -219,12 +205,6 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
           </div>
           <h1 id="auth-title">{heading}</h1>
           <p className="sub">{description}</p>
-          {!configured ? (
-            <div className="alert danger" role="alert">
-              <CircleAlert size={16} aria-hidden="true" />
-              <span>Falta configurar el correo de la cuenta propietaria.</span>
-            </div>
-          ) : null}
           {error ? (
             <div className="alert danger" role="alert">
               <CircleAlert size={16} aria-hidden="true" />
@@ -242,7 +222,7 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
               <LoaderCircle size={16} className="personal-auth-spin" aria-hidden="true" /> Verificando enlace…
             </p>
           ) : null}
-          {(!recovery || recoveryStatus === 'ready') && mode !== 'verify' && mode !== 'sent' ? (
+          {(!recovery || recoveryStatus === 'ready') && mode !== 'sent' ? (
             <div className="field">
               <label className="label" htmlFor="auth-email">
                 Correo electrónico
@@ -252,15 +232,17 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
                 className="input input-lg personal-auth-email"
                 type="email"
                 value={email}
-                readOnly
+                onChange={event => setEmail(event.target.value.trim().toLowerCase())}
+                readOnly={recovery}
+                disabled={pending}
                 autoComplete="username"
                 aria-describedby="auth-account-hint"
               />
               <span className="hint" id="auth-account-hint">
-                Cuenta personal de este espacio.
+                Inicia sesión con una cuenta habilitada en TR8.
               </span>
             </div>
-          ) : !recovery && (mode === 'verify' || mode === 'sent') ? (
+          ) : !recovery && mode === 'sent' ? (
             <p className="personal-auth-address">{email}</p>
           ) : null}
           {isPasswordForm ? (
@@ -342,15 +324,7 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
           {isPasswordForm || (!recovery && mode === 'forgot') ? (
             <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={pending || !configured}>
               {pending ? <LoaderCircle size={16} className="personal-auth-spin" aria-hidden="true" /> : null}
-              {pending
-                ? 'Procesando…'
-                : recovery
-                  ? 'Guardar nueva contraseña'
-                  : mode === 'login'
-                    ? 'Iniciar sesión'
-                    : mode === 'signup'
-                      ? 'Crear mi cuenta'
-                      : 'Enviar enlace de recuperación'}
+              {pending ? 'Procesando…' : recovery ? 'Guardar nueva contraseña' : mode === 'login' ? 'Iniciar sesión' : 'Enviar enlace de recuperación'}
             </button>
           ) : null}
           {recovery && recoveryStatus !== 'checking' ? (
@@ -365,12 +339,7 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
             </button>
           ) : null}
           {!recovery && mode === 'login' ? (
-            <p className="auth-foot">
-              ¿Es tu primera vez?{' '}
-              <button type="button" className="link" disabled={pending} onClick={() => switchMode('signup')}>
-                Crear mi cuenta
-              </button>
-            </p>
+            <p className="auth-foot">Las nuevas cuentas se habilitarán mediante invitación. Las altas externas están desactivadas por ahora.</p>
           ) : null}
           {!recovery && mode !== 'login' ? (
             <p className="auth-foot">

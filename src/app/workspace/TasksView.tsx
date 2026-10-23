@@ -201,7 +201,7 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
         <>
           <p className="pw-board-help">
             {readOnly
-              ? 'Proyecto archivado: consulta sus tareas o restáuralo para editarlas.'
+              ? 'Vista de solo lectura: puedes consultar las tareas de este proyecto.'
               : 'Arrastra las tarjetas entre columnas o utiliza el selector de estado de cada tarea.'}
           </p>
           <div className="board pw-board">

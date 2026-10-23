@@ -1013,3 +1013,47 @@
     transition: none;
   }
 }
+.pw-workspace-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 12px;
+}
+
+.pw-workspace-picker select {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface, #fff);
+  color: inherit;
+  padding: 8px;
+  font: inherit;
+}
+
+.pw-team-page {
+  max-width: 1000px;
+}
+
+.pw-team-page .pw-account-card {
+  margin-bottom: 18px;
+}
+
+.pw-member-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+
+.pw-member-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.pw-member-list small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-3);
+}

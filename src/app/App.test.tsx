@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
@@ -12,6 +13,12 @@ const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
   unsubscribe: vi.fn(),
   repository: {
+    context: vi.fn(),
+    resolveProject: vi.fn(),
+    createTeam: vi.fn(),
+    members: vi.fn(),
+    invitations: vi.fn(),
+    acceptInvitation: vi.fn(),
     load: vi.fn(),
     createProject: vi.fn(),
     updateProject: vi.fn(),
@@ -68,6 +75,7 @@ function session(id = 'owner-a', email = 'owner@example.com') {
 function project(name = 'Proyecto privado', id = 'project-a'): Project {
   return {
     id,
+    workspace_id: 'personal-a',
     owner_id: 'owner-a',
     code: 'PRI',
     name,
@@ -84,6 +92,7 @@ function project(name = 'Proyecto privado', id = 'project-a'): Project {
 function task(title = 'Tarea privada', version = 1): Task {
   return {
     id: 'task-a',
+    workspace_id: 'personal-a',
     owner_id: 'owner-a',
     project_id: 'project-a',
     task_number: 1,
@@ -103,13 +112,19 @@ function task(title = 'Tarea privada', version = 1): Task {
 const clients: QueryClient[] = [];
 let authListener: (event: AuthChangeEvent, next: Session | null) => void;
 
-function show() {
+function show(path = '/', strict = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 }, mutations: { retry: false } } });
   clients.push(client);
   const view = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <App />
+      <MemoryRouter initialEntries={[path]}>
+        {strict ? (
+          <StrictMode>
+            <App />
+          </StrictMode>
+        ) : (
+          <App />
+        )}
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -130,6 +145,16 @@ beforeEach(() => {
   });
   mocks.auth.getSession.mockResolvedValue({ data: { session: session() }, error: null });
   mocks.auth.signOut.mockResolvedValue({ error: null });
+  mocks.repository.context.mockResolvedValue({
+    contract_version: 2,
+    personal_workspace_id: 'personal-a',
+    external_invites_enabled: false,
+    workspaces: [
+      { id: 'personal-a', name: 'Personal', kind: 'personal', owner_id: 'owner-a', version: 1, permissions: [] },
+      { id: 'team-a', name: 'Equipo', kind: 'team', owner_id: 'owner-a', version: 1, permissions: [] },
+    ],
+  });
+  mocks.repository.resolveProject.mockResolvedValue(project());
   mocks.repository.load.mockResolvedValue({ projects: [project()], tasks: [task()] });
 });
 
@@ -138,6 +163,19 @@ afterEach(() => {
 });
 
 describe('sesiones y datos del espacio personal', () => {
+  it('carga datos con el ciclo doble de efectos de React StrictMode', async () => {
+    show('/', true);
+    expect(await screen.findByText('Proyecto privado')).toBeInTheDocument();
+    expect(screen.getByText('Tarea privada')).toBeInTheDocument();
+  });
+
+  it('permite una cuenta habilitada cuyo correo difiere de la configuración inicial', async () => {
+    mocks.auth.getSession.mockResolvedValue({ data: { session: session('member-a', 'member@example.com') }, error: null });
+    show();
+    expect(await screen.findByText('Proyecto privado')).toBeInTheDocument();
+    expect(mocks.repository.context).toHaveBeenCalled();
+    expect(workspace().readOnly).toBe(true);
+  });
   it('no consulta proyectos antes de resolver la sesión', async () => {
     const pending = deferred<{ data: { session: Session }; error: null }>();
     mocks.auth.getSession.mockReturnValue(pending.promise);
@@ -171,8 +209,9 @@ describe('sesiones y datos del espacio personal', () => {
     expect(screen.queryByRole('heading', { name: 'No pudimos abrir tu sesión' })).not.toBeInTheDocument();
   });
 
-  it('no descarga datos para una cuenta diferente de la propietaria', async () => {
+  it('exige habilitación del servidor en lugar de comparar el correo con la configuración', async () => {
     mocks.auth.getSession.mockResolvedValue({ data: { session: session('other', 'other@example.com') }, error: null });
+    mocks.repository.context.mockRejectedValue(new DataError('La cuenta no está habilitada.', '42501'));
     show();
     expect(await screen.findByRole('heading', { name: 'Esta cuenta no tiene acceso' })).toBeInTheDocument();
     expect(mocks.repository.load).not.toHaveBeenCalled();
@@ -198,11 +237,41 @@ describe('sesiones y datos del espacio personal', () => {
     expect(mocks.auth.signOut).not.toHaveBeenCalled();
   });
 
+  it('retira datos previamente cargados y su caché cuando la recarga pierde autorización', async () => {
+    const { client } = show();
+    await screen.findByText('Proyecto privado');
+    mocks.repository.load.mockRejectedValue(new DataError('Ya no tienes acceso.', '42501'));
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['workspace', 'owner-a', 'personal-a'] });
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ya no tienes acceso');
+    expect(screen.queryByText('Proyecto privado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+    expect(client.getQueryData(['workspace', 'owner-a', 'personal-a'])).toBeUndefined();
+    mocks.repository.load.mockResolvedValue({ projects: [project()], tasks: [task()] });
+    await act(async () => workspace().onRetry());
+    expect(await screen.findByText('Proyecto privado')).toBeInTheDocument();
+  });
+
+  it('retira los datos y no conserva el borrador como guardado si una escritura es denegada', async () => {
+    const { client } = show();
+    await screen.findByText('Proyecto privado');
+    mocks.repository.updateTask.mockRejectedValue(new DataError('Permiso retirado.', '42501'));
+    await act(async () => {
+      await expect(workspace().onUpdateTask(task(), { title: 'Cambio rechazado' })).rejects.toMatchObject({ code: '42501' });
+    });
+    expect(screen.queryByText('Proyecto privado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cambio rechazado')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Permiso retirado');
+    expect(client.getQueryData(['workspace', 'owner-a', 'personal-a'])).toBeUndefined();
+  });
+
   it('cancela la consulta anterior y limpia su caché al cambiar de usuario', async () => {
     const firstLoad = deferred<WorkspaceData>();
     let firstSignal: AbortSignal | undefined;
     mocks.repository.load
-      .mockImplementationOnce((signal: AbortSignal) => {
+      .mockImplementationOnce((_scope: string, signal: AbortSignal) => {
         firstSignal = signal;
         return firstLoad.promise;
       })
@@ -214,8 +283,8 @@ describe('sesiones y datos del espacio personal', () => {
     expect(firstSignal?.aborted).toBe(true);
     await act(async () => firstLoad.resolve({ projects: [project('Datos de la sesión anterior')], tasks: [] }));
     expect(screen.queryByText('Datos de la sesión anterior')).not.toBeInTheDocument();
-    expect(client.getQueryData(['workspace', 'owner-a'])).toBeUndefined();
-    expect(client.getQueryData<WorkspaceData>(['workspace', 'owner-b'])?.projects[0].name).toBe('Proyecto de la segunda sesión');
+    expect(client.getQueryData(['workspace', 'owner-a', 'personal-a'])).toBeUndefined();
+    expect(client.getQueryData<WorkspaceData>(['workspace', 'owner-b', 'personal-a'])?.projects[0].name).toBe('Proyecto de la segunda sesión');
   });
 
   it('no repuebla la caché con un guardado que termina después del cierre de sesión', async () => {
@@ -232,10 +301,40 @@ describe('sesiones y datos del espacio personal', () => {
     expect(await screen.findByRole('heading', { name: 'Inicio de sesión' })).toBeInTheDocument();
     await act(async () => {
       pending.resolve(project('Nuevo', 'request-a'));
-      await save;
+      await expect(save).rejects.toThrow('El espacio cambió');
     });
     expect(client.getQueryCache().getAll()).toHaveLength(0);
     expect(screen.queryByText('Nuevo')).not.toBeInTheDocument();
+  });
+
+  it('cancela y retira datos al cambiar de espacio e ignora una respuesta tardía', async () => {
+    const pending = deferred<WorkspaceData>();
+    let signal: AbortSignal | undefined;
+    mocks.repository.load
+      .mockImplementationOnce((_scope: string, abort: AbortSignal) => {
+        signal = abort;
+        return pending.promise;
+      })
+      .mockResolvedValue({ projects: [{ ...project('Proyecto del equipo'), workspace_id: 'team-a' }], tasks: [] });
+    const { client } = show();
+    await waitFor(() => expect(mocks.repository.load).toHaveBeenCalledOnce());
+    act(() => workspace().onSelectWorkspace?.('team-a'));
+    expect(await screen.findByText('Proyecto del equipo')).toBeInTheDocument();
+    expect(signal?.aborted).toBe(true);
+    await act(async () => pending.resolve({ projects: [project('Personal tardío')], tasks: [] }));
+    expect(screen.queryByText('Personal tardío')).not.toBeInTheDocument();
+    expect(client.getQueryData(['workspace', 'owner-a', 'personal-a'])).toBeUndefined();
+    expect(mocks.repository.load.mock.calls.every(([scope]) => typeof scope === 'string')).toBe(true);
+  });
+
+  it('abre un enlace antiguo consultando solo su proyecto y después el espacio autorizado', async () => {
+    mocks.repository.resolveProject.mockResolvedValue({ ...project('Proyecto del equipo'), workspace_id: 'team-a' });
+    mocks.repository.load.mockResolvedValue({ projects: [{ ...project('Proyecto del equipo'), workspace_id: 'team-a' }], tasks: [] });
+    show('/projects/project-a?view=board');
+    expect(await screen.findByText('Proyecto del equipo')).toBeInTheDocument();
+    expect(mocks.repository.resolveProject).toHaveBeenCalledWith('project-a', expect.any(AbortSignal));
+    expect(mocks.repository.load).toHaveBeenCalledWith('team-a', expect.any(AbortSignal));
+    expect(mocks.repository.load).not.toHaveBeenCalledWith('personal-a', expect.anything());
   });
 
   it('actualiza el registro ante un conflicto de versión y conserva el error de guardado', async () => {
