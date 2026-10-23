@@ -31,6 +31,14 @@ remain local; project/task data comes from Supabase.
 
 ## Access
 
+Production is hosted at `https://tr8.vercel.app` in the Vercel project `tr8`,
+connected to the `main` branch of `SrEdgarR/tr8`. Only the production environment
+receives the public Supabase configuration. Supabase's Site URL is that HTTPS
+origin; its exact root and `/?auth=recovery` URLs are on the redirect allowlist.
+The local callback URLs remain allowed for development. Public HTML, assets,
+favicon and direct SPA routes returned HTTP 200 with the configured security
+headers. The owner signed in successfully from the published application.
+
 Both tables have row-level security. Every policy requires the authenticated
 user's ID to match `owner_id`, plus the private `tr8_private.is_owner()` check.
 That helper reads the current `auth.users` record, requires a confirmed email and

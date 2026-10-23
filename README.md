@@ -5,6 +5,8 @@ Aplicación personal de proyectos y tareas con React, TypeScript y Supabase. Con
 La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 `tr8.studio` es el dominio previsto para una compra futura.
 
+**Aplicación publicada:** [tr8.vercel.app](https://tr8.vercel.app/).
+
 ![TR8](docs/preview.png)
 
 ## Primer entregable
@@ -62,7 +64,9 @@ El entorno de este entregable usa el proyecto `tr8` de la organización **Horizo
 4. En **Authentication → URL Configuration**, usa `http://127.0.0.1:5173` como Site URL y autoriza las redirecciones exactas de inicio y recuperación descritas en [docs/database.md](docs/database.md).
 5. Mantén activa la confirmación de correo. Crea la cuenta desde la aplicación y confirma el mensaje de Supabase. Después, desactiva los registros nuevos para mantener el espacio personal.
 
-El esquema comienza con acceso denegado hasta configurar al propietario. No expongas el esquema privado a la Data API. Para producción hacen falta un alojamiento HTTPS, sus URLs de Auth y un servicio de correo adecuado; `vercel.json` contiene las reglas de una SPA, pero este entregable no publica un despliegue.
+El esquema comienza con acceso denegado hasta configurar al propietario. No expongas el esquema privado a la Data API. El proyecto `tr8` está publicado en Vercel dentro de **Horizon Studios**, conectado a `SrEdgarR/tr8` y su rama `main`. Las tres variables públicas están configuradas solo para producción. `vercel.json` contiene las reglas de la SPA y sus cabeceras de seguridad.
+
+Supabase usa `https://tr8.vercel.app` como Site URL y permite las redirecciones exactas `https://tr8.vercel.app/` y `https://tr8.vercel.app/?auth=recovery`. Las URLs locales se conservan para desarrollo. Cada dispositivo inicia sesión con la misma cuenta y lee los mismos datos. Para mayor volumen de correos hace falta configurar un servicio SMTP adecuado.
 
 ## Cómo funciona
 
