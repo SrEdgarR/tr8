@@ -13,6 +13,16 @@
   align-items: center;
   gap: 10px;
 }
+.pw-processes-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  line-height: 1.6;
+  color: var(--text-3);
+}
 .pw-processes-heading > div {
   flex: 1;
   min-width: 0;

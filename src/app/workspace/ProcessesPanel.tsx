@@ -58,21 +58,38 @@ function JobRow({ job }: { job: ProcessJob }) {
   );
 }
 
-export default function ProcessesPanel({ api, disabled = false, workspaceName }: { api: ProcessesApi; disabled?: boolean; workspaceName: string }) {
+export default function ProcessesPanel({
+  api,
+  disabled = false,
+  workspaceName,
+  embedded = false,
+}: {
+  api: ProcessesApi;
+  disabled?: boolean;
+  workspaceName: string;
+  embedded?: boolean;
+}) {
   const query = useQuery({ queryKey: api.scopeKey, queryFn: ({ signal }) => api.load(signal), enabled: !disabled, retry: false, refetchInterval: 30000 });
   const status = disabled || query.error ? null : query.data;
   return (
     <section className="pw-processes" aria-label="Procesos e integraciones">
-      <header className="pw-processes-heading">
-        <span className="pw-calendar-zone-icon">
-          <Activity size={18} aria-hidden="true" />
-        </span>
-        <div>
-          <h2>Procesos e integraciones</h2>
-          <p>Tus cambios se preparan en segundo plano, aunque cierres TR8.</p>
-        </div>
-        <span className="pw-processes-scope">{workspaceName}</span>
-      </header>
+      {embedded ? (
+        <p className="pw-processes-context">
+          <span>Tus cambios se preparan aunque cierres TR8.</span>
+          <span className="pw-processes-scope">{workspaceName}</span>
+        </p>
+      ) : (
+        <header className="pw-processes-heading">
+          <span className="pw-calendar-zone-icon">
+            <Activity size={18} aria-hidden="true" />
+          </span>
+          <div>
+            <h2>Procesos e integraciones</h2>
+            <p>Tus cambios se preparan en segundo plano, aunque cierres TR8.</p>
+          </div>
+          <span className="pw-processes-scope">{workspaceName}</span>
+        </header>
+      )}
       <div className="pw-processes-channels">
         <div>
           <Mail size={16} aria-hidden="true" />

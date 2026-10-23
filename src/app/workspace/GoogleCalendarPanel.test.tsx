@@ -16,7 +16,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 const clients: QueryClient[] = [];
-function mount(initial: GoogleCalendarStatus = googleFixture(), overrides: Partial<GoogleCalendarApi> = {}, tasksApi?: GoogleTasksApi) {
+function mount(initial: GoogleCalendarStatus = googleFixture(), overrides: Partial<GoogleCalendarApi> = {}, tasksApi?: GoogleTasksApi, collapsible = false) {
   const load = vi.fn().mockResolvedValue(initial);
   const api: GoogleCalendarApi = {
     scopeKey: ['google-calendar', 'owner-a'],
@@ -31,7 +31,7 @@ function mount(initial: GoogleCalendarStatus = googleFixture(), overrides: Parti
   clients.push(client);
   const view = render(
     <QueryClientProvider client={client}>
-      <GoogleCalendarPanel key={api.scopeKey.join(':')} api={api} tasksApi={tasksApi} />
+      <GoogleCalendarPanel key={api.scopeKey.join(':')} api={api} tasksApi={tasksApi} collapsible={collapsible} />
     </QueryClientProvider>,
   );
   return { ...view, api, load, client };
@@ -68,6 +68,76 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe('Conexión única de Google en Configuración', () => {
+  it('muestra Google cerrado por defecto y abre sus opciones con un control accesible sin desmontarlas', async () => {
+    const tasksApi = connectedTasks();
+    const { api } = mount(googleFixture({ state: 'connected', generation: 1, version: 5 }), {}, tasksApi, true);
+    const toggle = screen.getByRole('button', { name: 'Google' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    const body = document.getElementById(toggle.getAttribute('aria-controls')!);
+    expect(body).toHaveAttribute('hidden');
+    await screen.findByText('Conectado');
+    expect(api.load).toHaveBeenCalled();
+    expect(tasksApi.load).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Sincronizar ahora' })).not.toBeInTheDocument();
+    expect(body?.querySelector('.pw-google-tasks.is-embedded')).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(body).not.toHaveAttribute('hidden');
+    expect(screen.getByRole('button', { name: 'Sincronizar ahora' })).toBeVisible();
+    const lists = screen.getByRole('checkbox', { name: /Mis tareas/ });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(body).toHaveAttribute('hidden');
+    expect(lists.isConnected).toBe(true);
+    expect(screen.getByText('Conectado')).toBeVisible();
+  });
+
+  it('usa la G multicolor decorativa y referencias únicas para los cuerpos y máscaras SVG', async () => {
+    const first = mount(googleFixture(), {}, undefined, true);
+    const firstToggle = screen.getByRole('button', { name: 'Google' });
+    const firstIcon = firstToggle.querySelector('.pw-google-brand svg')!;
+    expect(firstIcon).toHaveAttribute('aria-hidden', 'true');
+    expect(firstIcon).toHaveAttribute('focusable', 'false');
+    expect(within(firstToggle).queryByRole('img')).not.toBeInTheDocument();
+    expect(firstIcon.querySelector('[fill="#3186FF"]')).not.toBeNull();
+    expect(firstIcon.querySelector('[fill="#FF4641"]')).not.toBeNull();
+    mount(googleFixture(), { scopeKey: ['google-calendar', 'another-instance'] }, undefined, true);
+    const toggles = screen.getAllByRole('button', { name: 'Google' });
+    expect(new Set(toggles.map(toggle => toggle.getAttribute('aria-controls'))).size).toBe(2);
+    const maskIds = [...document.querySelectorAll('.pw-google-brand mask')].map(mask => mask.id);
+    expect(new Set(maskIds).size).toBe(2);
+    expect(first.container.querySelector('script, img[src], image[href]')).toBeNull();
+  });
+
+  it('conserva la autorización y el diálogo en curso al plegar Google', async () => {
+    const completion = deferred<GoogleCompletion>();
+    const cancel = vi.fn();
+    const authorize = vi.fn();
+    vi.spyOn(popupApi, 'openGooglePopup').mockReturnValue({ result: completion.promise, cancel, authorize });
+    const { api, load } = mount(googleFixture(), {}, undefined, true);
+    const toggle = screen.getByRole('button', { name: 'Google' });
+    fireEvent.click(toggle);
+    fireEvent.click(await screen.findByRole('button', { name: 'Conectar Google' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Continuar con Google' }));
+    await waitFor(() => expect(authorize).toHaveBeenCalledWith(googleAuthorization()));
+    fireEvent.click(toggle);
+    const body = document.getElementById(toggle.getAttribute('aria-controls')!);
+    expect(body).toHaveAttribute('hidden');
+    expect(body?.contains(screen.getByRole('dialog'))).toBe(false);
+    expect(screen.getByRole('dialog')).toBeVisible();
+    expect(cancel).not.toHaveBeenCalled();
+    expect(api.complete).not.toHaveBeenCalled();
+    const next = googleFixture({ state: 'connected', generation: 1, version: 3 });
+    vi.mocked(api.complete).mockResolvedValue(next);
+    load.mockResolvedValue(next);
+    await act(async () => completion.resolve({ state: googleAuthorization().state, browser_secret: 'memory-only' }));
+    await waitFor(() => expect(api.complete).toHaveBeenCalledTimes(1));
+    await screen.findByText('Conectado');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Sincronizar ahora' })).not.toBeInTheDocument();
+  });
   it('revisa el permiso de todas las tareas y permite cancelar sin abrir OAuth ni mutar la conexión', async () => {
     const open = vi.spyOn(popupApi, 'openGooglePopup');
     const tasksApi = disconnectedTasks();

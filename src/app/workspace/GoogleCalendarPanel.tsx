@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, CircleCheck, ExternalLink, Link2, LoaderCircle, RefreshCw, ShieldCheck, TriangleAlert, Unplug } from 'lucide-react';
+import { CalendarDays, ChevronRight, CircleCheck, ExternalLink, Link2, LoaderCircle, RefreshCw, ShieldCheck, TriangleAlert, Unplug } from 'lucide-react';
 import type { GoogleCalendarApi, GoogleCalendarStatus, GoogleChangeInput, GoogleReason, GoogleState } from '../data/google-calendar';
 import { DataError } from '../data/errors';
 import { Dialog, ErrorNotice } from './ui';
@@ -9,6 +9,7 @@ import { browserSecret, openGooglePopup, type GooglePopup } from './google-oauth
 import './google-calendar.css';
 import GoogleTasksPanel from './GoogleTasksPanel';
 import type { GoogleTasksApi, GoogleTasksStatus } from '../data/google-tasks';
+import GoogleBrandIcon from './GoogleBrandIcon';
 
 const stateLabels: Record<GoogleState, string> = {
   disconnected: 'Desconectado',
@@ -46,7 +47,15 @@ function statusDate(value: string | null) {
     : 'Aún no hay una sincronización confirmada';
 }
 
-export default function GoogleCalendarPanel({ api, tasksApi }: { api: GoogleCalendarApi; tasksApi?: GoogleTasksApi }) {
+export default function GoogleCalendarPanel({
+  api,
+  tasksApi,
+  collapsible = false,
+}: {
+  api: GoogleCalendarApi;
+  tasksApi?: GoogleTasksApi;
+  collapsible?: boolean;
+}) {
   const client = useQueryClient();
   const statusKey = [...api.scopeKey, 'status'];
   const scope = api.scopeKey.join(':');
@@ -66,6 +75,8 @@ export default function GoogleCalendarPanel({ api, tasksApi }: { api: GoogleCale
   const [calendarId, setCalendarId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const bodyId = useId();
   const query = useQuery({
     queryKey: statusKey,
     queryFn: ({ signal }) => api.load(signal),
@@ -216,175 +227,207 @@ export default function GoogleCalendarPanel({ api, tasksApi }: { api: GoogleCale
     (!tasksStatus.enabled || ['needs_reauthorization', 'error'].includes(tasksStatus.state)),
   );
   const canDisconnect = status && status.state !== 'disconnected' && status.state !== 'disconnecting';
+  const headerStatus = !status
+    ? 'Por comprobar'
+    : !status.configured
+      ? 'Configuración pendiente'
+      : needsTasksPermission
+        ? 'Permisos pendientes'
+        : status.state === 'connected' && tasksApi && !tasksStatus
+          ? 'Comprobando permisos'
+          : stateLabels[status.state];
+  const badge = (
+    <span id={`${bodyId}-status`} className={`pw-google-badge${needsTasksPermission ? ' is-pending' : status?.state === 'connected' ? ' is-connected' : ''}`}>
+      {headerStatus}
+    </span>
+  );
   return (
-    <section className="pw-google" aria-label="Integración con Google">
-      <header className="pw-google-heading">
-        <span className="pw-calendar-zone-icon">
-          <Link2 size={19} aria-hidden="true" />
-        </span>
-        <div>
-          <h2>Google</h2>
-          <p>Calendario y tareas en una sola conexión.</p>
-        </div>
-        <span className={`pw-google-badge${needsTasksPermission ? ' is-pending' : status?.state === 'connected' ? ' is-connected' : ''}`}>
-          {!status
-            ? 'Por comprobar'
-            : !status.configured
-              ? 'Configuración pendiente'
-              : needsTasksPermission
-                ? 'Permisos pendientes'
-                : status.state === 'connected' && tasksApi && !tasksStatus
-                  ? 'Comprobando permisos'
-                  : stateLabels[status.state]}
-        </span>
-      </header>
-      <p className="pw-google-personal">
-        <ShieldCheck size={14} aria-hidden="true" />
-        Una conexión personal para Google Calendar y Google Tasks.
-      </p>
-      {query.error ? (
-        <ErrorNotice>
-          {errorMessage(query.error)}{' '}
-          <button className="btn btn-secondary btn-sm" onClick={() => void query.refetch()}>
-            Reintentar conexión
-          </button>
-        </ErrorNotice>
-      ) : !status ? (
-        <p role="status">Consultando tu conexión con Google…</p>
-      ) : (
-        <>
-          <div className="pw-google-service" role="group" aria-label="Eventos de Google Calendar">
-            <h3 className="pw-google-service-heading">
-              <CalendarDays size={16} aria-hidden="true" />
-              Eventos del calendario
-            </h3>
-            <div className="pw-google-details">
-              <Link2 size={16} aria-hidden="true" />
-              <p>
-                TR8 → Google Calendar. Se copian tus tareas personales y las asignadas a ti en equipos, con fecha u horario y acceso vigente, a un calendario
-                independiente llamado <strong>TR8</strong>.
-              </p>
+    <section className={`pw-google${collapsible ? ' is-collapsible' : ''}`} aria-label="Integración con Google">
+      <header className={`pw-google-heading${collapsible ? ' is-collapsible' : ''}`}>
+        {collapsible ? (
+          <h2 className="pw-google-disclosure-heading">
+            <button
+              type="button"
+              className="pw-google-disclosure"
+              aria-label="Google"
+              aria-expanded={expanded}
+              aria-controls={bodyId}
+              aria-describedby={`${bodyId}-status`}
+              onClick={() => setExpanded(value => !value)}
+            >
+              <span className="pw-google-brand">
+                <GoogleBrandIcon />
+              </span>
+              <span className="pw-google-disclosure-copy">
+                <span className="pw-google-disclosure-title">Google</span>
+                <span className="pw-google-disclosure-caption">Calendario y tareas en una sola conexión.</span>
+              </span>
+              {badge}
+              <ChevronRight className={`pw-google-chevron${expanded ? ' is-expanded' : ''}`} size={17} aria-hidden="true" />
+            </button>
+          </h2>
+        ) : (
+          <>
+            <span className="pw-google-brand">
+              <GoogleBrandIcon />
+            </span>
+            <div>
+              <h2>Google</h2>
+              <p>Calendario y tareas en una sola conexión.</p>
             </div>
-            <p className="pw-google-caption">
-              Los eventos se envían de TR8 a Google Calendar. Al completar una tarea conservaremos su evento con la marca «Hecha».
-            </p>
-            {status.reason && (
-              <p className="pw-google-reason" role="status">
-                <TriangleAlert size={15} aria-hidden="true" />
-                {reasonLabels[status.reason]}
+            {badge}
+          </>
+        )}
+      </header>
+      <div id={bodyId} className="pw-google-body" hidden={collapsible && !expanded}>
+        <p className="pw-google-personal">
+          <ShieldCheck size={14} aria-hidden="true" />
+          Una conexión personal para Google Calendar y Google Tasks.
+        </p>
+        {query.error ? (
+          <ErrorNotice>
+            {errorMessage(query.error)}{' '}
+            <button className="btn btn-secondary btn-sm" onClick={() => void query.refetch()}>
+              Reintentar conexión
+            </button>
+          </ErrorNotice>
+        ) : !status ? (
+          <p role="status">Consultando tu conexión con Google…</p>
+        ) : (
+          <>
+            <div className="pw-google-service" role="group" aria-label="Eventos de Google Calendar">
+              <h3 className="pw-google-service-heading">
+                <CalendarDays size={16} aria-hidden="true" />
+                Eventos del calendario
+              </h3>
+              <div className="pw-google-details">
+                <Link2 size={16} aria-hidden="true" />
+                <p>
+                  TR8 → Google Calendar. Se copian tus tareas personales y las asignadas a ti en equipos, con fecha u horario y acceso vigente, a un calendario
+                  independiente llamado <strong>TR8</strong>.
+                </p>
+              </div>
+              <p className="pw-google-caption">
+                Los eventos se envían de TR8 a Google Calendar. Al completar una tarea conservaremos su evento con la marca «Hecha».
+              </p>
+              {status.reason && (
+                <p className="pw-google-reason" role="status">
+                  <TriangleAlert size={15} aria-hidden="true" />
+                  {reasonLabels[status.reason]}
+                </p>
+              )}
+              {!status.configured && status.reason !== 'config_pending' && (
+                <p role="status">Falta completar la configuración de Google. La integración permanece desactivada.</p>
+              )}
+              {status.state !== 'disconnected' && (
+                <div className="pw-google-stats" key={`${scope}:${status.generation}`}>
+                  <div>
+                    <span>Última sincronización</span>
+                    <strong>{statusDate(status.last_sync_at)}</strong>
+                  </div>
+                  <div>
+                    <strong>{status.pending}</strong>
+                    <span>Pendientes</span>
+                  </div>
+                  <div>
+                    <strong>{status.failed}</strong>
+                    <span>Por revisar</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            {tasksApi && (
+              <GoogleTasksPanel api={tasksApi} embedded connectionBusy={operation !== null || status.state !== 'connected'} onBusyChange={onTasksBusyChange} />
+            )}
+            {['authorizing', 'provisioning', 'disconnecting'].includes(status.state) && (
+              <p className="pw-google-wait" role="status">
+                <LoaderCircle className="pw-spin" size={14} aria-hidden="true" />
+                {status.state === 'disconnecting'
+                  ? 'Terminando la opción de desconexión elegida. No se crearán nuevas copias.'
+                  : status.state === 'provisioning'
+                    ? 'Preparando el calendario y las primeras tareas. Puedes seguir usando TR8.'
+                    : 'Completa la autorización en la ventana de Google.'}
               </p>
             )}
-            {!status.configured && status.reason !== 'config_pending' && (
-              <p role="status">Falta completar la configuración de Google. La integración permanece desactivada.</p>
-            )}
-            {status.state !== 'disconnected' && (
-              <div className="pw-google-stats" key={`${scope}:${status.generation}`}>
-                <div>
-                  <span>Última sincronización</span>
-                  <strong>{statusDate(status.last_sync_at)}</strong>
-                </div>
-                <div>
-                  <strong>{status.pending}</strong>
-                  <span>Pendientes</span>
-                </div>
-                <div>
-                  <strong>{status.failed}</strong>
-                  <span>Por revisar</span>
-                </div>
-              </div>
-            )}
-          </div>
-          {tasksApi && (
-            <GoogleTasksPanel api={tasksApi} embedded connectionBusy={operation !== null || status.state !== 'connected'} onBusyChange={onTasksBusyChange} />
-          )}
-          {['authorizing', 'provisioning', 'disconnecting'].includes(status.state) && (
-            <p className="pw-google-wait" role="status">
-              <LoaderCircle className="pw-spin" size={14} aria-hidden="true" />
-              {status.state === 'disconnecting'
-                ? 'Terminando la opción de desconexión elegida. No se crearán nuevas copias.'
-                : status.state === 'provisioning'
-                  ? 'Preparando el calendario y las primeras tareas. Puedes seguir usando TR8.'
-                  : 'Completa la autorización en la ventana de Google.'}
-            </p>
-          )}
-          <div className="pw-google-actions">
-            {(canConnect || needsTasksPermission) && (
-              <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => showDialog('connect', status)}>
-                <Link2 size={14} aria-hidden="true" />
-                {needsTasksPermission
-                  ? 'Completar conexión con Google'
-                  : status.state === 'needs_reauthorization'
-                    ? 'Volver a conectar Google'
-                    : 'Conectar Google'}
-              </button>
-            )}
-            {status.configured && status.state === 'connected' && (
-              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void synchronize(status)}>
-                <RefreshCw size={14} aria-hidden="true" />
-                Sincronizar ahora
-              </button>
-            )}
-            {status.configured && status.state === 'provisioning_unknown' && (
-              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => showDialog('recover', status)}>
-                Recuperar calendario existente
-              </button>
-            )}
-            {status.configured && status.state === 'connected' && status.reason === 'remote_missing' && (
-              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => showDialog('rebuild', status)}>
-                Reconstruir eventos ausentes
-              </button>
-            )}
-            {status.state === 'cleanup_failed' && (
-              <>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  disabled={busy || !status.configured}
-                  onClick={() => void change({ action: 'retry_cleanup' }, status)}
-                >
-                  Reintentar limpieza
+            <div className="pw-google-actions">
+              {(canConnect || needsTasksPermission) && (
+                <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => showDialog('connect', status)}>
+                  <Link2 size={14} aria-hidden="true" />
+                  {needsTasksPermission
+                    ? 'Completar conexión con Google'
+                    : status.state === 'needs_reauthorization'
+                      ? 'Volver a conectar Google'
+                      : 'Conectar Google'}
                 </button>
-                <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => showDialog('abandon', status)}>
-                  Conservar restantes y desconectar
+              )}
+              {status.configured && status.state === 'connected' && (
+                <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void synchronize(status)}>
+                  <RefreshCw size={14} aria-hidden="true" />
+                  Sincronizar ahora
                 </button>
-              </>
-            )}
-            {canDisconnect && status.state !== 'cleanup_failed' && (
-              <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => showDialog('disconnect', status)}>
-                <Unplug size={14} aria-hidden="true" />
-                Desconectar
-              </button>
-            )}
-          </div>
-        </>
-      )}
-      {error && !dialogCurrent && <ErrorNotice>{error}</ErrorNotice>}
-      {status && notice && (
-        <p className="pw-google-notice" role="status">
-          <CircleCheck size={15} aria-hidden="true" />
-          {notice}
-        </p>
-      )}
-      {busy && !dialogCurrent && (
-        <p className="pw-google-wait" role="status">
-          <LoaderCircle size={14} className="pw-spin" aria-hidden="true" />
-          {operation === 'connect' ? 'Esperando tu autorización en Google…' : 'Confirmando la solicitud…'}
-        </p>
-      )}
-      <footer>
-        <span>Correo opcional y altas externas siguen desactivados.</span>
-        <button
-          className="btn btn-ghost btn-sm"
-          disabled={query.isFetching || busy}
-          onClick={() => {
-            setError(null);
-            void query.refetch();
-            if (tasksApi) void tasksQuery.refetch();
-          }}
-        >
-          <RefreshCw size={13} aria-hidden="true" />
-          Actualizar conexión
-        </button>
-      </footer>
+              )}
+              {status.configured && status.state === 'provisioning_unknown' && (
+                <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => showDialog('recover', status)}>
+                  Recuperar calendario existente
+                </button>
+              )}
+              {status.configured && status.state === 'connected' && status.reason === 'remote_missing' && (
+                <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => showDialog('rebuild', status)}>
+                  Reconstruir eventos ausentes
+                </button>
+              )}
+              {status.state === 'cleanup_failed' && (
+                <>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={busy || !status.configured}
+                    onClick={() => void change({ action: 'retry_cleanup' }, status)}
+                  >
+                    Reintentar limpieza
+                  </button>
+                  <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => showDialog('abandon', status)}>
+                    Conservar restantes y desconectar
+                  </button>
+                </>
+              )}
+              {canDisconnect && status.state !== 'cleanup_failed' && (
+                <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => showDialog('disconnect', status)}>
+                  <Unplug size={14} aria-hidden="true" />
+                  Desconectar
+                </button>
+              )}
+            </div>
+          </>
+        )}
+        {error && !dialogCurrent && <ErrorNotice>{error}</ErrorNotice>}
+        {status && notice && (
+          <p className="pw-google-notice" role="status">
+            <CircleCheck size={15} aria-hidden="true" />
+            {notice}
+          </p>
+        )}
+        {busy && !dialogCurrent && (
+          <p className="pw-google-wait" role="status">
+            <LoaderCircle size={14} className="pw-spin" aria-hidden="true" />
+            {operation === 'connect' ? 'Esperando tu autorización en Google…' : 'Confirmando la solicitud…'}
+          </p>
+        )}
+        <footer>
+          <span>Correo opcional y altas externas siguen desactivados.</span>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={query.isFetching || busy}
+            onClick={() => {
+              setError(null);
+              void query.refetch();
+              if (tasksApi) void tasksQuery.refetch();
+            }}
+          >
+            <RefreshCw size={13} aria-hidden="true" />
+            Actualizar conexión
+          </button>
+        </footer>
+      </div>
       {dialogCurrent && status && (
         <Dialog
           title={

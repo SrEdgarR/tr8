@@ -1,6 +1,6 @@
 # Etapa 6 · Google Tasks
 
-Estado: **implementación y backend instalados; autorización y aceptación real de Google Tasks pendientes**. La conexión de Google Calendar existente no acredita el permiso adicional de Tasks. No se ha autorizado todavía ese permiso ni comprobado la importación de la tarea real del teléfono.
+Estado: **implementación y backend publicados; autorización de Tasks e importación real comprobadas en la aplicación**. Se observó la tarea «Tarea de prueba para ver si se carga en TR8» en el proyecto personal Google Tasks. Las pruebas reales de edición, finalización y eliminación de esas tareas siguen pendientes; las pruebas de eventos de Calendar pertenecen a la etapa 5.
 
 ## Alcance
 
@@ -11,6 +11,12 @@ La sincronización manual respeta la pausa de Tasks y vuelve a consultar su esta
 antes de solicitar cambios. Las operaciones de ambas funciones comparten un bloqueo
 en la interfaz para evitar editar las listas durante una reconexión o desconexión.
 Esta reorganización no necesita migraciones ni modifica datos existentes.
+
+La pantalla dispone de las categorías **General**, **Conexiones** y **Actividad**.
+Zona horaria, Google y procesos empiezan colapsados. Cambiar de categoría o plegar
+un apartado conserva su contenido montado y sus borradores. El estado de Google
+permanece visible en la cabecera junto al icono de la plataforma; el diálogo de
+autorización se mantiene fuera del contenido que se puede ocultar.
 
 Una tarea creada en Google Tasks, incluida una creada como «Tarea» desde Google Calendar del teléfono, se importa al proyecto **Google Tasks** del espacio personal. El proyecto aparece con el primer elemento válido. Esta versión sincroniza las tareas de Google ya importadas; no crea tareas nuevas en Google a partir de tareas normales de TR8.
 
@@ -39,4 +45,4 @@ La comparación antes y después conservó exactamente el **proyecto y la tarea 
 
 Para evitar la regresión transaccional de la CLI documentada en [Supabase CLI #6347](https://github.com/supabase/cli/issues/6347), se aplicaron el SQL y su registro en el historial mediante `db query` dentro de una misma transacción. Se conservó el historial canónico, sin `migration repair` y sin modificar las migraciones originales ya aplicadas.
 
-Se mantienen **Supabase Free**, **Vercel Hobby**, las altas externas desactivadas y el correo opcional desactivado. El contrato detallado está en [tasks-contract.md](tasks-contract.md). La siguiente comprobación requiere el consentimiento real de Tasks y verificar importación, actualización, finalización y eliminación con la cuenta del propietario.
+Se mantienen **Supabase Free**, **Vercel Hobby**, las altas externas desactivadas y el correo opcional desactivado. El contrato detallado está en [tasks-contract.md](tasks-contract.md). Queda pendiente verificar con Google los cambios de título y fecha, la finalización y la eliminación de una tarea importada, sin modificar las demás.

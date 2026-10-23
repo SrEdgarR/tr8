@@ -84,7 +84,7 @@ describe('espacios y equipos', () => {
   const personal = { id: 'workspace-a', kind: 'personal' as const, name: 'Personal', owner_id: 'personal-owner', version: 1, permissions: [] };
   const team = { id: 'team-a', kind: 'team' as const, name: 'Equipo editorial', owner_id: 'personal-owner', version: 1, permissions: [] };
 
-  it('abre Configuración desde la navegación y conserva separadas las preferencias, los procesos y Mi cuenta', async () => {
+  it('abre las categorías de Configuración desde la navegación y conserva Mi cuenta por separado', async () => {
     const user = userEvent.setup();
     const calendar: CalendarApi = {
       scopeKey: ['settings', 'test'],
@@ -106,11 +106,30 @@ describe('espacios y equipos', () => {
     expect(settingsLink).toHaveAttribute('href', '/settings?workspace=workspace-a');
     await user.click(settingsLink);
     expect(screen.getByRole('heading', { name: 'Configuración', level: 1 })).toBeInTheDocument();
+    const categories = screen.getByRole('navigation', { name: 'Categorías de configuración' });
+    expect(screen.getByRole('region', { name: 'Configuración general' })).toBeVisible();
+    const zoneToggle = screen.getByRole('button', { name: /^Zona horaria/ });
+    expect(zoneToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('combobox', { name: 'Zona horaria de visualización' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Procesos en segundo plano' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Integración personal con Google' })).not.toBeInTheDocument();
+    await user.click(zoneToggle);
     const input = await screen.findByRole('combobox', { name: 'Zona horaria de visualización' });
     await waitFor(() => expect(input).toBeEnabled());
     expect(input).toHaveValue('America/La_Paz');
-    expect(screen.getByRole('region', { name: 'Procesos en segundo plano' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Integración personal con Google' })).toBeInTheDocument();
+    await user.click(within(categories).getByRole('button', { name: 'Conexiones' }));
+    expect(screen.getByRole('region', { name: 'Conexiones de la cuenta' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Integración personal con Google' })).toBeVisible();
+    expect(input).toBeInTheDocument();
+    expect(input).not.toBeVisible();
+    await user.click(within(categories).getByRole('button', { name: 'Actividad' }));
+    expect(screen.getByRole('region', { name: 'Actividad de los procesos' })).toBeVisible();
+    const processesToggle = screen.getByRole('button', { name: /^Procesos en segundo plano/ });
+    expect(processesToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('region', { name: 'Procesos en segundo plano' })).not.toBeInTheDocument();
+    await user.click(processesToggle);
+    expect(screen.getByRole('region', { name: 'Procesos en segundo plano' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Integración personal con Google' })).not.toBeInTheDocument();
     expect(calendar.items).not.toHaveBeenCalled();
     expect(calendar.saveProfile).not.toHaveBeenCalled();
     await user.click(screen.getByRole('link', { name: /personal@example.com/ }));

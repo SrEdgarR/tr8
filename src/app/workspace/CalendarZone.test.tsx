@@ -1,5 +1,5 @@
 import { StrictMode, type ReactNode } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarApi, CalendarPreferences, WorkspaceSummary } from '../types';
@@ -160,16 +160,27 @@ describe('zona horaria en Configuración', () => {
   function mountSettings(api: CalendarApi) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
     const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-    return { ...render(<CalendarSettings api={api} processes={<div>Procesos en segundo plano</div>} />, { wrapper }), client };
+    return {
+      ...render(
+        <CalendarSettings
+          api={api}
+          processes={<div>Estado de los procesos de prueba</div>}
+          integrations={<section aria-label="Conexión de prueba">Estado de la conexión de prueba</section>}
+        />,
+        { wrapper },
+      ),
+      client,
+    };
   }
 
   it('permite editar la preferencia guardada y la comparte con el calendario sin volver a mostrar el editor allí', async () => {
     const api = calendarApi({ profile: vi.fn().mockResolvedValue(savedProfile('America/La_Paz', 3)) });
     const { client, rerender } = mountSettings(api);
+    fireEvent.click(screen.getByRole('button', { name: /^Zona horaria/ }));
     const input = await screen.findByRole('combobox', { name: 'Zona horaria de visualización' });
     await waitFor(() => expect(input).toBeEnabled());
     expect(input).toHaveValue('America/La_Paz');
-    expect(screen.getByText('Procesos en segundo plano')).toBeInTheDocument();
+    expect(screen.getByText('Estado de los procesos de prueba')).not.toBeVisible();
     expect(api.saveProfile).not.toHaveBeenCalled();
     fireEvent.change(input, { target: { value: 'Europe/Madrid' } });
     fireEvent.click(screen.getByRole('button', { name: 'Guardar zona' }));
@@ -187,6 +198,9 @@ describe('zona horaria en Configuración', () => {
   it('no guarda una zona automática solo por visitar Configuración con un perfil nuevo', async () => {
     const api = calendarApi();
     mountSettings(api);
+    await waitFor(() => expect(api.profile).toHaveBeenCalled());
+    expect(screen.queryByRole('combobox', { name: 'Zona horaria de visualización' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Zona horaria/ }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar zona' })).toBeEnabled());
     expect(api.saveProfile).not.toHaveBeenCalled();
     expect(api.items).not.toHaveBeenCalled();
@@ -197,6 +211,7 @@ describe('zona horaria en Configuración', () => {
     const saveProfile = vi.fn().mockRejectedValueOnce(new DataError('Conflicto de versión', 'PT409')).mockResolvedValue(savedProfile('Europe/Madrid', 5));
     const api = calendarApi({ profile, saveProfile });
     mountSettings(api);
+    fireEvent.click(screen.getByRole('button', { name: /^Zona horaria/ }));
     const input = await screen.findByRole('combobox', { name: 'Zona horaria de visualización' });
     await waitFor(() => expect(input).toBeEnabled());
     fireEvent.change(input, { target: { value: 'Europe/Madrid' } });
@@ -208,5 +223,77 @@ describe('zona horaria en Configuración', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar zona' }));
     await screen.findByText(/Zona horaria guardada\. Los vencimientos/);
     expect(saveProfile).toHaveBeenNthCalledWith(2, 'Europe/Madrid', 4);
+  });
+
+  it('abre General con los ajustes cerrados, carga el perfil sin guardar y separa las categorías', async () => {
+    const api = calendarApi({ profile: vi.fn().mockResolvedValue(savedProfile('America/La_Paz', 3)) });
+    mountSettings(api);
+    const navigation = screen.getByRole('navigation', { name: 'Categorías de configuración' });
+    expect(within(navigation).getAllByRole('button')).toHaveLength(3);
+    expect(screen.getByRole('heading', { name: 'Configuración', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Configuración general' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Conexiones de la cuenta' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Actividad de los procesos' })).not.toBeInTheDocument();
+    const zoneToggle = screen.getByRole('button', { name: /^Zona horaria/ });
+    expect(zoneToggle).toHaveAttribute('aria-expanded', 'false');
+    await waitFor(() => expect(api.profile).toHaveBeenCalled());
+    const input = screen.getByLabelText('Zona horaria de visualización');
+    await waitFor(() => expect(input).toHaveValue('America/La_Paz'));
+    expect(input).not.toBeVisible();
+    expect(api.saveProfile).not.toHaveBeenCalled();
+    expect(api.items).not.toHaveBeenCalled();
+
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Conexiones' }));
+    expect(screen.getByRole('region', { name: 'Conexiones de la cuenta' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Conexión de prueba' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Configuración general' })).not.toBeInTheDocument();
+    expect(input).toBeInTheDocument();
+    expect(input).not.toBeVisible();
+
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Actividad' }));
+    expect(screen.getByRole('region', { name: 'Actividad de los procesos' })).toBeVisible();
+    const processesToggle = screen.getByRole('button', { name: /^Procesos en segundo plano/ });
+    expect(processesToggle).toHaveAttribute('aria-expanded', 'false');
+    const processes = screen.getByText('Estado de los procesos de prueba');
+    expect(processes).not.toBeVisible();
+    const bodyId = processesToggle.getAttribute('aria-controls');
+    expect(bodyId).toBeTruthy();
+    expect(document.getElementById(bodyId!)).toContainElement(processes);
+    fireEvent.click(processesToggle);
+    expect(processesToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(processes).toBeVisible();
+    fireEvent.click(processesToggle);
+    expect(processesToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(processes).not.toBeVisible();
+    expect(api.saveProfile).not.toHaveBeenCalled();
+  });
+
+  it('conserva el borrador horario y el estado de apertura al cambiar de categoría sin guardar', async () => {
+    const api = calendarApi({ profile: vi.fn().mockResolvedValue(savedProfile('America/La_Paz', 3)) });
+    mountSettings(api);
+    const navigation = screen.getByRole('navigation', { name: 'Categorías de configuración' });
+    const zoneToggle = screen.getByRole('button', { name: /^Zona horaria/ });
+    fireEvent.click(zoneToggle);
+    const input = await screen.findByRole('combobox', { name: 'Zona horaria de visualización' });
+    await waitFor(() => expect(input).toBeEnabled());
+    const bodyId = zoneToggle.getAttribute('aria-controls');
+    expect(bodyId).toBeTruthy();
+    expect(document.getElementById(bodyId!)).toContainElement(input);
+    fireEvent.change(input, { target: { value: 'Europe/Madrid' } });
+    fireEvent.click(zoneToggle);
+    expect(input).not.toBeVisible();
+    fireEvent.click(zoneToggle);
+    expect(input).toBeVisible();
+    expect(input).toHaveValue('Europe/Madrid');
+
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Conexiones' }));
+    expect(input).not.toBeVisible();
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Actividad' }));
+    fireEvent.click(within(navigation).getByRole('button', { name: 'General' }));
+    expect(zoneToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('combobox', { name: 'Zona horaria de visualización' })).toBe(input);
+    expect(input).toHaveValue('Europe/Madrid');
+    expect(api.saveProfile).not.toHaveBeenCalled();
+    expect(api.items).not.toHaveBeenCalled();
   });
 });

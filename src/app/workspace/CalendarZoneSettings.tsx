@@ -1,40 +1,45 @@
-import type { ReactNode } from 'react';
-import { Check, CircleCheck, Globe2, LoaderCircle, Save, SlidersHorizontal, UserRound } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { Activity, Check, CircleCheck, Globe2, LoaderCircle, Plug, Save, SlidersHorizontal, UserRound } from 'lucide-react';
 import type { CalendarApi } from '../types';
 import { validTimeZone } from './CalendarTime';
 import TimeZonePicker from './TimeZonePicker';
 import useCalendarZonePreferences from './useCalendarZonePreferences';
 import { Busy, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
+import SettingsDisclosure from './SettingsDisclosure';
+import './settings.css';
 
 type ZoneState = ReturnType<typeof useCalendarZonePreferences>;
 
-export function CalendarZoneEditor({ state, initial = false }: { state: ZoneState; initial?: boolean }) {
+export function CalendarZoneEditor({ state, initial = false, embedded = false }: { state: ZoneState; initial?: boolean; embedded?: boolean }) {
   const { profile, detectedZone, zone, zoneDraft, setZoneInput, zoneNotice, zoneError, savingZone, saveZone } = state;
+  const Container = embedded ? 'div' : 'section';
   return (
     <>
-      <section className="pw-calendar-zone" aria-label="Zona horaria del calendario">
-        <div className="pw-calendar-zone-heading">
-          <span className="pw-calendar-zone-icon">
-            <Globe2 size={18} aria-hidden="true" />
-          </span>
-          <div className="pw-calendar-zone-title">
-            <h2>Zona horaria</h2>
-            <p className="faint">
-              {zone
-                ? 'Elige cómo ves las fechas y horas de tus proyectos.'
-                : initial && detectedZone
-                  ? 'Usamos la zona de tu dispositivo en el primer acceso.'
-                  : initial
-                    ? 'No pudimos detectar la zona del dispositivo. Elige una para empezar.'
-                    : 'Busca tu ciudad o país y comprueba su hora antes de guardar.'}
-            </p>
+      <Container className={`pw-calendar-zone${embedded ? ' is-embedded' : ''}`} aria-label={embedded ? undefined : 'Zona horaria del calendario'}>
+        {!embedded && (
+          <div className="pw-calendar-zone-heading">
+            <span className="pw-calendar-zone-icon">
+              <Globe2 size={18} aria-hidden="true" />
+            </span>
+            <div className="pw-calendar-zone-title">
+              <h2>Zona horaria</h2>
+              <p className="faint">
+                {zone
+                  ? 'Elige cómo ves las fechas y horas de tus proyectos.'
+                  : initial && detectedZone
+                    ? 'Usamos la zona de tu dispositivo en el primer acceso.'
+                    : initial
+                      ? 'No pudimos detectar la zona del dispositivo. Elige una para empezar.'
+                      : 'Busca tu ciudad o país y comprueba su hora antes de guardar.'}
+              </p>
+            </div>
+            <span className="pw-calendar-zone-personal">
+              <UserRound size={12} aria-hidden="true" />
+              Personal
+            </span>
           </div>
-          <span className="pw-calendar-zone-personal">
-            <UserRound size={12} aria-hidden="true" />
-            Personal
-          </span>
-        </div>
+        )}
         <TimeZonePicker
           label="Zona horaria de visualización"
           value={zoneDraft}
@@ -67,7 +72,7 @@ export function CalendarZoneEditor({ state, initial = false }: { state: ZoneStat
             <span>{zoneNotice}</span>
           </div>
         )}
-      </section>
+      </Container>
       {profile.error && (
         <ErrorNotice>
           {errorMessage(profile.error)}{' '}
@@ -84,19 +89,36 @@ export function CalendarZoneEditor({ state, initial = false }: { state: ZoneStat
 
 function SavedZoneSettings({ api }: { api: CalendarApi }) {
   const state = useCalendarZonePreferences(api);
-  if (api.accessError)
-    return (
-      <ErrorNotice>
-        {api.accessError}
-        <button className="btn btn-secondary btn-sm" onClick={() => void api.retryAccess?.()}>
-          Revisar acceso a preferencias
-        </button>
-      </ErrorNotice>
-    );
-  return <CalendarZoneEditor state={state} />;
+  return (
+    <SettingsDisclosure
+      title="Zona horaria"
+      description="Define cómo ves las fechas y horas de tus proyectos."
+      icon={<Globe2 size={18} />}
+      value={state.profile.isPending ? 'Comprobando…' : (state.zone ?? 'Por configurar')}
+    >
+      {api.accessError ? (
+        <ErrorNotice>
+          {api.accessError}
+          <button className="btn btn-secondary btn-sm" onClick={() => void api.retryAccess?.()}>
+            Revisar acceso a preferencias
+          </button>
+        </ErrorNotice>
+      ) : (
+        <CalendarZoneEditor state={state} embedded />
+      )}
+    </SettingsDisclosure>
+  );
 }
 
+const categories = [
+  { id: 'general', label: 'General', icon: SlidersHorizontal, group: 'Personal' },
+  { id: 'connections', label: 'Conexiones', icon: Plug, group: 'Integraciones' },
+  { id: 'activity', label: 'Actividad', icon: Activity, group: 'Integraciones' },
+] as const;
+type SettingsCategory = (typeof categories)[number]['id'];
+
 export default function CalendarSettings({ api, processes, integrations }: { api?: CalendarApi; processes?: ReactNode; integrations?: ReactNode }) {
+  const [category, setCategory] = useState<SettingsCategory>('general');
   return (
     <div className="page pw-settings">
       <div className="ph">
@@ -109,9 +131,67 @@ export default function CalendarSettings({ api, processes, integrations }: { api
           <p>Ajusta TR8 a tu forma de trabajar. Estas preferencias solo se aplican a tu cuenta.</p>
         </div>
       </div>
-      {api && <SavedZoneSettings key={api.scopeKey.join(':')} api={api} />}
-      {integrations}
-      {processes}
+      <div className="pw-settings-layout">
+        <nav className="pw-settings-nav" aria-label="Categorías de configuración">
+          {['Personal', 'Integraciones'].map(group => (
+            <div className="pw-settings-nav-group" key={group}>
+              <p>{group}</p>
+              {categories
+                .filter(item => item.group === group)
+                .map(({ id, label, icon: Icon }) => (
+                  <button
+                    type="button"
+                    key={id}
+                    className={category === id ? 'is-current' : ''}
+                    aria-current={category === id ? 'page' : undefined}
+                    aria-controls={`tr8-settings-${id}`}
+                    onClick={() => setCategory(id)}
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                    <span>{label}</span>
+                  </button>
+                ))}
+            </div>
+          ))}
+        </nav>
+        <div className="pw-settings-content">
+          <section id="tr8-settings-general" className="pw-settings-category" aria-label="Configuración general" hidden={category !== 'general'}>
+            <header className="pw-settings-category-heading">
+              <h2>General</h2>
+              <p>Las preferencias que se aplican a tu cuenta.</p>
+            </header>
+            {api ? (
+              <SavedZoneSettings key={api.scopeKey.join(':')} api={api} />
+            ) : (
+              <p className="faint">Las preferencias del calendario no están disponibles en este momento.</p>
+            )}
+          </section>
+          <section id="tr8-settings-connections" className="pw-settings-category" aria-label="Conexiones de la cuenta" hidden={category !== 'connections'}>
+            <header className="pw-settings-category-heading">
+              <h2>Conexiones</h2>
+              <p>Conecta tus plataformas y gestiona sus permisos desde un solo lugar.</p>
+            </header>
+            {integrations ?? <p className="faint">No hay conexiones disponibles en este momento.</p>}
+          </section>
+          <section id="tr8-settings-activity" className="pw-settings-category" aria-label="Actividad de los procesos" hidden={category !== 'activity'}>
+            <header className="pw-settings-category-heading">
+              <h2>Actividad</h2>
+              <p>Consulta el procesamiento de tus cambios en segundo plano.</p>
+            </header>
+            {processes ? (
+              <SettingsDisclosure
+                title="Procesos en segundo plano"
+                description="Estado e historial de los cambios preparados por TR8."
+                icon={<Activity size={18} />}
+              >
+                {processes}
+              </SettingsDisclosure>
+            ) : (
+              <p className="faint">El estado de los procesos no está disponible en este momento.</p>
+            )}
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

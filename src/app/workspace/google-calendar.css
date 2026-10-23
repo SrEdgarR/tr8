@@ -13,6 +13,82 @@
   align-items: center;
   gap: 10px;
 }
+.pw-google-body:not([hidden]) {
+  display: grid;
+  gap: 15px;
+}
+.pw-google-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: #fff;
+}
+.pw-google.is-collapsible {
+  padding: 0;
+  gap: 0;
+}
+.pw-google-heading.is-collapsible {
+  display: block;
+}
+.pw-google-heading .pw-google-disclosure-heading {
+  margin: 0;
+}
+.pw-google-disclosure {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 18px 20px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+.pw-google-disclosure:hover {
+  background: var(--surface-2);
+}
+.pw-google-disclosure:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+.pw-google-disclosure-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+.pw-google-disclosure-title {
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}
+.pw-google-disclosure-caption {
+  font-size: var(--fs-2xs);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+.pw-google-disclosure .pw-google-badge {
+  margin: 0;
+}
+.pw-google-chevron {
+  color: var(--text-3);
+  flex-shrink: 0;
+  transition: transform 180ms ease;
+}
+.pw-google-chevron.is-expanded {
+  transform: rotate(90deg);
+}
+.pw-google.is-collapsible .pw-google-body {
+  padding: 0 20px 20px;
+}
 .pw-google-heading > div {
   flex: 1;
   min-width: 0;
@@ -229,6 +305,21 @@
   .pw-google {
     padding: 16px;
   }
+  .pw-google.is-collapsible {
+    padding: 0;
+  }
+  .pw-google-disclosure {
+    padding: 16px;
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+  .pw-google-disclosure .pw-google-badge {
+    order: 4;
+    margin-left: 43px;
+  }
+  .pw-google.is-collapsible .pw-google-body {
+    padding: 0 16px 16px;
+  }
   .pw-google-heading {
     flex-wrap: wrap;
   }
@@ -246,5 +337,11 @@
   }
   .pw-google-actions .btn {
     white-space: normal;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pw-google-disclosure,
+  .pw-google-chevron {
+    transition: none;
   }
 }

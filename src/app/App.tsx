@@ -582,10 +582,11 @@ function ScopedWorkspace({
       capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
       collaboration={collaboration}
       calendar={calendar}
-      integrations={<GoogleCalendarPanel key={google.scopeKey.join(':')} api={google} tasksApi={googleTasks} />}
+      integrations={<GoogleCalendarPanel key={google.scopeKey.join(':')} api={google} tasksApi={googleTasks} collapsible />}
       processes={
         <ProcessesPanel
           key={processes.scopeKey.join(':')}
+          embedded
           api={processes}
           disabled={unavailable || !selected.permissions.includes('project.read')}
           workspaceName={selected.kind === 'personal' ? 'Mi espacio personal' : selected.name}
