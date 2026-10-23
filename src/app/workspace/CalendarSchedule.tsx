@@ -2,9 +2,8 @@ import { useMemo, useRef, useState } from 'react';
 import type { CalendarApi, Task } from '../types';
 import { ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
-import { instantMicroseconds, localDateTime, localInstantChoices, moveBlock, resolveLocalInstant, validTimeZone } from './CalendarTime';
-
-const COMMON_ZONES = ['America/La_Paz', 'UTC', 'America/New_York', 'America/Mexico_City', 'America/Bogota', 'America/Lima', 'Europe/Madrid', 'Asia/Tokyo'];
+import { detectDeviceTimeZone, instantMicroseconds, localDateTime, localInstantChoices, moveBlock, resolveLocalInstant, validTimeZone } from './CalendarTime';
+import TimeZonePicker from './TimeZonePicker';
 
 function initialChoice(instant: string | null | undefined, zone: string): string {
   if (!instant) return '';
@@ -66,7 +65,8 @@ export default function CalendarSchedule({
   onSaved: (before: Task, saved: Task) => void;
 }) {
   const [task, setTask] = useState(liveTask);
-  const initialZone = task.scheduled_time_zone ?? 'America/La_Paz';
+  const [deviceZone] = useState(() => detectDeviceTimeZone() ?? 'UTC');
+  const initialZone = task.scheduled_time_zone ?? deviceZone;
   const [enabled, setEnabled] = useState(Boolean(task.scheduled_start_at));
   const [zone, setZone] = useState(initialZone);
   const [zoneDraft, setZoneDraft] = useState(initialZone);
@@ -223,22 +223,13 @@ export default function CalendarSchedule({
       {enabled && (
         <>
           <div className="pw-calendar-zone-editor">
-            <label className="pw-field">
-              Zona del bloque
-              <input
-                list="tr8-schedule-zones"
-                value={zoneDraft}
-                disabled={blocked}
-                onChange={event => setZoneDraft(event.target.value)}
-                placeholder="America/La_Paz"
-              />
-            </label>
-            <datalist id="tr8-schedule-zones">
-              {COMMON_ZONES.map(item => (
-                <option key={item} value={item} />
-              ))}
-            </datalist>
-            <button type="button" className="btn btn-secondary btn-sm" disabled={blocked || zoneDraft === zone} onClick={applyZone}>
+            <TimeZonePicker label="Zona del bloque" value={zoneDraft} onChange={setZoneDraft} disabled={blocked} />
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={blocked || zoneDraft === zone || !validTimeZone(zoneDraft)}
+              onClick={applyZone}
+            >
               Aplicar zona
             </button>
           </div>

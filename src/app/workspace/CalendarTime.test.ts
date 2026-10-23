@@ -11,9 +11,19 @@ import {
   resolveLocalInstant,
   validCivilDate,
   validTimeZone,
+  timeZoneClock,
 } from './CalendarTime';
 
 describe('fechas civiles y zonas del calendario', () => {
+  it('muestra fecha, reloj y desplazamientos reales a ambos lados de medianoche y con fracciones de hora', () => {
+    const now = new Date('2026-10-24T00:15:30Z');
+    expect(timeZoneClock('America/La_Paz', now)).toEqual({ date: 'viernes, 23 de octubre de 2026', time: '20:15:30', offset: 'UTC-04:00' });
+    expect(timeZoneClock('Asia/Kathmandu', now)).toEqual({ date: 'sábado, 24 de octubre de 2026', time: '06:00:30', offset: 'UTC+05:45' });
+    expect(timeZoneClock('Asia/Kolkata', now).offset).toBe('UTC+05:30');
+    expect(timeZoneClock('UTC', now).offset).toBe('UTC+00:00');
+    expect(timeZoneClock('America/New_York', new Date('2026-07-01T12:00:00Z')).offset).toBe('UTC-04:00');
+    expect(timeZoneClock('America/New_York', new Date('2026-12-01T12:00:00Z')).offset).toBe('UTC-05:00');
+  });
   it('suma días civiles en cambios horarios, bisiestos y fin de año', () => {
     expect(addCivilDays('2026-03-08', 1)).toBe('2026-03-09');
     expect(addCivilDays('2024-02-28', 1)).toBe('2024-02-29');

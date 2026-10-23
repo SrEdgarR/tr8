@@ -1,11 +1,23 @@
-import { useMemo, useState, type CSSProperties } from 'react';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, ChevronLeft, ChevronRight, List, RefreshCw } from 'lucide-react';
 import { STATUSES } from '../constants';
 import type { CalendarApi, CalendarItem, CalendarQuery, Project, TaskStatus, WorkspaceSummary } from '../types';
 import { Busy, Dialog, EmptyState, ErrorNotice, StatusDot } from './ui';
 import { errorMessage } from './helpers';
-import { addCivilDays, addCivilMonths, blockLastDate, dateInTimeZone, formatCivilDate, formatTime, monthDays, monthStart, validTimeZone } from './CalendarTime';
+import {
+  addCivilDays,
+  addCivilMonths,
+  blockLastDate,
+  dateInTimeZone,
+  detectDeviceTimeZone,
+  formatCivilDate,
+  formatTime,
+  monthDays,
+  monthStart,
+  validTimeZone,
+} from './CalendarTime';
+import TimeZonePicker from './TimeZonePicker';
 
 interface Props {
   api: CalendarApi;
@@ -91,14 +103,48 @@ function CalendarAgenda({ items, zone, from, onOpen }: { items: CalendarItem[]; 
 
 export default function Calendar({ api, workspaces, workspaceId, project, projects, onOpen }: Props) {
   const client = useQueryClient();
-  const profileKey = [...api.scopeKey, 'profile'];
+  const profileKey = useMemo(() => [...api.scopeKey, 'profile'], [api.scopeKey]);
   const profile = useQuery({ queryKey: profileKey, queryFn: ({ signal }) => api.profile(signal), retry: false });
+  const [detectedZone] = useState(detectDeviceTimeZone);
+  const automaticAttempt = useRef(false);
   const [zoneInput, setZoneInput] = useState<string | null>(null);
-  const [savingZone, setSavingZone] = useState(false);
   const [zoneError, setZoneError] = useState<string | null>(null);
   const [zoneNotice, setZoneNotice] = useState('');
   const zone = profile.error ? null : (profile.data?.time_zone ?? null);
-  const zoneDraft = zoneInput ?? zone ?? 'America/La_Paz';
+  const zoneDraft = zoneInput ?? zone ?? detectedZone ?? '';
+  const { mutate: persistZone, isPending: savingZone } = useMutation({
+    mutationFn: ({ nextZone, version }: { nextZone: string; version: number; automatic: boolean; key: string[] }) => api.saveProfile(nextZone, version),
+    onMutate: async variables => {
+      setZoneError(null);
+      setZoneNotice('');
+      await client.cancelQueries({ queryKey: variables.key, exact: true });
+    },
+    onSuccess: (saved, variables) => {
+      client.setQueryData(variables.key, saved);
+      if (!variables.automatic) setZoneInput(null);
+      setZoneNotice(
+        variables.automatic
+          ? `Detectamos y guardamos la zona de tu dispositivo: ${saved.time_zone}. Puedes cambiarla cuando quieras.`
+          : 'Zona horaria guardada. Los vencimientos conservan su fecha y los bloques conservan sus instantes.',
+      );
+    },
+    onError: async cause => {
+      setZoneError(errorMessage(cause));
+      if (cause && typeof cause === 'object' && 'code' in cause && cause.code === 'PT409') {
+        // Another tab may have initialized the preference. Adopt it; never overwrite it.
+        const current = await profile.refetch();
+        if (current.data?.time_zone) setZoneNotice('Se cargó la zona guardada desde otra sesión. Revisa la hora antes de cambiarla.');
+      }
+    },
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (automaticAttempt.current || !detectedZone || !profile.data || profile.data.time_zone !== null || profile.error || api.accessError || zoneInput !== null)
+      return;
+    automaticAttempt.current = true;
+    persistZone({ nextZone: detectedZone, version: profile.data.version, automatic: true, key: profileKey });
+  }, [detectedZone, profile.data, profile.error, api.accessError, zoneInput, persistZone, profileKey]);
   const [month, setMonth] = useState<string | null>(null);
   const currentMonth = month ?? monthStart(dateInTimeZone(new Date(), zone ?? 'America/La_Paz'));
   const [view, setView] = useState<'month' | 'agenda'>('month');
@@ -199,20 +245,10 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
     setZoneError(null);
     setZoneNotice('');
     if (!validTimeZone(zoneDraft)) {
-      setZoneError('Escribe una zona horaria IANA válida, por ejemplo America/La_Paz.');
+      setZoneError('Selecciona una zona de los resultados o escribe una zona IANA válida.');
       return;
     }
-    setSavingZone(true);
-    try {
-      const saved = await api.saveProfile(zoneDraft, profile.data.version);
-      client.setQueryData(profileKey, saved);
-      setZoneInput(null);
-      setZoneNotice('Zona horaria guardada. Los vencimientos conservan su fecha y los bloques conservan sus instantes.');
-    } catch (cause) {
-      setZoneError(errorMessage(cause));
-    } finally {
-      setSavingZone(false);
-    }
+    persistZone({ nextZone: zoneDraft, version: profile.data.version, automatic: false, key: profileKey });
   }
 
   if (api.accessError)
@@ -238,26 +274,24 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
       <section className="pw-calendar-zone" aria-label="Zona horaria del calendario">
         <div>
           <h2>Zona horaria</h2>
-          <p className="faint">{zone ? `Visualización en ${zone}.` : 'Confirma tu zona para empezar. Esta preferencia es personal.'}</p>
+          <p className="faint">
+            {zone
+              ? `Visualización en ${zone}.`
+              : detectedZone
+                ? 'Usamos la zona de tu dispositivo en el primer acceso.'
+                : 'No pudimos detectar la zona del dispositivo. Elige una para empezar.'}{' '}
+            Esta preferencia es personal.
+          </p>
         </div>
-        <label className="pw-field">
-          <span className="sr">Zona horaria de visualización</span>
-          <input
-            list="tr8-calendar-zones"
-            value={zoneDraft}
-            disabled={savingZone || profile.isPending || !!profile.error}
-            onChange={event => setZoneInput(event.target.value)}
-            placeholder="America/La_Paz"
-          />
-        </label>
-        <datalist id="tr8-calendar-zones">
-          {['America/La_Paz', 'UTC', 'America/New_York', 'America/Mexico_City', 'America/Bogota', 'Europe/Madrid', 'Asia/Tokyo'].map(value => (
-            <option key={value} value={value} />
-          ))}
-        </datalist>
+        <TimeZonePicker
+          label="Zona horaria de visualización"
+          value={zoneDraft}
+          onChange={setZoneInput}
+          disabled={savingZone || profile.isPending || !!profile.error}
+        />
         <button
           className="btn btn-secondary btn-sm"
-          disabled={savingZone || profile.isPending || !!profile.error || zoneDraft === zone}
+          disabled={savingZone || profile.isPending || !!profile.error || zoneDraft === zone || !validTimeZone(zoneDraft)}
           onClick={() => void saveZone()}
         >
           {savingZone ? 'Guardando…' : zone ? 'Guardar zona' : 'Confirmar zona'}

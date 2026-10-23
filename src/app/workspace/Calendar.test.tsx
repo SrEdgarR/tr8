@@ -92,17 +92,17 @@ function mount(ui: React.ReactNode) {
 }
 
 describe('calendario interno', () => {
-  it('no consulta fechas hasta confirmar explícitamente la zona del perfil', async () => {
-    const user = userEvent.setup();
-    const api = calendarApi({ profile: vi.fn().mockResolvedValue({ time_zone: null, version: 0, updated_at: null }) });
+  it('detecta y guarda la zona del dispositivo antes de consultar fechas en el primer acceso', async () => {
+    const detectedZone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const api = calendarApi({
+      profile: vi.fn().mockResolvedValue({ time_zone: null, version: 1, updated_at: null }),
+      saveProfile: vi.fn().mockImplementation(zone => Promise.resolve({ time_zone: zone, version: 2, updated_at: null })),
+    });
     mount(<Calendar api={api} workspaces={spaces} projects={[]} onOpen={vi.fn()} />);
-    await screen.findByRole('button', { name: 'Confirmar zona' });
-    expect(api.items).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Confirmar zona' }));
     await waitFor(() => expect(api.items).toHaveBeenCalled());
-    expect(api.saveProfile).toHaveBeenCalledWith('America/La_Paz', 0);
+    expect(api.saveProfile).toHaveBeenCalledExactlyOnceWith(detectedZone, 1);
     expect(api.items).toHaveBeenCalledWith(
-      expect.objectContaining({ workspace_ids: ['personal-a', 'team-a'], time_zone: 'America/La_Paz' }),
+      expect.objectContaining({ workspace_ids: ['personal-a', 'team-a'], time_zone: detectedZone }),
       expect.any(AbortSignal),
     );
   });

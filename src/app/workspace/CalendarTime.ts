@@ -54,6 +54,26 @@ export function validTimeZone(value: string): boolean {
   }
 }
 
+/** Read the device setting without requesting geographic location. */
+export function detectDeviceTimeZone(): string | null {
+  try {
+    const zone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return validTimeZone(zone) ? zone : null;
+  } catch {
+    return null;
+  }
+}
+
+export function timeZoneClock(zone: string, instant: Date = new Date()): { date: string; time: string; offset: string } {
+  const date = new Intl.DateTimeFormat('es', { timeZone: zone, dateStyle: 'full' }).format(instant);
+  const time = new Intl.DateTimeFormat('es', { timeZone: zone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(instant);
+  const offset = new Intl.DateTimeFormat('en', { timeZone: zone, timeZoneName: 'longOffset' })
+    .formatToParts(instant)
+    .find(part => part.type === 'timeZoneName')!
+    .value.replace('GMT', 'UTC');
+  return { date, time, offset: offset === 'UTC' ? 'UTC+00:00' : offset };
+}
+
 const localFormatters = new Map<string, Intl.DateTimeFormat>();
 
 function localParts(instant: number, timeZone: string): Record<string, number> {
