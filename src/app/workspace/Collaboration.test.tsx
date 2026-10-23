@@ -2,11 +2,13 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CollaborationApi, Project, Task, WorkspaceMember, WorkspaceProps, WorkspaceRole } from '../types';
 import Workspace from './Workspace';
 import TaskForm from './TaskForm';
 import { TeamAdministration } from './Collaboration';
+import { DataError } from '../data/errors';
 
 const date = '2026-10-23T12:00:00Z';
 const project: Project = {
@@ -327,5 +329,211 @@ describe('colaboración y permisos en la interfaz', () => {
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ version: 1 }), expect.objectContaining({ title: 'Mi borrador' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Conflicto de versión');
     expect(screen.getByLabelText('Título')).toHaveValue('Mi borrador');
+  });
+
+  it.each([true, false])(
+    'no presenta una asignación propia como conflicto al actualizar la tarea del padre (contenido de solo lectura: %s)',
+    async readOnly => {
+      const user = userEvent.setup();
+      const onUpdate = vi.fn().mockResolvedValue(task);
+      function SavedAssignmentForm() {
+        const [current, setCurrent] = useState(task);
+        const collaboration = api();
+        collaboration.assignTask = async (before, memberId) => {
+          const saved = { ...before, assignee_member_id: memberId, version: before.version + 1 };
+          setCurrent(saved);
+          return saved;
+        };
+        return (
+          <TaskForm
+            task={current}
+            projects={[project]}
+            pending={false}
+            readOnly={readOnly}
+            canAssign
+            collaboration={collaboration}
+            onCreate={vi.fn()}
+            onUpdate={onUpdate}
+            onDelete={vi.fn()}
+            onClose={vi.fn()}
+          />
+        );
+      }
+      show(<SavedAssignmentForm />);
+      if (!readOnly) {
+        await user.clear(screen.getByLabelText('Título'));
+        await user.type(screen.getByLabelText('Título'), 'Borrador todavía sin guardar');
+      }
+      await screen.findByRole('option', { name: member.display_name });
+      await user.selectOptions(screen.getByLabelText('Responsable principal'), member.id);
+      await user.click(screen.getByRole('button', { name: 'Guardar responsable' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar responsable' })).toBeDisabled());
+      expect(screen.queryByText(/La tarea cambió desde que abriste/)).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Responsable principal')).toHaveValue(member.id);
+      if (!readOnly) {
+        expect(screen.getByLabelText('Título')).toHaveValue('Borrador todavía sin guardar');
+        await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+        expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ version: 2 }), expect.objectContaining({ title: 'Borrador todavía sin guardar' }));
+      }
+    },
+  );
+
+  it('no absorbe una actualización externa anterior al confirmar una asignación propia', async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn().mockRejectedValue(new Error('Conflicto real'));
+    function ConcurrentAssignmentForm() {
+      const [current, setCurrent] = useState(task);
+      const collaboration = api();
+      collaboration.assignTask = async (before, memberId) => {
+        const saved = { ...before, assignee_member_id: memberId, version: before.version + 1 };
+        setCurrent(saved);
+        return saved;
+      };
+      return (
+        <>
+          <button onClick={() => setCurrent({ ...task, title: 'Cambio remoto', version: 2 })}>Recibir actualización externa</button>
+          <TaskForm
+            task={current}
+            projects={[project]}
+            pending={false}
+            canAssign
+            collaboration={collaboration}
+            onCreate={vi.fn()}
+            onUpdate={onUpdate}
+            onDelete={vi.fn()}
+            onClose={vi.fn()}
+          />
+        </>
+      );
+    }
+    show(<ConcurrentAssignmentForm />);
+    await user.clear(screen.getByLabelText('Título'));
+    await user.type(screen.getByLabelText('Título'), 'Borrador original');
+    // The incoming update is a server response while the form is already open.
+    screen.getByRole('button', { name: 'Recibir actualización externa' }).click();
+    expect(await screen.findByText(/La tarea cambió desde que abriste/)).toBeInTheDocument();
+    await screen.findByRole('option', { name: member.display_name });
+    await user.selectOptions(screen.getByLabelText('Responsable principal'), member.id);
+    await user.click(screen.getByRole('button', { name: 'Guardar responsable' }));
+    expect(screen.getByText(/La tarea cambió desde que abriste/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Título')).toHaveValue('Borrador original');
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ version: 1 }), expect.objectContaining({ title: 'Borrador original' }));
+  });
+
+  it.each([true, false])(
+    'conserva el conflicto si una edición remota llega alrededor de la confirmación propia (antes de resolver: %s)',
+    async remoteBeforeReply => {
+      const user = userEvent.setup();
+      const result = deferred<Task>();
+      const onUpdate = vi.fn().mockRejectedValue(new Error('Conflicto real'));
+      const ownSaved = { ...task, assignee_member_id: member.id, version: 2 };
+      const remoteSaved = { ...ownSaved, title: 'Edición remota posterior', version: 3 };
+      let receiveServerTask!: (row: Task) => void;
+      function OutOfOrderAssignmentForm() {
+        const [current, setCurrent] = useState(task);
+        receiveServerTask = setCurrent;
+        const collaboration = api();
+        collaboration.assignTask = () => result.promise;
+        return (
+          <TaskForm
+            task={current}
+            projects={[project]}
+            pending={false}
+            canAssign
+            collaboration={collaboration}
+            onCreate={vi.fn()}
+            onUpdate={onUpdate}
+            onDelete={vi.fn()}
+            onClose={vi.fn()}
+          />
+        );
+      }
+      show(<OutOfOrderAssignmentForm />);
+      await user.clear(screen.getByLabelText('Título'));
+      await user.type(screen.getByLabelText('Título'), 'Borrador antes de asignar');
+      await screen.findByRole('option', { name: member.display_name });
+      await user.selectOptions(screen.getByLabelText('Responsable principal'), member.id);
+      await user.click(screen.getByRole('button', { name: 'Guardar responsable' }));
+      if (remoteBeforeReply) {
+        await act(async () => receiveServerTask(remoteSaved));
+        await act(async () => result.resolve(ownSaved));
+      } else {
+        await act(async () => {
+          receiveServerTask(ownSaved);
+          result.resolve(ownSaved);
+        });
+        expect(screen.queryByText(/La tarea cambió desde que abriste/)).not.toBeInTheDocument();
+        await act(async () => receiveServerTask(remoteSaved));
+      }
+      expect(screen.getByText(/La tarea cambió desde que abriste/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Título')).toHaveValue('Borrador antes de asignar');
+      await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+      expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ version: 2 }), expect.objectContaining({ title: 'Borrador antes de asignar' }));
+    },
+  );
+
+  it('no avanza la versión del borrador cuando la asignación se rechaza con conflicto', async () => {
+    const user = userEvent.setup();
+    const collaboration = api();
+    vi.mocked(collaboration.assignTask).mockRejectedValue(new DataError('La asignación cambió en otro dispositivo.', 'PT409'));
+    const onUpdate = vi.fn().mockRejectedValue(new Error('Conflicto de contenido'));
+    const form = {
+      task,
+      projects: [project],
+      pending: false,
+      canAssign: true,
+      collaboration,
+      onCreate: vi.fn(),
+      onUpdate,
+      onDelete: vi.fn(),
+      onClose: vi.fn(),
+    };
+    const view = show(<TaskForm {...form} />);
+    await user.clear(screen.getByLabelText('Título'));
+    await user.type(screen.getByLabelText('Título'), 'Borrador pendiente');
+    await screen.findByRole('option', { name: member.display_name });
+    await user.selectOptions(screen.getByLabelText('Responsable principal'), member.id);
+    await user.click(screen.getByRole('button', { name: 'Guardar responsable' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('La asignación cambió en otro dispositivo.');
+    view.rerender(<TaskForm {...form} task={{ ...task, title: 'Otra edición', version: 2 }} />);
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ version: 1 }), expect.objectContaining({ title: 'Borrador pendiente' }));
+  });
+
+  it('actualiza la versión base después de retirar uno mismo al responsable', async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn().mockResolvedValue(task);
+    function UnassignmentForm() {
+      const [current, setCurrent] = useState({ ...task, assignee_member_id: member.id } as Task);
+      const collaboration = api();
+      collaboration.assignTask = async (before, memberId) => {
+        const saved = { ...before, assignee_member_id: memberId, version: before.version + 1 };
+        setCurrent(saved);
+        return saved;
+      };
+      return (
+        <TaskForm
+          task={current}
+          projects={[project]}
+          pending={false}
+          canAssign
+          collaboration={collaboration}
+          onCreate={vi.fn()}
+          onUpdate={onUpdate}
+          onDelete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+    }
+    show(<UnassignmentForm />);
+    await screen.findByRole('option', { name: member.display_name });
+    await user.selectOptions(screen.getByLabelText('Responsable principal'), '');
+    await user.click(screen.getByRole('button', { name: 'Guardar responsable' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar responsable' })).toBeDisabled());
+    expect(screen.queryByText(/La tarea cambió desde que abriste/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Responsable principal')).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ version: 2, assignee_member_id: null }), expect.anything());
   });
 });

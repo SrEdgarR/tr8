@@ -22,7 +22,19 @@ interface Props {
   onClose: () => void;
 }
 
-function TaskAssignment({ task, api, canAssign, disabled }: { task: Task; api: CollaborationApi; canAssign: boolean; disabled: boolean }) {
+function TaskAssignment({
+  task,
+  api,
+  canAssign,
+  disabled,
+  onSaved,
+}: {
+  task: Task;
+  api: CollaborationApi;
+  canAssign: boolean;
+  disabled: boolean;
+  onSaved: (before: Task, saved: Task) => void;
+}) {
   const members = useQuery({
     queryKey: [...api.scopeKey, 'assignable', task.project_id],
     queryFn: () => api.assignableMembers(task.project_id),
@@ -42,7 +54,8 @@ function TaskAssignment({ task, api, canAssign, disabled }: { task: Task; api: C
     setError(null);
     setNotice('');
     try {
-      await api.assignTask(task, selected || null);
+      const saved = await api.assignTask(task, selected || null);
+      onSaved(task, saved);
       setNotice('Responsable guardado.');
     } catch (cause) {
       setError(errorMessage(cause));
@@ -120,6 +133,27 @@ export default function TaskForm({
   const busy = pending || submitting;
   const archived = Boolean(projects.find(project => project.id === selectedProject)?.archived_at);
   const disabled = busy || archived || readOnly;
+
+  function assignmentSaved(before: Task, saved: Task) {
+    const fields = [
+      'id',
+      'workspace_id',
+      'owner_id',
+      'project_id',
+      'task_number',
+      'title',
+      'description',
+      'status',
+      'priority',
+      'start_date',
+      'due_date',
+      'position',
+      'created_at',
+    ] as const;
+    const sameContent = (left: Task, right: Task) => fields.every(field => left[field] === right[field]);
+    if (saved.version !== before.version + 1 || !sameContent(before, saved)) return;
+    setOriginalTask(previous => (previous && previous.version === before.version && sameContent(previous, before) ? saved : previous));
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -306,7 +340,14 @@ export default function TaskForm({
             </label>
           </div>
           {task && collaboration && (
-            <TaskAssignment key={`${task.id}:${task.version}`} task={task} api={collaboration} canAssign={canAssign && !archived} disabled={busy || archived} />
+            <TaskAssignment
+              key={`${task.id}:${task.version}`}
+              task={task}
+              api={collaboration}
+              canAssign={canAssign && !archived}
+              disabled={busy || archived}
+              onSaved={assignmentSaved}
+            />
           )}
           {!task && collaboration && <p className="faint">Después de crear la tarea podrás elegir su responsable principal.</p>}
           {confirmDelete && (
