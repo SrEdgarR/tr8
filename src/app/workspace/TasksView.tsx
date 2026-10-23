@@ -11,6 +11,8 @@ interface Props {
   projects: Project[];
   pending: boolean;
   readOnly?: boolean;
+  canCreate?: boolean;
+  canEditTask?: (task: Task) => boolean;
   onCreate: (status?: TaskStatus) => void;
   onOpen: (task: Task) => void;
   onMove: (task: Task, status: TaskStatus) => Promise<void>;
@@ -36,7 +38,7 @@ function TaskStateSelect({ task, disabled, onMove }: { task: Task; disabled: boo
   );
 }
 
-export default function TasksView({ tasks, projects, pending, readOnly = false, onCreate, onOpen, onMove }: Props) {
+export default function TasksView({ tasks, projects, pending, readOnly = false, canCreate = !readOnly, canEditTask, onCreate, onOpen, onMove }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = searchParams.get('view') === 'board' ? 'board' : 'list';
   const [query, setQuery] = useState('');
@@ -61,6 +63,7 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
     [tasks, status, priority, normalizedQuery, projectMap],
   );
   const hasFilters = Boolean(query || status || priority);
+  const mayEdit = (task: Task) => !readOnly && (canEditTask?.(task) ?? true);
 
   function changeView(next: string) {
     const params = new URLSearchParams(searchParams);
@@ -133,7 +136,7 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
                 Limpiar filtros
               </button>
             ) : (
-              !readOnly && (
+              canCreate && (
                 <button className="btn btn-primary" disabled={pending} onClick={() => onCreate()}>
                   <Plus size={14} aria-hidden="true" />
                   Nueva tarea
@@ -164,7 +167,7 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
               <span role="cell">
                 <button
                   className={`pw-complete${task.status === 'done' ? ' checked' : ''}`}
-                  disabled={pending || readOnly}
+                  disabled={pending || !mayEdit(task)}
                   aria-label={task.status === 'done' ? `Reabrir ${task.title}` : `Completar ${task.title}`}
                   onClick={() => {
                     void onMove(task, task.status === 'done' ? 'todo' : 'done');
@@ -186,7 +189,7 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
               </span>
               <span role="cell" className="pw-state-cell">
                 <StatusDot status={task.status} />
-                <TaskStateSelect task={task} disabled={pending || readOnly} onMove={onMove} />
+                <TaskStateSelect task={task} disabled={pending || !mayEdit(task)} onMove={onMove} />
               </span>
               <span role="cell" className={`pw-priority pw-priority-${task.priority}`}>
                 {PRIORITIES.find(item => item.id === task.priority)?.name}
@@ -228,14 +231,14 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
                     setDragging(null);
                     if (pending || readOnly) return;
                     const task = tasks.find(item => item.id === event.dataTransfer.getData('text/plain'));
-                    if (task && task.status !== column.id) void onMove(task, column.id);
+                    if (task && mayEdit(task) && task.status !== column.id) void onMove(task, column.id);
                   }}
                 >
                   <div className="bcol-h">
                     <StatusDot status={column.id} />
                     <span>{column.name}</span>
                     <span className="cnt">{items.length}</span>
-                    {!readOnly && (
+                    {canCreate && (
                       <span className="acts">
                         <button className="ibtn ibtn-xs" aria-label={`Añadir tarea: ${column.name}`} disabled={pending} onClick={() => onCreate(column.id)}>
                           <Plus size={15} aria-hidden="true" />
@@ -248,7 +251,7 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
                       <article
                         key={task.id}
                         className={`kcard${task.status === 'done' ? ' done' : ''}${dragging === task.id ? ' dragging' : ''}`}
-                        draggable={!pending && !readOnly}
+                        draggable={!pending && mayEdit(task)}
                         onDragStart={event => {
                           event.dataTransfer.setData('text/plain', task.id);
                           event.dataTransfer.effectAllowed = 'move';
@@ -276,10 +279,10 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
                           </span>
                         )}
                         <div className="pw-card-bottom">
-                          <TaskStateSelect task={task} disabled={pending || readOnly} onMove={onMove} />
+                          <TaskStateSelect task={task} disabled={pending || !mayEdit(task)} onMove={onMove} />
                           <button
                             className="ibtn ibtn-xs"
-                            disabled={pending || readOnly}
+                            disabled={pending || !mayEdit(task)}
                             aria-label={task.status === 'done' ? `Reabrir ${task.title}` : `Completar ${task.title}`}
                             onClick={() => {
                               void onMove(task, task.status === 'done' ? 'todo' : 'done');
@@ -290,7 +293,7 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
                         </div>
                       </article>
                     ))}
-                    {!readOnly && (
+                    {canCreate && (
                       <button className="addcard" disabled={pending} onClick={() => onCreate(column.id)}>
                         <Plus size={14} aria-hidden="true" />
                         Añadir tarea

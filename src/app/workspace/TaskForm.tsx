@@ -1,7 +1,8 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Trash2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { PRIORITIES, STATUSES } from '../constants';
-import type { Priority, Project, Task, TaskInput, TaskStatus, WorkspaceProps } from '../types';
+import type { CollaborationApi, Priority, Project, Task, TaskInput, TaskStatus, WorkspaceProps } from '../types';
 import { Dialog, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
 
@@ -12,13 +13,96 @@ interface Props {
   projects: Project[];
   pending: boolean;
   readOnly?: boolean;
+  canDelete?: boolean;
+  canAssign?: boolean;
+  collaboration?: CollaborationApi;
   onCreate: WorkspaceProps['onCreateTask'];
   onUpdate: WorkspaceProps['onUpdateTask'];
   onDelete: WorkspaceProps['onDeleteTask'];
   onClose: () => void;
 }
 
-export default function TaskForm({ task, projectId, initialStatus, projects, pending, readOnly = false, onCreate, onUpdate, onDelete, onClose }: Props) {
+function TaskAssignment({ task, api, canAssign, disabled }: { task: Task; api: CollaborationApi; canAssign: boolean; disabled: boolean }) {
+  const members = useQuery({
+    queryKey: [...api.scopeKey, 'assignable', task.project_id],
+    queryFn: () => api.assignableMembers(task.project_id),
+    refetchInterval: 30000,
+    retry: false,
+  });
+  const [selected, setSelected] = useState(task.assignee_member_id ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
+  const lock = useRef(false);
+  const available = members.error ? [] : (members.data ?? []);
+  async function save() {
+    if (lock.current || !canAssign || disabled || members.error) return;
+    lock.current = true;
+    setBusy(true);
+    setError(null);
+    setNotice('');
+    try {
+      await api.assignTask(task, selected || null);
+      setNotice('Responsable guardado.');
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="pw-assignment" aria-label="Responsable de la tarea">
+      <label className="pw-field">
+        Responsable principal
+        <select
+          value={selected}
+          disabled={disabled || busy || !canAssign || members.isPending || !!members.error}
+          onChange={event => setSelected(event.target.value)}
+        >
+          <option value="">Sin responsable</option>
+          {!!selected && !available.some(member => member.id === selected) && <option value={selected}>Responsable no disponible</option>}
+          {available.map(member => (
+            <option key={member.id} value={member.id}>
+              {member.display_name}
+              {member.is_owner ? ' (propietario)' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      {members.error && <ErrorNotice>{errorMessage(members.error)}</ErrorNotice>}
+      {error && <ErrorNotice>{error}</ErrorNotice>}
+      {notice && <p role="status">{notice}</p>}
+      {canAssign && (
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={disabled || busy || members.isPending || !!members.error || selected === (task.assignee_member_id ?? '')}
+          onClick={() => void save()}
+        >
+          {busy ? 'Guardando…' : 'Guardar responsable'}
+        </button>
+      )}
+      <p className="faint">Una persona opcional con acceso vigente al proyecto. La asignación se guarda por separado del contenido.</p>
+    </section>
+  );
+}
+
+export default function TaskForm({
+  task,
+  projectId,
+  initialStatus,
+  projects,
+  pending,
+  readOnly = false,
+  canDelete = !readOnly,
+  canAssign = !readOnly,
+  collaboration,
+  onCreate,
+  onUpdate,
+  onDelete,
+  onClose,
+}: Props) {
   const prefix = useId();
   const [selectedProject, setSelectedProject] = useState(task?.project_id ?? projectId ?? projects.find(project => !project.archived_at)?.id ?? '');
   const [title, setTitle] = useState(task?.title ?? '');
@@ -31,6 +115,7 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [originalTask, setOriginalTask] = useState(task);
   const lock = useRef(false);
   const busy = pending || submitting;
   const archived = Boolean(projects.find(project => project.id === selectedProject)?.archived_at);
@@ -65,7 +150,7 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
     };
     try {
       if (task) {
-        await onUpdate(task, {
+        await onUpdate(originalTask ?? task, {
           title: input.title,
           description: input.description,
           status: input.status,
@@ -86,12 +171,12 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
   }
 
   async function remove() {
-    if (!task || disabled || lock.current) return;
+    if (!task || busy || !canDelete || lock.current) return;
     lock.current = true;
     setSubmitting(true);
     setError(null);
     try {
-      await onDelete(task);
+      await onDelete(originalTask ?? task);
       onClose();
     } catch (cause) {
       setError(errorMessage(cause));
@@ -113,6 +198,17 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
           {error && <ErrorNotice>{error}</ErrorNotice>}
           {archived && <div className="pw-info">Este proyecto está archivado. Restáuralo para editar sus tareas.</div>}
           {readOnly && <div className="pw-info">Tienes acceso de lectura a las tareas de este espacio.</div>}
+          {task && originalTask && task.version !== originalTask.version && (
+            <div className="pw-info">
+              <p>
+                La tarea cambió desde que abriste el formulario. El contenido actual es: «{task.title}» ({STATUSES.find(item => item.id === task.status)?.name}
+                ). Tu borrador sigue aquí.
+              </p>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setOriginalTask(task)}>
+                Revisé los cambios; usar la versión actual
+              </button>
+            </div>
+          )}
           {task && (
             <span className="eyebrow">
               {projects.find(project => project.id === task.project_id)?.code ?? 'TAREA'}-{task.task_number}
@@ -209,6 +305,10 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
               />
             </label>
           </div>
+          {task && collaboration && (
+            <TaskAssignment key={`${task.id}:${task.version}`} task={task} api={collaboration} canAssign={canAssign && !archived} disabled={busy || archived} />
+          )}
+          {!task && collaboration && <p className="faint">Después de crear la tarea podrás elegir su responsable principal.</p>}
           {confirmDelete && (
             <div className="pw-confirm" role="alert">
               <strong>¿Eliminar esta tarea?</strong>
@@ -217,7 +317,7 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
                 <button
                   type="button"
                   className="btn btn-danger"
-                  disabled={disabled}
+                  disabled={busy || !canDelete}
                   onClick={() => {
                     void remove();
                   }}
@@ -232,8 +332,8 @@ export default function TaskForm({ task, projectId, initialStatus, projects, pen
           )}
         </div>
         <div className="pw-form-footer">
-          {task && !archived && (
-            <button type="button" className="btn btn-danger-ghost pw-delete" disabled={disabled} onClick={() => setConfirmDelete(true)}>
+          {task && canDelete && (
+            <button type="button" className="btn btn-danger-ghost pw-delete" disabled={busy} onClick={() => setConfirmDelete(true)}>
               <Trash2 size={14} aria-hidden="true" />
               Eliminar
             </button>

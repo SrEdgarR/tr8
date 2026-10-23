@@ -8,7 +8,7 @@ import Workspace from './workspace/Workspace';
 import { callbackRequestedRecovery, configuration, supabase } from './data/client';
 import { createRepository, type WorkspaceData } from './data/repository';
 import { dataError, DataError } from './data/errors';
-import type { Project, Task, WorkspaceProps, WorkspaceSummary } from './types';
+import type { CollaborationApi, Project, Task, WorkspaceProps, WorkspaceSummary } from './types';
 
 function LoadingScreen() {
   return (
@@ -229,7 +229,7 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
     );
   return (
     <ScopedWorkspace
-      key={`${session.user.id}:${selected.id}`}
+      key={`${session.user.id}:${selected.id}:${[...selected.permissions].sort().join(',')}`}
       client={client}
       session={session}
       selected={selected}
@@ -268,8 +268,8 @@ function ScopedWorkspace({
 }) {
   const queryClient = useQueryClient();
   const repository = useMemo(() => createRepository(client), [client]);
-  const location = useLocation();
-  const queryKey = useMemo(() => ['workspace', session.user.id, selected.id], [session.user.id, selected.id]);
+  const scopeRevision = [...selected.permissions].sort().join('|');
+  const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
   const locked = useRef(false);
   const [accessError, setAccessError] = useState<DataError | null>(null);
@@ -279,41 +279,89 @@ function ScopedWorkspace({
       active.current = false;
       void queryClient.cancelQueries({ queryKey });
       queryClient.removeQueries({ queryKey });
-      const directoryKey = ['directory', session.user.id, selected.id];
+      const directoryKey = ['directory', session.user.id, selected.id, scopeRevision];
       void queryClient.cancelQueries({ queryKey: directoryKey });
       queryClient.removeQueries({ queryKey: directoryKey });
+      const collaborationKey = ['collaboration', session.user.id, selected.id, scopeRevision];
+      void queryClient.cancelQueries({ queryKey: collaborationKey });
+      queryClient.removeQueries({ queryKey: collaborationKey });
     };
-  }, [queryClient, queryKey, session.user.id, selected.id]);
+  }, [queryClient, queryKey, session.user.id, selected.id, scopeRevision]);
   const query = useQuery({
     queryKey,
-    queryFn: ({ signal }) => repository.load(selected.id, signal),
+    queryFn: async ({ signal }) => {
+      if (selected.owner_id !== session.user.id && !selected.permissions.includes('project.read')) return { projects: [], tasks: [], capabilities: {} };
+      const [data, permissions] = await Promise.all([repository.load(selected.id, signal), repository.projectCapabilities(selected.id, signal)]);
+      const capabilities = Object.fromEntries(permissions.map(capability => [capability.project_id, capability]));
+      return {
+        projects: data.projects.filter(project => capabilities[project.id]?.permissions.includes('project.read')),
+        tasks: data.tasks.filter(task => capabilities[task.project_id]?.permissions.includes('task.read')),
+        capabilities,
+      };
+    },
     enabled: !accessError,
     staleTime: 15000,
     refetchInterval: 30000,
     retry: (count, error) => count < 1 && !(error instanceof DataError && ['42501', 'PGRST205', 'PGRST202'].includes(error.code ?? '')),
   });
+  const projectRevision = useMemo(
+    () =>
+      JSON.stringify(
+        Object.entries(query.data?.capabilities ?? {})
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([id, capability]) => [id, capability.access_level, [...capability.permissions].sort()]),
+      ),
+    [query.data?.capabilities],
+  );
+  const collaborationScope = useMemo(
+    () => ['collaboration', session.user.id, selected.id, scopeRevision, projectRevision],
+    [session.user.id, selected.id, scopeRevision, projectRevision],
+  );
+  const previousCollaborationScope = useRef<string[] | null>(null);
+  const previousCapabilities = useRef<WorkspaceData['capabilities']>(undefined);
+  useEffect(() => {
+    const oldScope = previousCollaborationScope.current;
+    previousCollaborationScope.current = collaborationScope;
+    if (oldScope && oldScope !== collaborationScope) {
+      void queryClient.cancelQueries({ queryKey: oldScope });
+      queryClient.removeQueries({ queryKey: oldScope });
+    }
+    const next = query.data?.capabilities;
+    const previous = previousCapabilities.current;
+    previousCapabilities.current = next;
+    if (!previous || !next) return;
+    const reduced = Object.entries(previous).some(([id, capability]) => capability.permissions.some(permission => !next[id]?.permissions.includes(permission)));
+    if (!reduced) return;
+    const locatorKey = ['project-location', session.user.id];
+    void queryClient.cancelQueries({ queryKey: locatorKey });
+    queryClient.removeQueries({ queryKey: locatorKey });
+  }, [query.data?.capabilities, queryClient, session.user.id, collaborationScope]);
   useEffect(() => {
     if (!active.current || accessError || !(query.error instanceof DataError) || !['42501', 'PGRST301', 'PGRST303', 'PT404'].includes(query.error.code ?? ''))
       return;
     setAccessError(query.error);
     void queryClient.cancelQueries({ queryKey });
     queryClient.removeQueries({ queryKey });
-    const directoryKey = ['directory', session.user.id, selected.id];
+    const directoryKey = ['directory', session.user.id, selected.id, scopeRevision];
     void queryClient.cancelQueries({ queryKey: directoryKey });
     queryClient.removeQueries({ queryKey: directoryKey });
+    const collaborationKey = ['collaboration', session.user.id, selected.id, scopeRevision];
+    void queryClient.cancelQueries({ queryKey: collaborationKey });
+    queryClient.removeQueries({ queryKey: collaborationKey });
     void queryClient.invalidateQueries({ queryKey: ['context', session.user.id] });
-  }, [query.error, accessError, queryClient, queryKey, session.user.id, selected.id]);
+  }, [query.error, accessError, queryClient, queryKey, session.user.id, selected.id, scopeRevision]);
   const directory = useQuery({
-    queryKey: ['directory', session.user.id, selected.id],
+    queryKey: ['directory', session.user.id, selected.id, scopeRevision],
     queryFn: async () => {
       const [members, invitations] = await Promise.all([
-        repository.members(selected.id),
-        selected.owner_id === session.user.id ? repository.invitations(selected.id) : Promise.resolve([]),
+        repository.memberDirectory(selected.id),
+        selected.owner_id === session.user.id || selected.permissions.includes('member.invite') ? repository.invitations(selected.id) : Promise.resolve([]),
       ]);
       return { members, invitations };
     },
-    enabled: !accessError && selected.kind === 'team' && location.pathname === '/team',
+    enabled: !accessError && selected.kind === 'team' && (selected.owner_id === session.user.id || selected.permissions.includes('member.read')),
     staleTime: 15000,
+    refetchInterval: 30000,
     retry: false,
   });
   const mutation = useMutation({ mutationFn: async (operation: () => Promise<unknown>) => operation(), retry: false });
@@ -321,7 +369,6 @@ function ScopedWorkspace({
   async function write<T>(operation: () => Promise<T>, accept?: (data: WorkspaceData, row: T) => WorkspaceData): Promise<T> {
     if (!active.current) throw new DataError('El espacio cambió. Abre de nuevo el proyecto antes de guardar.');
     if (accessError) throw accessError;
-    if (selected.owner_id !== session.user.id) throw new DataError('Tienes acceso de lectura a este espacio.', '42501');
     if (locked.current) throw new DataError('Espera a que termine el guardado en curso.');
     locked.current = true;
     try {
@@ -330,6 +377,9 @@ function ScopedWorkspace({
       if (active.current) {
         if (accept) queryClient.setQueryData<WorkspaceData>(queryKey, previous => accept(previous ?? { projects: [], tasks: [] }, row));
         void queryClient.invalidateQueries({ queryKey });
+        void queryClient.invalidateQueries({ queryKey: ['directory', session.user.id, selected.id, scopeRevision] });
+        void queryClient.invalidateQueries({ queryKey: ['collaboration', session.user.id, selected.id, scopeRevision] });
+        void queryClient.invalidateQueries({ queryKey: ['context', session.user.id] });
       }
       return row;
     } catch (cause) {
@@ -338,13 +388,19 @@ function ScopedWorkspace({
         setAccessError(error);
         await queryClient.cancelQueries({ queryKey });
         queryClient.removeQueries({ queryKey });
-        const directoryKey = ['directory', session.user.id, selected.id];
+        const directoryKey = ['directory', session.user.id, selected.id, scopeRevision];
         await queryClient.cancelQueries({ queryKey: directoryKey });
         queryClient.removeQueries({ queryKey: directoryKey });
+        const collaborationKey = ['collaboration', session.user.id, selected.id, scopeRevision];
+        await queryClient.cancelQueries({ queryKey: collaborationKey });
+        queryClient.removeQueries({ queryKey: collaborationKey });
         void queryClient.invalidateQueries({ queryKey: ['context', session.user.id] });
       }
-      if (active.current && cause instanceof DataError && ['PT409', 'PT404', '23503'].includes(cause.code ?? ''))
+      if (active.current && cause instanceof DataError && ['PT409', 'PT404', '23503'].includes(cause.code ?? '')) {
         void queryClient.invalidateQueries({ queryKey });
+        void queryClient.invalidateQueries({ queryKey: ['directory', session.user.id, selected.id, scopeRevision] });
+        void queryClient.invalidateQueries({ queryKey: ['collaboration', session.user.id, selected.id, scopeRevision] });
+      }
       throw error;
     } finally {
       locked.current = false;
@@ -356,13 +412,53 @@ function ScopedWorkspace({
     projects: [...data.projects.filter(project => project.id !== row.id), row],
   });
   const acceptTask = (data: WorkspaceData, row: Task): WorkspaceData => ({ ...data, tasks: [...data.tasks.filter(task => task.id !== row.id), row] });
+  async function readCollaboration<T>(operation: () => Promise<T>): Promise<T> {
+    if (!active.current || accessError) throw accessError ?? new DataError('Este espacio ya no está abierto.');
+    try {
+      const result = await operation();
+      if (!active.current) throw new DataError('El espacio cambió. Vuelve a abrirlo para consultar los datos.');
+      return result;
+    } catch (cause) {
+      const error = dataError(cause);
+      if (active.current && ['42501', 'PT404', 'PGRST301', 'PGRST303'].includes(error.code ?? '')) {
+        setAccessError(error);
+        await queryClient.cancelQueries({ queryKey });
+        queryClient.removeQueries({ queryKey });
+        const directoryKey = ['directory', session.user.id, selected.id, scopeRevision];
+        await queryClient.cancelQueries({ queryKey: directoryKey });
+        queryClient.removeQueries({ queryKey: directoryKey });
+        const collaborationKey = ['collaboration', session.user.id, selected.id, scopeRevision];
+        await queryClient.cancelQueries({ queryKey: collaborationKey });
+        queryClient.removeQueries({ queryKey: collaborationKey });
+        void queryClient.invalidateQueries({ queryKey: ['context', session.user.id] });
+      }
+      throw error;
+    }
+  }
+  const collaboration: CollaborationApi = {
+    scopeKey: collaborationScope,
+    roles: () => readCollaboration(() => repository.roles(selected.id)),
+    createRole: (id, name, permissions) => write(() => repository.createRole(selected.id, id, name, permissions)),
+    updateRole: (role, name, permissions) => write(() => repository.updateRole(selected.id, role, name, permissions)),
+    deleteRole: role => write(() => repository.deleteRole(selected.id, role)),
+    setMemberRoles: (member, roleIds) => write(() => repository.setMemberRoles(selected.id, member, roleIds)),
+    removeMember: member => write(() => repository.removeMember(selected.id, member)),
+    projectAccess: projectId => readCollaboration(() => repository.projectAccess(selected.id, projectId)),
+    setProjectAccess: (projectId, memberId, version, level) => write(() => repository.setProjectAccess(selected.id, projectId, memberId, version, level)),
+    removeProjectAccess: access => write(() => repository.removeProjectAccess(access)),
+    assignableMembers: projectId => readCollaboration(() => repository.assignableMembers(selected.id, projectId)),
+    assignTask: (task, memberId) => write(() => repository.assignTask(task, memberId), acceptTask),
+    activity: (projectId, beforeId) => readCollaboration(() => repository.activity(selected.id, projectId, beforeId)),
+  };
   const failure = accessError ?? mutation.error ?? query.error;
   const unavailable = Boolean(accessError) || (query.error instanceof DataError && ['42501', 'PGRST301', 'PGRST303', 'PT404'].includes(query.error.code ?? ''));
   return (
     <Workspace
       workspace={selected}
       workspaces={workspaces}
-      readOnly={selected.owner_id !== session.user.id}
+      currentUserId={session.user.id}
+      capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
+      collaboration={collaboration}
       accessUnavailable={unavailable}
       members={unavailable || directory.error ? [] : (directory.data?.members ?? [])}
       invitations={unavailable || directory.error ? [] : (directory.data?.invitations ?? [])}

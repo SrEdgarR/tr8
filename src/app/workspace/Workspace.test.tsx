@@ -1,4 +1,6 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render as testingRender, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,6 +9,11 @@ import ProjectForm from './ProjectForm';
 import TaskForm from './TaskForm';
 import TasksView from './TasksView';
 import Workspace from './Workspace';
+
+function render(ui: ReactNode) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return testingRender(ui, { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+}
 
 const project: Project = {
   workspace_id: 'workspace-a',
@@ -27,6 +34,7 @@ const task: Task = {
   id: 'd4bf169b-6d3b-4a27-a14b-ed6fead520af',
   owner_id: project.owner_id,
   project_id: project.id,
+  assignee_member_id: null,
   task_number: 14,
   title: 'Preparar edición',
   description: 'Revisar los textos y las imágenes',
@@ -98,13 +106,26 @@ describe('espacios y equipos', () => {
             workspaces: [personal, team],
             projects: [],
             tasks: [],
-            members: [{ id: 'member-a', user_id: 'personal-owner', display_name: 'Edgar', status: 'active', version: 1, is_owner: true, roles: [] }],
+            members: [
+              {
+                id: 'member-a',
+                user_id: 'personal-owner',
+                display_name: 'Edgar',
+                status: 'active',
+                version: 1,
+                is_owner: true,
+                roles: [],
+                permissions: [],
+                can_manage_roles: false,
+                can_remove: false,
+              },
+            ],
           })}
         />
       </MemoryRouter>,
     );
     expect(screen.getByText('Edgar')).toBeInTheDocument();
-    expect(screen.getByText('Propietario')).toBeInTheDocument();
+    expect(screen.getByText('Propietario protegido')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Invitar miembro' })).toBeDisabled();
     expect(screen.getByText(/remitente verificado/)).toBeInTheDocument();
     expect(screen.queryByText('owner@example.com')).not.toBeInTheDocument();
@@ -143,7 +164,7 @@ describe('espacios y equipos', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByLabelText('Título')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Eliminar' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Eliminar' })).not.toBeInTheDocument();
     expect(props.onUpdateTask).not.toHaveBeenCalled();
   });
 });

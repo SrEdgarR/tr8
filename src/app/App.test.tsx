@@ -8,6 +8,7 @@ import type { WorkspaceProps, Project, Task } from './types';
 import type { WorkspaceData } from './data/repository';
 import { DataError } from './data/errors';
 import App from './App';
+import { ActivityPanel } from './workspace/Collaboration';
 
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
@@ -17,6 +18,8 @@ const mocks = vi.hoisted(() => ({
     resolveProject: vi.fn(),
     createTeam: vi.fn(),
     members: vi.fn(),
+    memberDirectory: vi.fn(),
+    projectCapabilities: vi.fn(),
     invitations: vi.fn(),
     acceptInvitation: vi.fn(),
     load: vi.fn(),
@@ -26,8 +29,11 @@ const mocks = vi.hoisted(() => ({
     createTask: vi.fn(),
     updateTask: vi.fn(),
     deleteTask: vi.fn(),
+    roles: vi.fn(),
+    activity: vi.fn(),
   },
   workspace: null as WorkspaceProps | null,
+  showActivity: false,
 }));
 
 vi.mock('./data/client', () => ({
@@ -52,6 +58,7 @@ vi.mock('./workspace/Workspace', () => ({
         {props.tasks.map(task => (
           <p key={task.id}>{task.title}</p>
         ))}
+        {mocks.showActivity && !props.loading && props.collaboration && <ActivityPanel api={props.collaboration} />}
         <button onClick={props.onRetry}>Reintentar datos</button>
       </section>
     );
@@ -95,6 +102,7 @@ function task(title = 'Tarea privada', version = 1): Task {
     workspace_id: 'personal-a',
     owner_id: 'owner-a',
     project_id: 'project-a',
+    assignee_member_id: null,
     task_number: 1,
     title,
     description: '',
@@ -139,6 +147,7 @@ function workspace() {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.workspace = null;
+  mocks.showActivity = false;
   mocks.auth.onAuthStateChange.mockImplementation(callback => {
     authListener = callback;
     return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
@@ -150,11 +159,31 @@ beforeEach(() => {
     personal_workspace_id: 'personal-a',
     external_invites_enabled: false,
     workspaces: [
-      { id: 'personal-a', name: 'Personal', kind: 'personal', owner_id: 'owner-a', version: 1, permissions: [] },
-      { id: 'team-a', name: 'Equipo', kind: 'team', owner_id: 'owner-a', version: 1, permissions: [] },
+      { id: 'personal-a', name: 'Personal', kind: 'personal', owner_id: 'owner-a', version: 1, permissions: ['project.read'] },
+      { id: 'team-a', name: 'Equipo', kind: 'team', owner_id: 'owner-a', version: 1, permissions: ['project.read'] },
     ],
   });
   mocks.repository.resolveProject.mockResolvedValue(project());
+  mocks.repository.projectCapabilities.mockResolvedValue(
+    ['project-a', 'project-b'].map(project_id => ({
+      project_id,
+      access_level: 'write',
+      permissions: [
+        'project.read',
+        'project.edit',
+        'project.archive',
+        'task.read',
+        'task.create',
+        'task.edit',
+        'task.delete',
+        'task.assign',
+        'project.access.manage',
+        'audit.read',
+      ],
+    })),
+  );
+  mocks.repository.memberDirectory.mockResolvedValue([]);
+  mocks.repository.invitations.mockResolvedValue([]);
   mocks.repository.load.mockResolvedValue({ projects: [project()], tasks: [task()] });
 });
 
@@ -163,6 +192,138 @@ afterEach(() => {
 });
 
 describe('sesiones y datos del espacio personal', () => {
+  it('retira actividad privada inmediatamente al cambiar ACL sin cambiar roles y espera la nueva lectura', async () => {
+    mocks.showActivity = true;
+    mocks.auth.getSession.mockResolvedValue({ data: { session: session('delegate-a') }, error: null });
+    mocks.repository.context.mockResolvedValue({
+      contract_version: 2,
+      personal_workspace_id: 'personal-a',
+      external_invites_enabled: false,
+      workspaces: [{ id: 'team-a', kind: 'team', name: 'Equipo', owner_id: 'owner-a', version: 1, permissions: ['project.read', 'task.read', 'audit.read'] }],
+    });
+    mocks.repository.activity.mockResolvedValue({
+      items: [
+        {
+          id: 2,
+          project_id: 'project-a',
+          actor_id: 'old-actor',
+          actor_name: 'Participante privado',
+          action: 'task.updated',
+          resource_id: 'task-a',
+          created_at: '2026-10-23T12:00:00Z',
+        },
+      ],
+      next_before_id: null,
+    });
+    const { client } = show('/team?workspace=team-a');
+    await screen.findByText('Participante privado');
+    const oldScope = workspace().collaboration!.scopeKey;
+    client.setQueryData([...oldScope, 'assignable', 'project-a'], [{ display_name: 'Asignable privado' }]);
+    client.setQueryData([...oldScope, 'access', 'project-a'], [{ display_name: 'Acceso privado' }]);
+    const oldPermissions = [...workspace().workspace!.permissions];
+    const nextActivity = deferred<{ items: never[]; next_before_id: null }>();
+    mocks.repository.activity.mockReturnValue(nextActivity.promise);
+    mocks.repository.projectCapabilities.mockResolvedValue([
+      { project_id: 'project-b', access_level: 'read', permissions: ['project.read', 'task.read', 'audit.read'] },
+    ]);
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['workspace', 'delegate-a', 'team-a'] });
+    });
+    await waitFor(() => expect(screen.queryByText('Participante privado')).not.toBeInTheDocument());
+    expect(workspace().workspace!.permissions).toEqual(oldPermissions);
+    expect(workspace().collaboration!.scopeKey).not.toEqual(oldScope);
+    expect(client.getQueriesData({ queryKey: oldScope })).toEqual([]);
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+    expect(client.getQueryState([...workspace().collaboration!.scopeKey, 'activity', null])?.fetchStatus).toBe('fetching');
+    await act(async () => nextActivity.resolve({ items: [], next_before_id: null }));
+    expect(await screen.findByText('Todavía no hay actividad disponible.')).toBeInTheDocument();
+    expect(screen.queryByText('Participante privado')).not.toBeInTheDocument();
+  });
+
+  it('no reutiliza datos frescos ni consultas de la revisión anterior al perder permisos en el contexto', async () => {
+    mocks.auth.getSession.mockResolvedValue({ data: { session: session('delegate-a') }, error: null });
+    const original = {
+      contract_version: 2,
+      personal_workspace_id: 'personal-a',
+      external_invites_enabled: false,
+      workspaces: [
+        { id: 'team-a', kind: 'team', name: 'Equipo', owner_id: 'owner-a', version: 1, permissions: ['project.read', 'task.read', 'role.read', 'role.manage'] },
+      ],
+    };
+    mocks.repository.context.mockResolvedValue(original);
+    const { client } = show('/team?workspace=team-a');
+    await screen.findByText('Tarea privada');
+    const previousScope = workspace().collaboration!.scopeKey;
+    client.setQueryData([...previousScope, 'roles'], [{ name: 'Rol reservado' }]);
+    mocks.repository.context.mockResolvedValue({ ...original, workspaces: [{ ...original.workspaces[0], permissions: ['role.manage'] }] });
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['context', 'delegate-a'] });
+    });
+    await waitFor(() => expect(screen.queryByText('Proyecto privado')).not.toBeInTheDocument());
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+    expect(workspace().collaboration!.scopeKey).not.toEqual(previousScope);
+    expect(client.getQueriesData({ queryKey: previousScope })).toEqual([]);
+    expect(mocks.repository.load).toHaveBeenCalledOnce();
+    expect(mocks.repository.projectCapabilities).toHaveBeenCalledOnce();
+    expect(workspace().workspace?.permissions).toEqual(['role.manage']);
+  });
+
+  it('permite administrar roles sin requerir acceso al contenido de proyectos', async () => {
+    mocks.auth.getSession.mockResolvedValue({ data: { session: session('delegate-a') }, error: null });
+    mocks.repository.context.mockResolvedValue({
+      contract_version: 2,
+      personal_workspace_id: 'personal-a',
+      external_invites_enabled: false,
+      workspaces: [{ id: 'team-a', kind: 'team', name: 'Equipo', owner_id: 'owner-a', version: 1, permissions: ['member.read', 'role.read', 'role.manage'] }],
+    });
+    show('/team?workspace=team-a');
+    await waitFor(() => expect(workspace().loading).toBe(false));
+    expect(mocks.repository.load).not.toHaveBeenCalled();
+    expect(mocks.repository.projectCapabilities).not.toHaveBeenCalled();
+    expect(mocks.repository.memberDirectory).toHaveBeenCalledWith('team-a');
+    expect(workspace().projects).toEqual([]);
+    expect(workspace().collaboration).toBeDefined();
+  });
+
+  it('deja al servidor autorizar un colaborador que puede escribir aunque no sea propietario', async () => {
+    mocks.auth.getSession.mockResolvedValue({ data: { session: session('collaborator-a') }, error: null });
+    mocks.repository.updateTask.mockResolvedValue({ ...task(), title: 'Cambio confirmado', version: 2 });
+    show();
+    await screen.findByText('Tarea privada');
+    await act(async () => {
+      await workspace().onUpdateTask(task(), { title: 'Cambio confirmado' });
+    });
+    expect(mocks.repository.updateTask).toHaveBeenCalledWith(task(), { title: 'Cambio confirmado' });
+  });
+
+  it('retira proyectos y tareas al refrescar capacidades aunque una lectura anterior aún devuelva las filas', async () => {
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    mocks.repository.projectCapabilities.mockResolvedValue([]);
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['workspace', 'owner-a', 'personal-a'] });
+    });
+    await waitFor(() => expect(screen.queryByText('Proyecto privado')).not.toBeInTheDocument());
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+    expect(workspace().capabilities).toEqual({});
+    expect(client.getQueriesData<WorkspaceData>({ queryKey: ['workspace', 'owner-a', 'personal-a'] })[0]?.[1]?.tasks).toEqual([]);
+  });
+
+  it('limpia también directorios y administración en caché cuando una consulta sensible es denegada', async () => {
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    client.setQueryData([...workspace().collaboration!.scopeKey, 'access', 'project-a'], [{ display_name: 'Dato anterior' }]);
+    client.setQueryData(['directory', 'owner-a', 'personal-a', 'project.read'], { members: [{ display_name: 'Dato anterior' }] });
+    mocks.repository.roles.mockRejectedValue(new DataError('Permiso retirado.', '42501'));
+    await act(async () => {
+      await expect(workspace().collaboration!.roles()).rejects.toMatchObject({ code: '42501' });
+    });
+    expect(workspace().accessUnavailable).toBe(true);
+    expect(client.getQueriesData({ queryKey: ['collaboration', 'owner-a', 'personal-a'] })).toEqual([]);
+    expect(client.getQueriesData({ queryKey: ['directory', 'owner-a', 'personal-a'] }).every(([, data]) => data === undefined)).toBe(true);
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+  });
+
   it('carga datos con el ciclo doble de efectos de React StrictMode', async () => {
     show('/', true);
     expect(await screen.findByText('Proyecto privado')).toBeInTheDocument();
@@ -171,10 +332,17 @@ describe('sesiones y datos del espacio personal', () => {
 
   it('permite una cuenta habilitada cuyo correo difiere de la configuración inicial', async () => {
     mocks.auth.getSession.mockResolvedValue({ data: { session: session('member-a', 'member@example.com') }, error: null });
+    mocks.repository.context.mockResolvedValue({
+      contract_version: 2,
+      personal_workspace_id: 'personal-a',
+      external_invites_enabled: false,
+      workspaces: [{ id: 'personal-a', kind: 'personal', name: 'Personal', owner_id: 'member-a', version: 1, permissions: ['project.read'] }],
+    });
     show();
     expect(await screen.findByText('Proyecto privado')).toBeInTheDocument();
     expect(mocks.repository.context).toHaveBeenCalled();
-    expect(workspace().readOnly).toBe(true);
+    expect(workspace().currentUserId).toBe('member-a');
+    expect(workspace().capabilities?.['project-a'].permissions).toContain('project.read');
   });
   it('no consulta proyectos antes de resolver la sesión', async () => {
     const pending = deferred<{ data: { session: Session }; error: null }>();
@@ -284,7 +452,9 @@ describe('sesiones y datos del espacio personal', () => {
     await act(async () => firstLoad.resolve({ projects: [project('Datos de la sesión anterior')], tasks: [] }));
     expect(screen.queryByText('Datos de la sesión anterior')).not.toBeInTheDocument();
     expect(client.getQueryData(['workspace', 'owner-a', 'personal-a'])).toBeUndefined();
-    expect(client.getQueryData<WorkspaceData>(['workspace', 'owner-b', 'personal-a'])?.projects[0].name).toBe('Proyecto de la segunda sesión');
+    expect(client.getQueriesData<WorkspaceData>({ queryKey: ['workspace', 'owner-b', 'personal-a'] })[0]?.[1]?.projects[0].name).toBe(
+      'Proyecto de la segunda sesión',
+    );
   });
 
   it('no repuebla la caché con un guardado que termina después del cierre de sesión', async () => {

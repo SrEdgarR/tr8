@@ -105,7 +105,11 @@ begin
   perform pg_temp.assert_true((select count(*)=2 from pg_class where oid in ('public.tr8_workspace_projects'::regclass,'public.tr8_workspace_tasks'::regclass) and relrowsecurity),'RLS enabled on both exposed content tables');
   perform pg_temp.assert_true((select count(*)=18 from tr8_private.permission_catalog),'fixed permission catalogue contains exactly 18 entries');
   perform pg_temp.assert_true((select count(*)=0 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'tr8_v2_%' and p.prosecdef),'public stage-1 RPC wrappers never run as definer');
-  perform pg_temp.assert_true((select count(*)=0 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('tr8_v2_create_role','tr8_v2_update_role','tr8_v2_delete_role','tr8_v2_set_member_roles','tr8_v2_set_project_access','tr8_v2_remove_project_access')),'stage-2 role and ACL mutation endpoints are not prematurely exposed');
+  if not exists(select 1 from information_schema.columns where table_schema='public' and table_name='tr8_workspace_tasks' and column_name='assignee_member_id') then
+    perform pg_temp.assert_true((select count(*)=0 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('tr8_v2_create_role','tr8_v2_update_role','tr8_v2_delete_role','tr8_v2_set_member_roles','tr8_v2_set_project_access','tr8_v2_remove_project_access')),'stage-2 role and ACL mutation endpoints are not prematurely exposed');
+  else
+    perform pg_temp.assert_true((select count(*)=6 and not bool_or(p.prosecdef) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('tr8_v2_create_role','tr8_v2_update_role','tr8_v2_delete_role','tr8_v2_set_member_roles','tr8_v2_set_project_access','tr8_v2_remove_project_access')),'authorized stage-2 role and ACL mutation endpoints exist and remain invokers');
+  end if;
 end;
 $$;
 

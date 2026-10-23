@@ -1057,3 +1057,111 @@
   margin-top: 4px;
   color: var(--text-3);
 }
+.pw-permission-grid {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.pw-permission-grid legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.pw-check-field {
+  align-items: flex-start;
+  display: flex;
+  gap: 9px;
+  font-size: 13px;
+}
+
+.pw-check-field input {
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+.pw-check-field small {
+  color: var(--text-3);
+  display: block;
+  font-size: 11px;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.pw-role-list,
+.pw-activity-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.pw-role-list li,
+.pw-activity-list li {
+  border-top: 1px solid var(--border);
+  padding: 13px 0;
+}
+
+.pw-role-permissions {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 9px 0 0;
+}
+
+.pw-activity {
+  margin: 24px;
+}
+
+.pw-team-page .pw-activity {
+  margin: 0;
+}
+
+.pw-activity-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.pw-activity-list time {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.pw-access-form {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 130px auto;
+  margin-top: 20px;
+}
+
+.pw-member-list .pw-confirm {
+  flex-basis: 100%;
+}
+
+.pw-assignment {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+@media (max-width: 640px) {
+  .pw-permission-grid,
+  .pw-access-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pw-member-list li {
+    flex-wrap: wrap;
+  }
+
+  .pw-activity {
+    margin: 16px;
+  }
+}

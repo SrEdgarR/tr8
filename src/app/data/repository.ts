@@ -1,10 +1,23 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AppContext, Project, ProjectInput, Task, TaskInput, TaskPatch, WorkspaceInvitation, WorkspaceMember, WorkspaceSummary } from '../types';
+import type {
+  AppContext,
+  Project,
+  ProjectCapability,
+  ProjectInput,
+  Task,
+  TaskInput,
+  TaskPatch,
+  WorkspaceInvitation,
+  WorkspaceMember,
+  WorkspaceSummary,
+} from '../types';
 import { dataError, DataError } from './errors';
+import { createCollaborationRepository } from './collaboration';
 
 export interface WorkspaceData {
   projects: Project[];
   tasks: Task[];
+  capabilities?: Record<string, ProjectCapability>;
 }
 
 const PAGE_SIZE = 250;
@@ -55,6 +68,7 @@ async function rpc<T>(client: SupabaseClient, name: string, parameters: Record<s
 
 export function createRepository(client: SupabaseClient) {
   return {
+    ...createCollaborationRepository(client),
     async context(): Promise<AppContext> {
       const context = await rpc<AppContext>(client, 'tr8_v2_get_context', {});
       if (context.contract_version !== 2) throw new DataError('TR8 necesita actualizarse. Recarga la página para continuar.', 'CLIENT_UPGRADE_REQUIRED');

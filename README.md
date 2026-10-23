@@ -9,24 +9,27 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 
 ![TR8](docs/preview.png)
 
-## Funciones actuales · Etapa 1
+## Funciones actuales · Etapa 2
 
 - Cuenta confirmada con Supabase Auth: inicio/cierre de sesión y recuperación de contraseña. El registro público está cerrado.
 - Espacio personal privado, varios equipos, selector de espacio y directorio mínimo de miembros.
+- Roles personalizados por equipo, varios roles por miembro y administración delegada dentro de sus permisos actuales.
+- Proyectos privados con acceso explícito de lectura o escritura y controles de interfaz por capacidad efectiva.
 - Proyectos: crear, editar, archivar y restaurar.
-- Tareas: crear, editar, eliminar, completar y cambiar de estado; descripción, prioridad y fechas opcionales.
+- Tareas: crear, editar, eliminar, completar y cambiar de estado; descripción, prioridad, fechas y un responsable opcional. Asignar y editar son permisos separados.
 - Lista y tablero sobre los mismos datos, con búsqueda y filtros. El tablero permite arrastrar tareas entre estados; el selector ofrece una alternativa con teclado.
 - Inicio con resumen y próximos vencimientos. Los datos se guardan en Postgres y se recuperan al volver a entrar.
 - Acceso por identidad habilitada, membresía, permisos y proyecto, aplicado en Postgres mediante RLS y RPC verificadas. La caché está separada por usuario y espacio.
+- Actividad de equipos y proyectos, filtrada por el acceso vigente. Retirar un miembro o su acceso conserva el trabajo y elimina responsabilidades que dejen de ser válidas.
 
-Las altas e invitaciones externas permanecen desactivadas, por decisión del propietario, hasta disponer de correo y provisión de cuentas adecuados. Los roles personalizados, la asignación de tareas y la administración del acceso por proyecto pertenecen a la etapa 2. Calendario, notificaciones, Google y Pulso son etapas posteriores.
+Las altas e invitaciones externas permanecen desactivadas, por decisión del propietario, hasta disponer de correo y provisión de cuentas adecuados. Se pueden administrar miembros existentes y preparar roles y proyectos. Calendario, notificaciones, Google y Pulso son etapas posteriores.
 
 ## Especificación y evolución
 
 La [especificación técnica y el plan por etapas](docs/stage-0/README.md) documentan
 la evolución acordada hacia espacios personales, equipos, roles, calendarios,
 avisos opcionales y Pulso privado. La etapa 0 prepara contratos y condiciones
-de verificación. La [entrega de etapa 1](docs/stage-1/README.md) describe el contrato actual y sus comprobaciones. El [presupuesto gratuito](docs/stage-0/free-tier-budget.md) identifica
+de verificación. La [entrega de etapa 1](docs/stage-1/README.md) registra la transición a espacios; la [etapa 2](docs/stage-2/README.md) describe colaboración, permisos y sus comprobaciones. El [presupuesto gratuito](docs/stage-0/free-tier-budget.md) identifica
 las dependencias externas antes de activar correo, Google o finanzas.
 
 ## Desarrollo local
@@ -71,7 +74,7 @@ El entorno de este entregable usa el proyecto `tr8` de la organización **Horizo
 
 3. Aplica las migraciones de etapa 1 en orden. El bootstrap solo habilita la cuenta confirmada de la configuración histórica; después la autoridad es `tr8_private.app_users`, no una coincidencia de correo ni metadatos editables. Un inicio de sesión no habilita por sí solo una cuenta nueva.
 4. En **Authentication → URL Configuration**, usa `http://127.0.0.1:5173` como Site URL y autoriza las redirecciones exactas de inicio y recuperación descritas en [docs/database.md](docs/database.md).
-5. Mantén activa la confirmación de correo y desactivados los registros e invitaciones externas. Consulta [la operación de etapa 1](docs/stage-1/README.md) antes de habilitar colaboradores.
+5. Aplica la migración de etapa 2, que añade responsables y operaciones de colaboración conservando el contrato v2. Mantén activa la confirmación de correo y desactivados los registros e invitaciones externas. Consulta [la operación actual](docs/stage-2/README.md) antes de habilitar colaboradores.
 
 El esquema comienza con acceso denegado hasta habilitar una identidad de confianza. No expongas el esquema privado a la Data API. El proyecto `tr8` está publicado en Vercel dentro de **Horizon Studios**, conectado a `SrEdgarR/tr8` y su rama `main`. Producción y pruebas usan bases de Supabase separadas. `vercel.json` contiene las reglas de la SPA y sus cabeceras de seguridad.
 
@@ -89,7 +92,7 @@ Interfaz React → React Query → repositorio → Supabase Auth / Data API
 
 Los formularios llaman al repositorio. Una escritura solo se considera guardada cuando Supabase devuelve el registro persistido. Un UUID estable evita duplicar un alta al reintentar tras un fallo de red. Las modificaciones incluyen la versión leída: si otra pestaña ya cambió el registro, el servidor rechaza la escritura antigua y la interfaz conserva el formulario para revisarlo. El archivado bloquea nuevas tareas y cambios hasta restaurar el proyecto.
 
-La base de datos valida identidad, acceso al espacio/proyecto, relación proyecto/tarea, estados, prioridades y fechas. Los códigos, números de tarea, versiones y marcas de tiempo se gestionan en el servidor. Las escrituras directas están denegadas; las RPC `tr8_v2_*` verifican permisos y versión. Consulta [el contrato actual](docs/stage-1/README.md) y [el registro histórico](docs/database.md).
+La base de datos valida identidad, acceso al espacio/proyecto, relación proyecto/tarea, estados, prioridades y fechas. Los códigos, números de tarea, versiones y marcas de tiempo se gestionan en el servidor. Las escrituras directas están denegadas; las RPC `tr8_v2_*` verifican permisos y versión. Las consultas de capacidades y directorios están paginadas; los roles no abren un proyecto privado por sí solos. Consulta [el contrato actual](docs/stage-2/README.md) y [el registro histórico](docs/database.md).
 
 ## Estructura
 

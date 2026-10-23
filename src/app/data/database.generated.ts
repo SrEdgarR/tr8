@@ -55,6 +55,7 @@ export type Database = {
       };
       tr8_workspace_tasks: {
         Row: {
+          assignee_member_id: string | null;
           created_at: string;
           description: string;
           due_date: string | null;
@@ -72,6 +73,7 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          assignee_member_id?: string | null;
           created_at?: string;
           description?: string;
           due_date?: string | null;
@@ -89,6 +91,7 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          assignee_member_id?: string | null;
           created_at?: string;
           description?: string;
           due_date?: string | null;
@@ -121,6 +124,38 @@ export type Database = {
     };
     Functions: {
       tr8_v2_accept_invitation: { Args: { p_token: string }; Returns: Json };
+      tr8_v2_assign_task: {
+        Args: {
+          p_assignee_member_id: string;
+          p_id: string;
+          p_version: number;
+          p_workspace_id: string;
+        };
+        Returns: {
+          assignee_member_id: string | null;
+          created_at: string;
+          description: string;
+          due_date: string | null;
+          id: string;
+          owner_id: string;
+          position: number;
+          priority: string;
+          project_id: string;
+          start_date: string | null;
+          status: string;
+          task_number: number;
+          title: string;
+          updated_at: string;
+          version: number;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'tr8_workspace_tasks';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       tr8_v2_create_invitation: {
         Args: { p_email: string; p_id: string; p_workspace_id: string };
         Returns: Json;
@@ -155,6 +190,15 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      tr8_v2_create_role: {
+        Args: {
+          p_id: string;
+          p_name: string;
+          p_permissions: string[];
+          p_workspace_id: string;
+        };
+        Returns: Json;
+      };
       tr8_v2_create_task: {
         Args: {
           p_description: string;
@@ -168,6 +212,7 @@ export type Database = {
           p_workspace_id: string;
         };
         Returns: {
+          assignee_member_id: string | null;
           created_at: string;
           description: string;
           due_date: string | null;
@@ -195,18 +240,97 @@ export type Database = {
         Args: { p_id: string; p_name: string };
         Returns: Json;
       };
+      tr8_v2_delete_role: {
+        Args: { p_id: string; p_version: number; p_workspace_id: string };
+        Returns: Json;
+      };
       tr8_v2_delete_task: {
         Args: { p_id: string; p_version: number; p_workspace_id: string };
         Returns: undefined;
       };
       tr8_v2_get_context: { Args: never; Returns: Json };
+      tr8_v2_get_project_capabilities: {
+        Args: { p_project_id: string; p_workspace_id: string };
+        Returns: Json;
+      };
+      tr8_v2_list_activity: {
+        Args: {
+          p_before_id?: number;
+          p_limit?: number;
+          p_project_id?: string;
+          p_workspace_id: string;
+        };
+        Returns: Json;
+      };
+      tr8_v2_list_assignable_members: {
+        Args: {
+          p_cursor?: string;
+          p_limit?: number;
+          p_project_id: string;
+          p_workspace_id: string;
+        };
+        Returns: Json;
+      };
       tr8_v2_list_invitations: {
         Args: { p_workspace_id: string };
         Returns: Json;
       };
       tr8_v2_list_members: { Args: { p_workspace_id: string }; Returns: Json };
+      tr8_v2_list_members_page: {
+        Args: { p_cursor?: string; p_limit?: number; p_workspace_id: string };
+        Returns: Json;
+      };
+      tr8_v2_list_project_access: {
+        Args: {
+          p_cursor?: string;
+          p_limit?: number;
+          p_project_id: string;
+          p_workspace_id: string;
+        };
+        Returns: Json;
+      };
+      tr8_v2_list_project_capabilities: {
+        Args: { p_cursor?: string; p_limit?: number; p_workspace_id: string };
+        Returns: Json;
+      };
+      tr8_v2_list_roles: {
+        Args: { p_cursor?: string; p_limit?: number; p_workspace_id: string };
+        Returns: Json;
+      };
+      tr8_v2_remove_member: {
+        Args: { p_member_id: string; p_version: number; p_workspace_id: string };
+        Returns: Json;
+      };
+      tr8_v2_remove_project_access: {
+        Args: {
+          p_member_id: string;
+          p_project_id: string;
+          p_version: number;
+          p_workspace_id: string;
+        };
+        Returns: Json;
+      };
       tr8_v2_revoke_invitation: {
         Args: { p_id: string; p_version: number; p_workspace_id: string };
+        Returns: Json;
+      };
+      tr8_v2_set_member_roles: {
+        Args: {
+          p_member_id: string;
+          p_role_ids: string[];
+          p_version: number;
+          p_workspace_id: string;
+        };
+        Returns: Json;
+      };
+      tr8_v2_set_project_access: {
+        Args: {
+          p_access_level: string;
+          p_member_id: string;
+          p_project_id: string;
+          p_version: number;
+          p_workspace_id: string;
+        };
         Returns: Json;
       };
       tr8_v2_update_project: {
@@ -237,6 +361,16 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      tr8_v2_update_role: {
+        Args: {
+          p_id: string;
+          p_name: string;
+          p_permissions: string[];
+          p_version: number;
+          p_workspace_id: string;
+        };
+        Returns: Json;
+      };
       tr8_v2_update_task: {
         Args: {
           p_id: string;
@@ -245,6 +379,7 @@ export type Database = {
           p_workspace_id: string;
         };
         Returns: {
+          assignee_member_id: string | null;
           created_at: string;
           description: string;
           due_date: string | null;

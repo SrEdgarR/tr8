@@ -22,17 +22,29 @@ import {
 } from 'lucide-react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { formatDate, PROJECT_STATUSES } from '../constants';
-import type { Project, Task, TaskStatus, WorkspaceProps } from '../types';
+import type { CollaborationApi, Project, Task, TaskStatus, WorkspaceProps } from '../types';
 import ProjectForm from './ProjectForm';
 import TaskForm from './TaskForm';
 import TasksView from './TasksView';
 import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon, StatusDot } from './ui';
 import { errorMessage, localDate } from './helpers';
+import { ActivityPanel, ProjectAccessDialog, TeamAdministration } from './Collaboration';
+import { canInProject, canInWorkspace } from './permissions';
 import './workspace.css';
 
-type ProjectActions = { onEdit: (project: Project) => void; onArchive: (project: Project) => void; pending: boolean; readOnly?: boolean; scopeSearch?: string };
+type ProjectActions = {
+  onEdit: (project: Project) => void;
+  onArchive: (project: Project) => void;
+  onAccess: (project: Project) => void;
+  pending: boolean;
+  can: (projectId: string, permission: string) => boolean;
+  canCreateProject: boolean;
+  canCreateTask: boolean;
+  collaboration?: CollaborationApi;
+  scopeSearch?: string;
+};
 
-function ProjectCard({ project, tasks, pending, readOnly, scopeSearch = '', onEdit, onArchive }: ProjectActions & { project: Project; tasks: Task[] }) {
+function ProjectCard({ project, tasks, pending, can, scopeSearch = '', onEdit, onArchive }: ProjectActions & { project: Project; tasks: Task[] }) {
   const complete = tasks.filter(task => task.status === 'done').length;
   const progress = tasks.length ? Math.round((complete / tasks.length) * 100) : 0;
   return (
@@ -61,13 +73,18 @@ function ProjectCard({ project, tasks, pending, readOnly, scopeSearch = '', onEd
           {complete}/{tasks.length} tareas
         </span>
         <div className="sp" />
-        <button className="ibtn ibtn-xs" aria-label={`Editar ${project.name}`} disabled={pending || readOnly} onClick={() => onEdit(project)}>
+        <button
+          className="ibtn ibtn-xs"
+          aria-label={`Editar ${project.name}`}
+          disabled={pending || !can(project.id, 'project.edit')}
+          onClick={() => onEdit(project)}
+        >
           <Pencil size={13} aria-hidden="true" />
         </button>
         <button
           className="ibtn ibtn-xs"
           aria-label={`${project.archived_at ? 'Restaurar' : 'Archivar'} ${project.name}`}
-          disabled={pending || readOnly}
+          disabled={pending || !can(project.id, 'project.archive')}
           onClick={() => onArchive(project)}
         >
           {project.archived_at ? <RefreshCw size={13} aria-hidden="true" /> : <Archive size={13} aria-hidden="true" />}
@@ -105,11 +122,11 @@ function HomePage({
           <p>Una vista clara de tus proyectos y de lo que sigue.</p>
         </div>
         <div className="acts">
-          <button className="btn btn-secondary" disabled={actions.pending || actions.readOnly} onClick={onNewProject}>
+          <button className="btn btn-secondary" disabled={actions.pending || !actions.canCreateProject} onClick={onNewProject}>
             <Plus size={14} aria-hidden="true" />
             Nuevo proyecto
           </button>
-          <button className="btn btn-primary" disabled={actions.pending || actions.readOnly || !activeProjects.length} onClick={onNewTask}>
+          <button className="btn btn-primary" disabled={actions.pending || !actions.canCreateTask} onClick={onNewTask}>
             <Plus size={14} aria-hidden="true" />
             Nueva tarea
           </button>
@@ -139,7 +156,7 @@ function HomePage({
           <EmptyState
             title="Dale espacio a tu primer proyecto"
             action={
-              <button className="btn btn-primary" disabled={actions.pending || actions.readOnly} onClick={onNewProject}>
+              <button className="btn btn-primary" disabled={actions.pending || !actions.canCreateProject} onClick={onNewProject}>
                 <Plus size={14} aria-hidden="true" />
                 Crear proyecto
               </button>
@@ -210,7 +227,7 @@ function ProjectsPage({ projects, tasks, onNew, ...actions }: ProjectActions & {
           <p>Un lugar para cada idea y cada objetivo.</p>
         </div>
         <div className="acts">
-          <button className="btn btn-primary" disabled={actions.pending || actions.readOnly} onClick={onNew}>
+          <button className="btn btn-primary" disabled={actions.pending || !actions.canCreateProject} onClick={onNew}>
             <Plus size={14} aria-hidden="true" />
             Nuevo proyecto
           </button>
@@ -247,7 +264,7 @@ function ProjectsPage({ projects, tasks, onNew, ...actions }: ProjectActions & {
               </button>
             ) : (
               !archived && (
-                <button className="btn btn-primary" disabled={actions.pending || actions.readOnly} onClick={onNew}>
+                <button className="btn btn-primary" disabled={actions.pending || !actions.canCreateProject} onClick={onNew}>
                   Crear proyecto
                 </button>
               )
@@ -306,18 +323,28 @@ function ProjectPage({
             <h1>{project.name}</h1>
             <p className="pw-project-description">{project.description || 'Organiza las tareas de este proyecto.'}</p>
           </div>
-          <button className="btn btn-secondary" disabled={actions.pending || actions.readOnly} onClick={() => actions.onEdit(project)}>
+          <button className="btn btn-secondary" disabled={actions.pending || !actions.can(project.id, 'project.edit')} onClick={() => actions.onEdit(project)}>
             <Pencil size={13} aria-hidden="true" />
             Editar
           </button>
-          <button className="btn btn-ghost" disabled={actions.pending || actions.readOnly} onClick={() => actions.onArchive(project)}>
+          <button
+            className="btn btn-ghost"
+            disabled={actions.pending || !actions.can(project.id, 'project.archive')}
+            onClick={() => actions.onArchive(project)}
+          >
             <Archive size={14} aria-hidden="true" />
             {project.archived_at ? 'Restaurar' : 'Archivar'}
           </button>
           {!project.archived_at && (
-            <button className="btn btn-primary" disabled={actions.pending || actions.readOnly} onClick={() => onNewTask(project)}>
+            <button className="btn btn-primary" disabled={actions.pending || !actions.can(project.id, 'task.create')} onClick={() => onNewTask(project)}>
               <Plus size={14} aria-hidden="true" />
               Nueva tarea
+            </button>
+          )}
+          {actions.collaboration && actions.can(project.id, 'project.access.manage') && (
+            <button className="btn btn-secondary" disabled={actions.pending} onClick={() => actions.onAccess(project)}>
+              <Users size={14} aria-hidden="true" />
+              Acceso
             </button>
           )}
         </div>
@@ -339,77 +366,14 @@ function ProjectPage({
         tasks={projectTasks}
         projects={projects}
         pending={actions.pending}
-        readOnly={Boolean(project.archived_at) || actions.readOnly}
+        readOnly={Boolean(project.archived_at)}
+        canCreate={actions.can(project.id, 'task.create') && !project.archived_at}
+        canEditTask={task => actions.can(task.project_id, 'task.edit') && !project.archived_at}
         onCreate={status => onNewTask(project, status)}
         onOpen={onOpen}
         onMove={onMove}
       />
-    </div>
-  );
-}
-
-function TeamPage({ workspace, members = [], invitations = [], directoryLoading, directoryError }: WorkspaceProps) {
-  if (workspace?.kind !== 'team')
-    return (
-      <div className="page">
-        <EmptyState title="Este es tu espacio personal">Crea un equipo desde el selector de espacios para organizar trabajo compartido.</EmptyState>
-      </div>
-    );
-  return (
-    <div className="page pw-team-page">
-      <div className="ph">
-        <div>
-          <div className="eyebrow">Equipo</div>
-          <h1>{workspace.name}</h1>
-          <p>Los proyectos son privados y requieren acceso explícito. El propietario puede consultar todos los proyectos de su equipo.</p>
-        </div>
-      </div>
-      <section className="pw-account-card" aria-labelledby="team-members-title">
-        <h2 id="team-members-title">Miembros</h2>
-        {directoryError ? (
-          <ErrorNotice>{directoryError}</ErrorNotice>
-        ) : directoryLoading ? (
-          <Busy />
-        ) : (
-          <ul className="pw-member-list">
-            {members.map(member => (
-              <li key={member.id}>
-                <span className="pw-avatar small">{member.display_name.charAt(0).toUpperCase()}</span>
-                <span className="grow">
-                  <strong>{member.display_name}</strong>
-                  <small>{member.is_owner ? 'Propietario' : member.roles.map(role => role.name).join(', ') || 'Miembro'}</small>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {!directoryError && !directoryLoading && !members.length && <p className="faint">No hay miembros disponibles para mostrar.</p>}
-      </section>
-      <section className="pw-account-card" aria-labelledby="team-invitations-title">
-        <div className="row">
-          <h2 id="team-invitations-title" className="grow">
-            Invitaciones
-          </h2>
-          <button className="btn btn-secondary" disabled aria-describedby="team-invitation-help">
-            <Plus size={14} aria-hidden="true" />
-            Invitar miembro
-          </button>
-        </div>
-        <p id="team-invitation-help" className="pw-info">
-          Las altas externas están desactivadas hasta conectar un proveedor de correo con remitente verificado. Puedes preparar tu equipo y sus proyectos.
-        </p>
-        {invitations.length > 0 && (
-          <ul className="pw-member-list">
-            {invitations.map(invitation => (
-              <li key={invitation.id}>
-                <span className="grow">{invitation.email}</span>
-                <span className="faint">{invitation.status}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <p className="faint">La edición de roles y permisos de proyectos se incorporará en la siguiente etapa.</p>
+      {actions.collaboration && actions.can(project.id, 'audit.read') && <ActivityPanel key={project.id} api={actions.collaboration} projectId={project.id} />}
     </div>
   );
 }
@@ -561,12 +525,14 @@ export default function Workspace(props: WorkspaceProps) {
   const [mobileNav, setMobileNav] = useState(false);
   const [projectEditor, setProjectEditor] = useState<{ project?: Project } | null>(null);
   const [newTask, setNewTask] = useState<{ projectId?: string; status?: TaskStatus } | null>(null);
+  const [accessProject, setAccessProject] = useState<Project | null>(null);
   const [creatingTeam, setCreatingTeam] = useState(false);
   useEffect(() => {
     if (props.accessUnavailable) {
       setProjectEditor(null);
       setNewTask(null);
       setCreatingTeam(false);
+      setAccessProject(null);
     }
   }, [props.accessUnavailable]);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -574,15 +540,31 @@ export default function Workspace(props: WorkspaceProps) {
   const [actionBusy, setActionBusy] = useState(false);
   const actionLock = useRef(false);
   const pending = props.pending || actionBusy;
-  const readOnly = props.readOnly ?? false;
+  const can = (projectId: string, permission: string) => canInProject(props, projectId, permission);
+  const canCreateProject = canInWorkspace(props, 'project.create');
   const workspaceName = props.workspace?.kind === 'personal' ? 'Mi espacio personal' : (props.workspace?.name ?? 'Mi espacio');
   const scopeSearch = props.workspace ? `?workspace=${props.workspace.id}` : '';
   const activeProjects = props.projects.filter(project => !project.archived_at);
+  const creatableProjects = activeProjects.filter(project => can(project.id, 'task.create'));
   const activeProjectIds = useMemo(() => new Set(props.projects.filter(project => !project.archived_at).map(project => project.id)), [props.projects]);
   const activeTasks = props.tasks.filter(task => activeProjectIds.has(task.project_id));
   const taskId = searchParams.get('task');
   const selectedTask = props.tasks.find(task => task.id === taskId);
   const currentProject = props.projects.find(project => location.pathname === `/projects/${project.id}`);
+  const editorAllowed = Boolean(
+    projectEditor &&
+    (projectEditor.project
+      ? props.projects.some(project => project.id === projectEditor.project!.id) && can(projectEditor.project.id, 'project.edit')
+      : canCreateProject),
+  );
+  const accessAllowed = Boolean(
+    accessProject && props.projects.some(project => project.id === accessProject.id) && can(accessProject.id, 'project.access.manage'),
+  );
+  useEffect(() => {
+    if (projectEditor && !editorAllowed) setProjectEditor(null);
+    if (accessProject && !accessAllowed) setAccessProject(null);
+    if (newTask && !creatableProjects.some(project => !newTask.projectId || project.id === newTask.projectId)) setNewTask(null);
+  }, [projectEditor, editorAllowed, accessProject, accessAllowed, newTask, creatableProjects]);
   const pageName =
     currentProject?.name ??
     (location.pathname === '/projects'
@@ -613,7 +595,7 @@ export default function Workspace(props: WorkspaceProps) {
   }
 
   async function moveTask(task: Task, status: TaskStatus) {
-    if (readOnly || task.status === status) return;
+    if (!can(task.project_id, 'task.edit') || task.status === status) return;
     await action(() => props.onUpdateTask(task, { status, position: Date.now() }), 'Estado de la tarea guardado.');
   }
 
@@ -636,12 +618,16 @@ export default function Workspace(props: WorkspaceProps) {
   }
   const projectActions: ProjectActions = {
     pending,
-    readOnly,
+    can,
+    canCreateProject,
+    canCreateTask: creatableProjects.length > 0,
+    collaboration: props.collaboration,
     scopeSearch,
     onEdit: project => {
-      if (!readOnly) setProjectEditor({ project });
+      if (can(project.id, 'project.edit')) setProjectEditor({ project });
     },
     onArchive: archiveProject,
+    onAccess: setAccessProject,
   };
   const openNewProject = () => setProjectEditor({});
   const openNewTask = () => createTask(currentProject);
@@ -716,7 +702,7 @@ export default function Workspace(props: WorkspaceProps) {
               <div className="sgroup-h">
                 <span>Proyectos activos</span>
                 <span className="sp" />
-                <button className="ibtn ibtn-xs" aria-label="Crear proyecto" disabled={pending || props.loading || readOnly} onClick={openNewProject}>
+                <button className="ibtn ibtn-xs" aria-label="Crear proyecto" disabled={pending || props.loading || !canCreateProject} onClick={openNewProject}>
                   <Plus size={13} aria-hidden="true" />
                 </button>
               </div>
@@ -833,7 +819,7 @@ export default function Workspace(props: WorkspaceProps) {
                         <p>Todas tus tareas, una vista clara.</p>
                       </div>
                       <div className="acts">
-                        <button className="btn btn-primary" disabled={pending || readOnly || !activeProjects.length} onClick={openNewTask}>
+                        <button className="btn btn-primary" disabled={pending || !creatableProjects.length} onClick={openNewTask}>
                           <Plus size={14} aria-hidden="true" />
                           Nueva tarea
                         </button>
@@ -844,7 +830,8 @@ export default function Workspace(props: WorkspaceProps) {
                         tasks={activeTasks}
                         projects={props.projects}
                         pending={pending}
-                        readOnly={readOnly}
+                        canCreate={creatableProjects.length > 0}
+                        canEditTask={task => can(task.project_id, 'task.edit')}
                         onCreate={status => createTask(undefined, status)}
                         onOpen={openTask}
                         onMove={moveTask}
@@ -853,7 +840,7 @@ export default function Workspace(props: WorkspaceProps) {
                       <EmptyState
                         title="Primero, un proyecto"
                         action={
-                          <button className="btn btn-primary" disabled={pending || readOnly} onClick={openNewProject}>
+                          <button className="btn btn-primary" disabled={pending || !canCreateProject} onClick={openNewProject}>
                             Crear proyecto
                           </button>
                         }
@@ -864,7 +851,7 @@ export default function Workspace(props: WorkspaceProps) {
                   </div>
                 }
               />
-              <Route path="/team" element={<TeamPage {...props} />} />
+              <Route path="/team" element={<TeamAdministration {...props} />} />
               <Route
                 path="/account"
                 element={<AccountPage email={props.email} pending={pending} onSignOut={props.onSignOut} onPasswordReset={props.onPasswordReset} />}
@@ -893,7 +880,7 @@ export default function Workspace(props: WorkspaceProps) {
           {announcement}
         </span>
       </div>
-      {projectEditor && !props.accessUnavailable && (
+      {projectEditor && editorAllowed && !props.accessUnavailable && (
         <ProjectForm
           key={projectEditor.project?.id ?? 'new-project'}
           project={projectEditor.project}
@@ -911,13 +898,20 @@ export default function Workspace(props: WorkspaceProps) {
       )}
       {(newTask || selectedTask) && !props.loading && !props.accessUnavailable && (
         <TaskForm
-          key={selectedTask?.id ?? 'new-task'}
+          key={
+            selectedTask
+              ? `${selectedTask.id}:${can(selectedTask.project_id, 'task.edit')}:${can(selectedTask.project_id, 'task.assign')}:${can(selectedTask.project_id, 'task.delete')}`
+              : 'new-task'
+          }
           task={newTask ? undefined : selectedTask}
           projectId={newTask?.projectId}
           initialStatus={newTask?.status}
-          projects={props.projects}
+          projects={newTask ? creatableProjects : props.projects}
           pending={pending}
-          readOnly={readOnly}
+          readOnly={selectedTask ? !can(selectedTask.project_id, 'task.edit') : false}
+          canDelete={selectedTask ? can(selectedTask.project_id, 'task.delete') : false}
+          canAssign={selectedTask ? can(selectedTask.project_id, 'task.assign') : false}
+          collaboration={props.collaboration}
           onCreate={props.onCreateTask}
           onUpdate={props.onUpdateTask}
           onDelete={props.onDeleteTask}
@@ -935,6 +929,17 @@ export default function Workspace(props: WorkspaceProps) {
         </Dialog>
       )}
       {creatingTeam && props.onCreateTeam && <CreateTeamDialog onClose={() => setCreatingTeam(false)} onCreate={props.onCreateTeam} />}
+      {accessProject && accessAllowed && props.collaboration && !props.accessUnavailable && (
+        <ProjectAccessDialog
+          key={accessProject.id}
+          project={accessProject}
+          api={props.collaboration}
+          members={props.members ?? []}
+          currentUserId={props.currentUserId}
+          canReadMembers={canInWorkspace(props, 'member.read')}
+          onClose={() => setAccessProject(null)}
+        />
+      )}
     </div>
   );
 }
