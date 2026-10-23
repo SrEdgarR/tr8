@@ -1,10 +1,15 @@
 # Etapa 5 · Contrato de base de datos y trabajador Google
 
-Estado: esquema y funciones instalados en producción; autorización personal de
-Google pendiente. La infraestructura y el cron están preparados según la decisión
-del propietario de conectar directamente producción. Este contrato no demuestra
-por sí solo consentimiento ni entrega real de eventos; las comprobaciones y el
-despliegue se registran en el README de esta etapa.
+Estado: esquema y funciones instalados en producción; consentimiento personal
+completado el 23 de octubre de 2026 a las 21:09 UTC. El propietario informó que
+la audiencia OAuth está **En producción**. La conexión está `connected`,
+generación 1: `provision` terminó a las 21:10:03 UTC y `reconcile_scan` a las
+21:11:01 UTC. El conector Google confirmó un único calendario TR8 en la cuenta
+correcta y la coincidencia de su ID con la base de datos; ese ID no se publica.
+La integración reservó dos solicitudes, `oauth` y `calendar_create`. No hay
+enlaces ni tareas con fecha u horario, por lo que esta evidencia no acredita
+entrega de eventos, renovación real de tokens ni limpieza o desconexión real.
+Los recibos históricos y el despliegue se distinguen en el README de esta etapa.
 
 ## Fronteras
 
@@ -68,6 +73,19 @@ incluye IDs de Google, credenciales, concesiones, otros usuarios ni títulos.
 Estados: `disconnected`, `authorizing`, `provisioning`,
 `provisioning_unknown`, `connected`, `needs_reauthorization`, `disconnecting`,
 `cleanup_failed`, `error`.
+
+La migración `20261023211313_google_calendar_provisioning_status.sql`, aplicada
+en producción y comprobada con 22 aserciones específicas, modifica solo
+`v5_status(uuid)`. Cuando la conexión almacena `provisioning_unknown` pero existe un
+trabajo `provision` de esa misma conexión y generación, `leased` y con concesión
+vigente, el estado público se proyecta como `provisioning` y sin motivo de
+error. La conexión y su concesión se leen en una única instantánea SQL.
+`config_pending` conserva su prioridad si falta configuración. Al confirmarse un
+resultado incierto o vencer la concesión se muestra `provisioning_unknown`.
+Esta proyección no cambia el estado persistido, la reserva ni el bloqueo de una
+segunda creación. La interfaz consulta cada tres segundos durante las
+transiciones y cada treinta en estados estables, sin consultas en segundo plano.
+Los permisos, propietario y firma de la función se conservan.
 
 Motivos públicos permitidos: `config_pending`, `oauth_denied`, `oauth_expired`,
 `oauth_exchange_failed`, `scope_missing`, `refresh_missing`,
@@ -246,9 +264,10 @@ de cron exclusivamente de TR8 Google tras siete días. No elimina enlaces ni
 trabajos desconocidos, fallidos o pendientes: sus identificadores son necesarios
 para compensación y seguimiento. Su crecimiento debe medirse.
 
-La prueba SQL aislada verifica límites de rol, sesiones, consumo OAuth,
+La prueba SQL aislada histórica verifica límites de rol, sesiones, consumo OAuth,
 idempotencia, provisión incierta, IDs persistidos, proyección fresca, presupuestos,
 concesiones vencidas, desconexión concurrente, limpieza sin contenido privado y
-preservación de filas previas. No acredita consentimiento ni entrega real al
-proveedor. La conexión personal requiere la autorización del propietario desde
-la aplicación publicada.
+preservación de filas previas. Esas pruebas no acreditan consentimiento ni
+entrega real al proveedor. El consentimiento posterior del propietario y la
+creación del calendario sí quedaron comprobados en producción como se registra
+al inicio; la entrega de eventos todavía no se ha observado.

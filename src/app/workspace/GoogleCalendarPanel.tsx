@@ -58,7 +58,16 @@ export default function GoogleCalendarPanel({ api }: { api: GoogleCalendarApi })
   const [calendarId, setCalendarId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const query = useQuery({ queryKey: statusKey, queryFn: ({ signal }) => api.load(signal), retry: false, refetchInterval: 30000 });
+  const query = useQuery({
+    queryKey: statusKey,
+    queryFn: ({ signal }) => api.load(signal),
+    retry: false,
+    refetchInterval: current =>
+      !current.state.error && current.state.data?.configured && ['authorizing', 'provisioning', 'disconnecting'].includes(current.state.data.state)
+        ? 3000
+        : 30000,
+    refetchIntervalInBackground: false,
+  });
   const status = query.error ? null : query.data;
   const busy = operation !== null;
   useEffect(() => {

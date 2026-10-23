@@ -98,7 +98,8 @@ set local role service_role;
 select pg_temp.s5_error('select pg_temp.s5_request(''begin'')',array['PT503'],'cannot authorize an unconfigured integration');
 select pg_temp.s5_error('select public.tr8_server_google(''status'',''f5000000-0000-4000-8000-000000000001'',''f5100000-0000-4000-8000-000000000002'')',array['42501'],'actor cannot use another user session');
 reset role;
-update tr8_private.google_config set configured=true where singleton;
+-- Keep the synthetic OAuth origin independent of the disabled test deployment.
+update tr8_private.google_config set configured=true,app_origins=array['https://tr8.vercel.app'] where singleton;
 set local role service_role;
 select pg_temp.s5_put('begin_input',jsonb_build_object('request_id',gen_random_uuid(),'expected_version',0,'state_hash',repeat('A',43),'browser_hash',repeat('B',43),'pkce_envelope',pg_temp.s5_get('cipher'),'app_origin','https://tr8.vercel.app'));
 select pg_temp.s5_put('begin',pg_temp.s5_call('begin',pg_temp.s5_get('begin_input')));
@@ -132,7 +133,9 @@ set local role service_role;
 select pg_temp.s5_put('prepared',pg_temp.s5_call('prepare',pg_temp.s5_get('job')));
 select pg_temp.s5_assert(pg_temp.s5_get('prepared')->>'kind'='provision' and pg_temp.s5_get('prepared')->>'time_zone'='UTC','provision prepares profile zone fallback');
 select pg_temp.s5_assert((pg_temp.s5_call('reserve_request',pg_temp.s5_get('job')||'{"purpose":"calendar_create"}')->>'allowed')::boolean,'calendar creation reserves request budget');
-select pg_temp.s5_assert(pg_temp.s5_call('status')->>'state'='provisioning_unknown','unknown state persists before remote create');
+select pg_temp.s5_assert(pg_temp.s5_call('status')->>'state'='provisioning'
+  and pg_temp.s5_call('status')->'reason'='null'::jsonb
+  and pg_temp.s5_call('inspect_connection')->>'state'='provisioning_unknown','live provisioning is projected without changing its durable unknown state');
 select pg_temp.s5_assert(pg_temp.s5_call('reserve_request',pg_temp.s5_get('job')||'{"purpose":"calendar_create"}')->>'reason'='provisioning_unknown','same lease cannot blindly create a second calendar');
 select pg_temp.s5_assert(pg_temp.s5_call('finish',pg_temp.s5_get('job')||'{"outcome":"unknown"}')='true','uncertain provisioning result stored');
 select pg_temp.s5_assert(pg_temp.s5_call('claim','{"limit":2}')='[]','unknown provisioning does not automatically replay');

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GoogleCalendarApi, GoogleCalendarStatus, GoogleCompletion } from '../data/google-calendar';
 import { DataError } from '../data/errors';
@@ -40,6 +40,104 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe('Google Calendar en Configuración', () => {
+  it('adopta provisioning → connected automáticamente y vuelve a consultar cada 30 segundos', async () => {
+    vi.useFakeTimers();
+    focusManager.setFocused(true);
+    const preparing = googleFixture({ state: 'provisioning', generation: 1, version: 3 });
+    const connected = googleFixture({ state: 'connected', generation: 1, version: 4 });
+    const load = vi.fn().mockResolvedValueOnce(preparing).mockResolvedValue(connected);
+    const view = mount(preparing, { load });
+    try {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText('Preparando tu calendario')).toBeInTheDocument();
+      expect(load).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2999);
+      });
+      expect(load).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(load).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      expect(screen.getByText('Conectado')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Sincronizar ahora' })).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(29000);
+      });
+      expect(load).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(load).toHaveBeenCalledTimes(3);
+    } finally {
+      view.unmount();
+      focusManager.setFocused(undefined);
+      vi.useRealTimers();
+    }
+  });
+
+  it('no consulta en segundo plano y retoma el estado al volver a la aplicación', async () => {
+    vi.useFakeTimers();
+    focusManager.setFocused(true);
+    const preparing = googleFixture({ state: 'provisioning', generation: 1, version: 3 });
+    const connected = googleFixture({ state: 'connected', generation: 1, version: 4 });
+    const load = vi.fn().mockResolvedValueOnce(preparing).mockResolvedValue(connected);
+    const view = mount(preparing, { load });
+    try {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(load).toHaveBeenCalledTimes(1);
+      act(() => focusManager.setFocused(false));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(90000);
+      });
+      expect(load).toHaveBeenCalledTimes(1);
+      act(() => focusManager.setFocused(true));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(load).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('Conectado')).toBeInTheDocument();
+    } finally {
+      view.unmount();
+      focusManager.setFocused(undefined);
+      vi.useRealTimers();
+    }
+  });
+
+  it('mantiene 30 segundos cuando la creación necesita comprobación manual', async () => {
+    vi.useFakeTimers();
+    focusManager.setFocused(true);
+    const unknown = googleFixture({ state: 'provisioning_unknown', generation: 1, version: 3, reason: 'provisioning_unknown' });
+    const load = vi.fn().mockResolvedValue(unknown);
+    const view = mount(unknown, { load });
+    try {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText('Calendario por comprobar')).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(29999);
+      });
+      expect(load).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(load).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole('button', { name: 'Recuperar calendario existente' })).toBeInTheDocument();
+    } finally {
+      view.unmount();
+      focusManager.setFocused(undefined);
+      vi.useRealTimers();
+    }
+  });
+
   it('muestra configuración pendiente sin ofrecer una conexión inexistente', async () => {
     const { api } = mount(googleFixture({ configured: false, reason: 'config_pending' }));
     await screen.findByText('Configuración pendiente');
