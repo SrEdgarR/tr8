@@ -30,16 +30,26 @@ function statusDate(value: string | null, fallback: string) {
   return value ? new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : fallback;
 }
 
-/** Remount local forms when identity changes, even if the parent omits a React key. */
-export default function GoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onConnect: () => void }) {
-  return <PersonalGoogleTasksPanel key={api.scopeKey.join(':')} api={api} onConnect={onConnect} />;
+export interface GoogleTasksPanelProps {
+  api: GoogleTasksApi;
+  onConnect?: () => void;
+  /** Render as a capability inside the shared Google integration card. */
+  embedded?: boolean;
+  connectionBusy?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 }
 
-function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onConnect: () => void }) {
+/** Remount local forms when identity changes, even if the parent omits a React key. */
+export default function GoogleTasksPanel(props: GoogleTasksPanelProps) {
+  return <PersonalGoogleTasksPanel key={props.api.scopeKey.join(':')} {...props} />;
+}
+
+function PersonalGoogleTasksPanel({ api, onConnect, embedded = false, connectionBusy = false, onBusyChange }: GoogleTasksPanelProps) {
   const client = useQueryClient();
   const statusKey = [...api.scopeKey, 'status'];
   const active = useRef(true);
   const busyRef = useRef(false);
+  const notifyBusy = useRef(onBusyChange);
   const controller = useRef<AbortController | null>(null);
   const pendingSince = useRef<number | null>(null);
   const [operation, setOperation] = useState<string | null>(null);
@@ -63,17 +73,24 @@ function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onC
     refetchIntervalInBackground: false,
   });
   const status = query.error ? null : query.data;
-  const busy = operation !== null;
+  const busy = operation !== null || connectionBusy;
+  useEffect(() => {
+    notifyBusy.current = onBusyChange;
+  }, [onBusyChange]);
   useEffect(() => {
     active.current = true;
     return () => {
       active.current = false;
       controller.current?.abort();
+      if (busyRef.current) {
+        busyRef.current = false;
+        notifyBusy.current?.(false);
+      }
     };
   }, []);
 
   async function change(input: GoogleTasksChangeInput, expected: GoogleTasksStatus) {
-    if (!active.current || busyRef.current) return;
+    if (!active.current || busyRef.current || connectionBusy) return;
     const latest = client.getQueryData<GoogleTasksStatus>(statusKey);
     if (!latest || latest.version !== expected.version) {
       setResolution(null);
@@ -81,6 +98,7 @@ function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onC
       return;
     }
     busyRef.current = true;
+    notifyBusy.current?.(true);
     setOperation(input.action);
     setError(null);
     setNotice(null);
@@ -115,6 +133,7 @@ function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onC
       if (controller.current === request) controller.current = null;
       if (active.current) {
         busyRef.current = false;
+        notifyBusy.current?.(false);
         setOperation(null);
       }
     }
@@ -123,24 +142,44 @@ function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onC
   const canConfigure = Boolean(status?.configured && status.enabled && ['connected', 'paused'].includes(status.state));
   const currentResolution =
     resolution && status && resolution.version === status.version && status.conflict_items.some(item => item.id === resolution.item.id) ? resolution : null;
+  const Container = embedded ? 'div' : 'section';
+  const statusLabel = !status
+    ? 'Por comprobar'
+    : !status.configured
+      ? 'Configuración pendiente'
+      : !status.enabled
+        ? embedded
+          ? 'Permiso pendiente'
+          : 'Sin activar'
+        : embedded && status.state === 'connected'
+          ? 'Autorizado'
+          : stateLabels[status.state];
   return (
-    <section className="pw-google-tasks" aria-label="Integración con Google Tasks">
-      <header className="pw-google-tasks-heading">
-        <span className="pw-calendar-zone-icon">
-          <ListChecks size={19} aria-hidden="true" />
-        </span>
-        <div>
-          <h2>Google Tasks</h2>
-          <p>Tus tareas del teléfono, también en TR8.</p>
+    <Container className={`pw-google-tasks${embedded ? ' is-embedded' : ''}`} aria-label={embedded ? undefined : 'Integración con Google Tasks'}>
+      {embedded ? (
+        <div className="pw-google-tasks-subheading">
+          <ListChecks size={16} aria-hidden="true" />
+          <h3>Tareas de Google</h3>
+          <span className={`pw-google-tasks-badge${status?.state === 'connected' ? ' is-connected' : ''}`}>{statusLabel}</span>
         </div>
-        <span className={`pw-google-tasks-badge${status?.state === 'connected' ? ' is-connected' : ''}`}>
-          {!status ? 'Por comprobar' : !status.configured ? 'Configuración pendiente' : !status.enabled ? 'Sin activar' : stateLabels[status.state]}
-        </span>
-      </header>
-      <p className="pw-google-tasks-personal">
-        <ShieldCheck size={14} aria-hidden="true" />
-        Conexión personal · Tus listas permanecen en tu espacio personal.
-      </p>
+      ) : (
+        <header className="pw-google-tasks-heading">
+          <span className="pw-calendar-zone-icon">
+            <ListChecks size={19} aria-hidden="true" />
+          </span>
+          <div>
+            <h2>Google Tasks</h2>
+            <p>Tus tareas del teléfono, también en TR8.</p>
+          </div>
+          <span className={`pw-google-tasks-badge${status?.state === 'connected' ? ' is-connected' : ''}`}>{statusLabel}</span>
+        </header>
+      )}
+      {!embedded && (
+        <p className="pw-google-tasks-personal">
+          <ShieldCheck size={14} aria-hidden="true" />
+          Conexión personal · Tus listas permanecen en tu espacio personal.
+        </p>
+      )}
       <div className="pw-google-tasks-details">
         <ArrowLeftRight size={17} aria-hidden="true" />
         <p>
@@ -158,9 +197,11 @@ function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onC
       {query.error ? (
         <ErrorNotice>
           {errorMessage(query.error)}{' '}
-          <button className="btn btn-secondary btn-sm" onClick={() => void query.refetch()}>
-            Reintentar Google Tasks
-          </button>
+          {!embedded && (
+            <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void query.refetch()}>
+              Reintentar Google Tasks
+            </button>
+          )}
         </ErrorNotice>
       ) : !status ? (
         <p role="status">Consultando tus listas de Google Tasks…</p>
@@ -258,7 +299,7 @@ function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onC
             </div>
           )}
           <div className="pw-google-tasks-actions">
-            {status.configured && (!status.enabled || ['disconnected', 'needs_reauthorization', 'error'].includes(status.state)) && (
+            {!embedded && onConnect && status.configured && (!status.enabled || ['disconnected', 'needs_reauthorization', 'error'].includes(status.state)) && (
               <button className="btn btn-primary" disabled={busy} onClick={onConnect}>
                 <ListChecks size={14} aria-hidden="true" />
                 {status.enabled ? 'Volver a autorizar Google Tasks' : 'Conectar Google Tasks'}
@@ -266,7 +307,7 @@ function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onC
             )}
             {canConfigure && (
               <>
-                {status.state === 'connected' && (
+                {!embedded && status.state === 'connected' && (
                   <button className="btn btn-secondary" disabled={busy} onClick={() => void change({ action: 'tasks_reconcile' }, status)}>
                     <RefreshCw size={14} aria-hidden="true" />
                     Sincronizar tareas ahora
@@ -282,13 +323,15 @@ function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onC
                 </button>
               </>
             )}
-            <button className="btn btn-ghost btn-sm" disabled={busy || query.isFetching} onClick={() => void query.refetch()}>
-              Actualizar estado de tareas
-            </button>
+            {!embedded && (
+              <button className="btn btn-ghost btn-sm" disabled={busy || query.isFetching} onClick={() => void query.refetch()}>
+                Actualizar estado de tareas
+              </button>
+            )}
           </div>
         </>
       )}
-      {busy && (
+      {operation !== null && (
         <p className="pw-google-tasks-wait" role="status">
           <LoaderCircle className="pw-spin" size={14} aria-hidden="true" />
           Guardando tu elección…
@@ -301,7 +344,7 @@ function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onC
           {notice}
         </p>
       )}
-      <footer>Pausar Google Tasks no revoca el permiso de Google ni modifica la conexión con Google Calendar.</footer>
+      {!embedded && <footer>Pausar Google Tasks no revoca el permiso de Google ni modifica la conexión con Google Calendar.</footer>}
       {currentResolution && status && (
         <Dialog title="Revisar versión de la tarea" onClose={() => setResolution(null)} busy={busy}>
           <div className="pw-google-tasks-dialog">
@@ -341,6 +384,6 @@ function PersonalGoogleTasksPanel({ api, onConnect }: { api: GoogleTasksApi; onC
           </div>
         </Dialog>
       )}
-    </section>
+    </Container>
   );
 }

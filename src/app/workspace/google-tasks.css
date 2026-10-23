@@ -13,6 +13,30 @@
   align-items: center;
   gap: 10px;
 }
+.pw-google-tasks.is-embedded {
+  margin: 0;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  gap: 12px;
+}
+.pw-google-tasks-subheading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pw-google-tasks-subheading > svg {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.pw-google-tasks-subheading h3 {
+  margin: 0;
+  flex: 1;
+  font-size: var(--fs-xs);
+  font-weight: 550;
+}
 .pw-google-tasks-heading > div {
   flex: 1;
   min-width: 0;
@@ -223,11 +247,17 @@
   .pw-google-tasks {
     padding: 16px;
   }
+  .pw-google-tasks.is-embedded {
+    padding: 14px 0 0;
+  }
   .pw-google-tasks-heading {
     flex-wrap: wrap;
   }
   .pw-google-tasks-badge {
     margin-left: 44px;
+  }
+  .pw-google-tasks-subheading .pw-google-tasks-badge {
+    margin-left: 0;
   }
   .pw-google-tasks-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataError } from '../data/errors';
 import type { GoogleTasksApi, GoogleTasksStatus } from '../data/google-tasks';
-import GoogleTasksPanel from './GoogleTasksPanel';
+import GoogleTasksPanel, { type GoogleTasksPanelProps } from './GoogleTasksPanel';
 
 function fixture(change: Partial<GoogleTasksStatus> = {}): GoogleTasksStatus {
   return {
@@ -34,7 +34,11 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-function mount(initial = fixture(), overrides: Partial<GoogleTasksApi> = {}) {
+function mount(
+  initial = fixture(),
+  overrides: Partial<GoogleTasksApi> = {},
+  presentation: Pick<GoogleTasksPanelProps, 'embedded' | 'connectionBusy' | 'onBusyChange'> = {},
+) {
   const load = vi.fn().mockResolvedValue(initial);
   const api: GoogleTasksApi = { scopeKey: ['google-tasks', 'owner-a'], load, change: vi.fn().mockResolvedValue(initial), ...overrides };
   const onConnect = vi.fn();
@@ -43,7 +47,7 @@ function mount(initial = fixture(), overrides: Partial<GoogleTasksApi> = {}) {
   const view = render(
     <QueryClientProvider client={client}>
       <StrictMode>
-        <GoogleTasksPanel api={api} onConnect={onConnect} />
+        <GoogleTasksPanel api={api} onConnect={onConnect} {...presentation} />
       </StrictMode>
     </QueryClientProvider>,
   );
@@ -55,6 +59,82 @@ afterEach(() => {
 });
 
 describe('Google Tasks en Configuración', () => {
+  it('se integra en la tarjeta Google sin otra sección, cabecera, conectar, refrescar o sincronizar independientes', async () => {
+    const { container, onConnect } = mount(fixture(), {}, { embedded: true });
+    await screen.findByText('Autorizado');
+    expect(screen.getByRole('heading', { level: 3, name: 'Tareas de Google' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
+    expect(container.querySelector('section')).toBeNull();
+    expect(container.querySelector('header')).toBeNull();
+    expect(container.querySelector('footer')).toBeNull();
+    expect(container.querySelector('.pw-google-tasks')).toHaveClass('is-embedded');
+    expect(screen.queryByRole('button', { name: /Conectar|autorizar|Actualizar|Sincronizar|Desconectar/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Mis tareas/ })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Pausar tareas' })).toBeInTheDocument();
+    expect(onConnect).not.toHaveBeenCalled();
+  });
+
+  it('delega el consentimiento pendiente y los errores de carga a los controles comunes de Google', async () => {
+    const { api, onConnect, unmount } = mount(fixture({ enabled: false, state: 'disconnected' }), {}, { embedded: true });
+    await screen.findByText('Permiso pendiente');
+    expect(screen.queryByRole('button', { name: /Conectar Google Tasks/ })).not.toBeInTheDocument();
+    expect(api.change).not.toHaveBeenCalled();
+    expect(onConnect).not.toHaveBeenCalled();
+    unmount();
+    mount(
+      fixture(),
+      { scopeKey: ['google-tasks', 'failed-owner'], load: vi.fn().mockRejectedValue(new Error('No se pudo consultar Google')) },
+      { embedded: true },
+    );
+    await screen.findByText('No se pudo consultar Google');
+    expect(screen.queryByRole('button', { name: /Reintentar|Actualizar/ })).not.toBeInTheDocument();
+  });
+
+  it('bloquea listas, pausa y conflictos durante una operación común de Google', async () => {
+    const { api } = mount(
+      fixture({ conflicts: 1, conflict_items: [{ id: 'link-a', title: 'Tarea', google_title: 'Otra', reason: 'concurrent_changes' }] }),
+      {},
+      { embedded: true, connectionBusy: true },
+    );
+    const list = await screen.findByRole('checkbox', { name: /Compras/ });
+    expect(list).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Pausar tareas' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Elegir TR8' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Elegir Google' })).toBeDisabled();
+    fireEvent.click(list);
+    fireEvent.click(screen.getByRole('button', { name: 'Pausar tareas' }));
+    expect(api.change).not.toHaveBeenCalled();
+    expect(screen.queryByText('Guardando tu elección…')).not.toBeInTheDocument();
+  });
+
+  it('avisa al padre de una operación local antes de esperar la respuesta y lo libera al finalizar', async () => {
+    const result = deferred<GoogleTasksStatus>();
+    const onBusyChange = vi.fn();
+    const { api, load } = mount(fixture(), { change: vi.fn().mockReturnValue(result.promise) }, { embedded: true, onBusyChange });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Compras/ }));
+    expect(onBusyChange).toHaveBeenCalledExactlyOnceWith(true);
+    await waitFor(() => expect(api.change).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Pausar tareas' })).toBeDisabled();
+    const next = fixture({ version: 4 });
+    load.mockResolvedValue(next);
+    await act(async () => result.resolve(next));
+    expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Pausar tareas' })).toBeEnabled());
+  });
+
+  it('libera el bloqueo al desmontarse y una respuesta antigua no libera otra operación del padre', async () => {
+    const result = deferred<GoogleTasksStatus>();
+    const onBusyChange = vi.fn();
+    const { api, unmount } = mount(fixture(), { change: vi.fn().mockReturnValue(result.promise) }, { embedded: true, onBusyChange });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Compras/ }));
+    await waitFor(() => expect(api.change).toHaveBeenCalledTimes(1));
+    const signal = vi.mocked(api.change).mock.calls[0][1];
+    unmount();
+    expect(signal?.aborted).toBe(true);
+    expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
+    await act(async () => result.resolve(fixture({ version: 4 })));
+    expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
+  });
   it('explica el permiso amplio, la selección de listas y la fecha sin horas antes de conectar', async () => {
     const { api, onConnect } = mount(fixture({ enabled: false, state: 'disconnected' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Conectar Google Tasks' }));

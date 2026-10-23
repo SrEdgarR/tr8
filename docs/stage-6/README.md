@@ -4,6 +4,14 @@ Estado: **implementación y backend instalados; autorización y aceptación real
 
 ## Alcance
 
+Configuración reúne Calendar y Tasks en una sola tarjeta **Google**, con un flujo
+de autorización conjunto y acciones comunes para sincronizar, actualizar el estado
+y desconectar. Dentro se conservan las opciones de eventos y de listas de tareas.
+La sincronización manual respeta la pausa de Tasks y vuelve a consultar su estado
+antes de solicitar cambios. Las operaciones de ambas funciones comparten un bloqueo
+en la interfaz para evitar editar las listas durante una reconexión o desconexión.
+Esta reorganización no necesita migraciones ni modifica datos existentes.
+
 Una tarea creada en Google Tasks, incluida una creada como «Tarea» desde Google Calendar del teléfono, se importa al proyecto **Google Tasks** del espacio personal. El proyecto aparece con el primer elemento válido. Esta versión sincroniza las tareas de Google ya importadas; no crea tareas nuevas en Google a partir de tareas normales de TR8.
 
 - El **título, la fecha y el estado de completado** se pueden modificar en ambas aplicaciones. Las eliminaciones de tareas vinculadas también se sincronizan, con comprobación de versión y tratamiento de conflictos.
