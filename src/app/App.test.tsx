@@ -1,5 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
@@ -10,6 +10,8 @@ import { DataError } from './data/errors';
 import App from './App';
 import { ActivityPanel } from './workspace/Collaboration';
 import Calendar from './workspace/Calendar';
+import { googleFixture } from './test/google-calendar';
+import type { GoogleCalendarStatus } from './data/google-calendar';
 
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
@@ -36,14 +38,19 @@ const mocks = vi.hoisted(() => ({
     setCalendarPreferences: vi.fn(),
     calendarItems: vi.fn(),
     scheduleTask: vi.fn(),
+    googleStatus: vi.fn(),
+    beginGoogle: vi.fn(),
+    completeGoogle: vi.fn(),
+    changeGoogle: vi.fn(),
   },
   workspace: null as WorkspaceProps | null,
   showActivity: false,
   showCalendar: false,
+  showIntegrations: false,
 }));
 
 vi.mock('./data/client', () => ({
-  configuration: { ownerEmail: 'owner@example.com' },
+  configuration: { ownerEmail: 'owner@example.com', url: 'https://test.supabase.co' },
   supabase: { auth: mocks.auth },
   callbackRequestedRecovery: false,
 }));
@@ -52,7 +59,7 @@ vi.mock('./auth/AuthScreen', () => ({
   default: ({ recovery }: { recovery: boolean }) => <h1>{recovery ? 'Recuperación' : 'Inicio de sesión'}</h1>,
 }));
 vi.mock('./workspace/Workspace', () => ({
-  default: (props: WorkspaceProps) => {
+  default: (props: WorkspaceProps & { integrations?: ReactNode }) => {
     mocks.workspace = props;
     return (
       <section aria-label="Espacio personal">
@@ -74,6 +81,7 @@ vi.mock('./workspace/Workspace', () => ({
             onOpen={() => {}}
           />
         )}
+        {mocks.showIntegrations && props.integrations}
         <button onClick={props.onRetry}>Reintentar datos</button>
       </section>
     );
@@ -164,6 +172,7 @@ beforeEach(() => {
   mocks.workspace = null;
   mocks.showActivity = false;
   mocks.showCalendar = false;
+  mocks.showIntegrations = false;
   mocks.auth.onAuthStateChange.mockImplementation(callback => {
     authListener = callback;
     return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
@@ -201,6 +210,7 @@ beforeEach(() => {
   mocks.repository.memberDirectory.mockResolvedValue([]);
   mocks.repository.invitations.mockResolvedValue([]);
   mocks.repository.load.mockResolvedValue({ projects: [project()], tasks: [task()] });
+  mocks.repository.googleStatus.mockResolvedValue(googleFixture({ configured: false, reason: 'config_pending' }));
 });
 
 afterEach(() => {
@@ -208,6 +218,95 @@ afterEach(() => {
 });
 
 describe('sesiones y datos del espacio personal', () => {
+  it.each([
+    ['/privacy', 'Privacidad en TR8'],
+    ['/about', 'Un lugar para avanzar'],
+  ])('abre %s como información pública antes de Auth y sin consultar cuentas', async (path, heading) => {
+    show(path, true);
+    expect(await screen.findByRole('heading', { name: heading, level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'TR8' })).toBeInTheDocument();
+    expect(screen.getByText(/registro no está abierto al público/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'SrEdgarR en GitHub' })).toHaveAttribute('href', 'https://github.com/SrEdgarR');
+    expect(screen.getByRole('link', { name: 'Entrar a TR8' })).toHaveAttribute('href', '/');
+    expect(screen.queryByText(/sredgarpadilla@gmail\.com/)).not.toBeInTheDocument();
+    expect(mocks.auth.getSession).not.toHaveBeenCalled();
+    expect(mocks.auth.onAuthStateChange).not.toHaveBeenCalled();
+    expect(mocks.repository.context).not.toHaveBeenCalled();
+    expect(mocks.repository.googleStatus).not.toHaveBeenCalled();
+  });
+
+  it('abre el retorno público de Google sin cargar Auth ni datos y emite solo una señal sin parámetros', async () => {
+    const postMessage = vi.fn();
+    const close = vi.spyOn(window, 'close').mockImplementation(() => {});
+    const previousOpener = window.opener;
+    Object.defineProperty(window, 'opener', { configurable: true, value: { postMessage } });
+    try {
+      show('/google-calendar/callback?code=ignored&state=ignored#access_token=ignored', true);
+      expect(await screen.findByRole('heading', { name: 'Volver a TR8' })).toBeInTheDocument();
+      expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'tr8-google-oauth-ready' }, window.location.origin);
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(mocks.auth.getSession).not.toHaveBeenCalled();
+      expect(mocks.auth.onAuthStateChange).not.toHaveBeenCalled();
+      expect(mocks.repository.context).not.toHaveBeenCalled();
+      expect(mocks.repository.completeGoogle).not.toHaveBeenCalled();
+      expect(screen.getByRole('status')).not.toHaveTextContent('ignored');
+    } finally {
+      Object.defineProperty(window, 'opener', { configurable: true, value: previousOpener });
+    }
+  });
+
+  it('explica cómo regresar si el callback se abre sin la ventana iniciadora', async () => {
+    const close = vi.spyOn(window, 'close').mockImplementation(() => {});
+    const previousOpener = window.opener;
+    Object.defineProperty(window, 'opener', { configurable: true, value: null });
+    try {
+      show('/google-calendar/callback');
+      expect(await screen.findByRole('status')).toHaveTextContent('No encontramos la ventana que inició la conexión');
+      expect(close).not.toHaveBeenCalled();
+      expect(mocks.auth.getSession).not.toHaveBeenCalled();
+      expect(mocks.repository.context).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, 'opener', { configurable: true, value: previousOpener });
+    }
+  });
+
+  it('consulta Google por usuario incluso en un equipo sin permiso de leer proyectos', async () => {
+    mocks.showIntegrations = true;
+    mocks.repository.context.mockResolvedValue({
+      contract_version: 2,
+      personal_workspace_id: 'personal-a',
+      external_invites_enabled: false,
+      workspaces: [
+        { id: 'personal-a', name: 'Personal', kind: 'personal', owner_id: 'owner-a', version: 1, permissions: ['project.read'] },
+        { id: 'team-a', name: 'Equipo', kind: 'team', owner_id: 'other-owner', version: 1, permissions: [] },
+      ],
+    });
+    const { client } = show('/settings?workspace=team-a');
+    await screen.findByText('Configuración pendiente');
+    expect(mocks.repository.load).not.toHaveBeenCalled();
+    expect(mocks.repository.googleStatus).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(client.getQueryData(['google-calendar', 'owner-a', 'status'])).toMatchObject({ configured: false });
+    expect(mocks.repository.beginGoogle).not.toHaveBeenCalled();
+  });
+
+  it('retira Google al cerrar sesión e ignora su lectura tardía', async () => {
+    mocks.showIntegrations = true;
+    const pending = deferred<GoogleCalendarStatus>();
+    let googleSignal: AbortSignal | undefined;
+    mocks.repository.googleStatus.mockImplementation((signal: AbortSignal) => {
+      googleSignal = signal;
+      return pending.promise;
+    });
+    const { client } = show('/settings');
+    await waitFor(() => expect(mocks.repository.googleStatus).toHaveBeenCalledOnce());
+    act(() => authListener('SIGNED_OUT', null));
+    await screen.findByRole('heading', { name: 'Inicio de sesión' });
+    expect(googleSignal?.aborted).toBe(true);
+    await act(async () => pending.resolve(googleFixture({ state: 'connected', generation: 10, version: 10, pending: 99 })));
+    expect(screen.queryByText('Conectado')).not.toBeInTheDocument();
+    expect(client.getQueriesData({ queryKey: ['google-calendar'] })).toHaveLength(0);
+  });
+
   function calendarSetup() {
     mocks.showCalendar = true;
     const context = {

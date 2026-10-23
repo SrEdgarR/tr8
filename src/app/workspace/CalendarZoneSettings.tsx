@@ -96,7 +96,7 @@ function SavedZoneSettings({ api }: { api: CalendarApi }) {
   return <CalendarZoneEditor state={state} />;
 }
 
-export default function CalendarSettings({ api, processes }: { api?: CalendarApi; processes?: ReactNode }) {
+export default function CalendarSettings({ api, processes, integrations }: { api?: CalendarApi; processes?: ReactNode; integrations?: ReactNode }) {
   return (
     <div className="page pw-settings">
       <div className="ph">
@@ -110,6 +110,7 @@ export default function CalendarSettings({ api, processes }: { api?: CalendarApi
         </div>
       </div>
       {api && <SavedZoneSettings key={api.scopeKey.join(':')} api={api} />}
+      {integrations}
       {processes}
     </div>
   );

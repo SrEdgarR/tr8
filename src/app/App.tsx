@@ -6,7 +6,11 @@ import { CircleAlert, LoaderCircle, LockKeyhole } from 'lucide-react';
 import AuthScreen from './auth/AuthScreen';
 import Workspace from './workspace/Workspace';
 import ProcessesPanel from './workspace/ProcessesPanel';
+import GoogleCalendarPanel from './workspace/GoogleCalendarPanel';
+import GoogleCalendarReturn from './workspace/GoogleCalendarReturn';
+import PublicInformation from './PublicInformation';
 import type { ProcessesApi } from './data/processes';
+import type { GoogleCalendarApi } from './data/google-calendar';
 import { callbackRequestedRecovery, configuration, supabase } from './data/client';
 import { createRepository, type WorkspaceData } from './data/repository';
 import { dataError, DataError } from './data/errors';
@@ -23,6 +27,10 @@ function LoadingScreen() {
 }
 
 export default function App() {
+  const location = useLocation();
+  if (location.pathname === '/google-calendar/callback') return <GoogleCalendarReturn />;
+  if (location.pathname === '/privacy' || location.pathname === '/about')
+    return <PublicInformation page={location.pathname === '/privacy' ? 'privacy' : 'about'} />;
   if (!configuration || !supabase)
     return (
       <main className="app-status">
@@ -163,6 +171,30 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
     staleTime: 15000,
     retry: false,
   });
+  const google = useMemo<GoogleCalendarApi>(() => {
+    async function ownConnection<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+      if (!active.current || signal?.aborted) throw new DataError('La sesión cambió. Vuelve a abrir la configuración.');
+      const result = await operation();
+      if (!active.current || signal?.aborted) throw new DataError('La sesión cambió durante la operación con Google.');
+      return result;
+    }
+    return {
+      scopeKey: ['google-calendar', session.user.id],
+      callbackOrigin: window.location.origin,
+      load: signal => ownConnection(() => repository.googleStatus(signal), signal),
+      begin: (input, signal) => ownConnection(() => repository.beginGoogle(input, signal), signal),
+      complete: (input, signal) => ownConnection(() => repository.completeGoogle(input, signal), signal),
+      change: (input, signal) => ownConnection(() => repository.changeGoogle(input, signal), signal),
+    };
+  }, [repository, session.user.id]);
+  useEffect(
+    () => () => {
+      const key = ['google-calendar', session.user.id];
+      void queryClient.cancelQueries({ queryKey: key });
+      queryClient.removeQueries({ queryKey: key });
+    },
+    [queryClient, session.user.id],
+  );
   if (inviteToken)
     return (
       <main className="app-status">
@@ -234,6 +266,7 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
       key={`${session.user.id}:${selected.id}:${[...selected.permissions].sort().join(',')}`}
       client={client}
       session={session}
+      google={google}
       selected={selected}
       workspaces={context.data.workspaces}
       onSelectWorkspace={id => {
@@ -260,6 +293,7 @@ function ScopedWorkspace({
   workspaces,
   onSelectWorkspace,
   onCreateTeam,
+  google,
 }: {
   client: SupabaseClient;
   session: Session;
@@ -267,6 +301,7 @@ function ScopedWorkspace({
   workspaces: WorkspaceSummary[];
   onSelectWorkspace: (id: string) => void;
   onCreateTeam: NonNullable<WorkspaceProps['onCreateTeam']>;
+  google: GoogleCalendarApi;
 }) {
   const queryClient = useQueryClient();
   const repository = useMemo(() => createRepository(client), [client]);
@@ -405,6 +440,7 @@ function ScopedWorkspace({
         void queryClient.invalidateQueries({ queryKey: ['context', session.user.id] });
         void queryClient.invalidateQueries({ queryKey: ['calendar', session.user.id] });
         void queryClient.invalidateQueries({ queryKey: ['processes', session.user.id] });
+        void queryClient.invalidateQueries({ queryKey: ['google-calendar', session.user.id] });
       }
       return row;
     } catch (cause) {
@@ -526,6 +562,7 @@ function ScopedWorkspace({
       capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
       collaboration={collaboration}
       calendar={calendar}
+      integrations={<GoogleCalendarPanel key={google.scopeKey.join(':')} api={google} />}
       processes={
         <ProcessesPanel
           key={processes.scopeKey.join(':')}

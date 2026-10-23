@@ -538,7 +538,7 @@ function AccountPage({ email, pending, onSignOut, onPasswordReset }: Pick<Worksp
   );
 }
 
-export default function Workspace(props: WorkspaceProps & { processes?: ReactNode }) {
+export default function Workspace(props: WorkspaceProps & { processes?: ReactNode; integrations?: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -912,7 +912,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                   )
                 }
               />
-              <Route path="/settings" element={<CalendarSettings api={props.calendar} processes={props.processes} />} />
+              <Route path="/settings" element={<CalendarSettings api={props.calendar} integrations={props.integrations} processes={props.processes} />} />
               <Route
                 path="/account"
                 element={<AccountPage email={props.email} pending={pending} onSignOut={props.onSignOut} onPasswordReset={props.onPasswordReset} />}

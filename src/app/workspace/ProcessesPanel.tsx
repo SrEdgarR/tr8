@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Activity, CalendarDays, Check, CheckCheck, CircleHelp, Clock3, Inbox, Mail, Pause, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Activity, Check, CheckCheck, CircleHelp, Clock3, Inbox, Mail, Pause, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react';
 import type { ProcessesApi, ProcessJob, ProcessState } from '../data/processes';
 import { errorMessage } from './helpers';
 import { ErrorNotice } from './ui';
@@ -79,15 +79,10 @@ export default function ProcessesPanel({ api, disabled = false, workspaceName }:
           <span>Correo opcional</span>
           <span className="pw-processes-off">Desactivado</span>
         </div>
-        <div>
-          <CalendarDays size={16} aria-hidden="true" />
-          <span>Google Calendar</span>
-          <span className="pw-processes-off">Desconectado</span>
-        </div>
       </div>
       <p className="pw-processes-explanation">
         <ShieldCheck size={14} aria-hidden="true" />
-        Esta etapa prepara cambios internamente. No envía correos ni crea eventos externos.
+        Este panel confirma la preparación interna de tus cambios. El estado de Google Calendar se consulta en su propia sección.
       </p>
       {disabled ? (
         <p>No se pudo comprobar el acceso a este espacio.</p>
@@ -158,7 +153,7 @@ export default function ProcessesPanel({ api, disabled = false, workspaceName }:
         </>
       )}
       <footer>
-        <span>Los servicios externos siguen apagados.</span>
+        <span>Los correos opcionales siguen desactivados.</span>
         <button className="btn btn-ghost btn-sm" disabled={disabled || query.isFetching} onClick={() => void query.refetch()}>
           <RefreshCw size={13} aria-hidden="true" className={query.isFetching ? 'pw-spin' : ''} />
           Actualizar procesos

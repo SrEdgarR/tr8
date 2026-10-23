@@ -98,6 +98,7 @@ describe('espacios y equipos', () => {
         <Workspace
           {...workspaceProps({ workspace: personal, workspaces: [personal], calendar })}
           processes={<section aria-label="Procesos en segundo plano">Estado de los procesos</section>}
+          integrations={<section aria-label="Integración personal con Google">Estado de Google</section>}
         />
       </MemoryRouter>,
     );
@@ -109,11 +110,13 @@ describe('espacios y equipos', () => {
     await waitFor(() => expect(input).toBeEnabled());
     expect(input).toHaveValue('America/La_Paz');
     expect(screen.getByRole('region', { name: 'Procesos en segundo plano' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Integración personal con Google' })).toBeInTheDocument();
     expect(calendar.items).not.toHaveBeenCalled();
     expect(calendar.saveProfile).not.toHaveBeenCalled();
     await user.click(screen.getByRole('link', { name: /personal@example.com/ }));
     expect(screen.getByRole('heading', { name: 'Mi cuenta', level: 1 })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Procesos en segundo plano' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Integración personal con Google' })).not.toBeInTheDocument();
   });
 
   it('abre el calendario general mediante su API y conserva lista y tablero por proyecto', async () => {

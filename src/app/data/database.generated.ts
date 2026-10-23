@@ -132,6 +132,15 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      tr8_server_google: {
+        Args: {
+          p_action: string;
+          p_actor?: string;
+          p_payload?: Json;
+          p_session?: string;
+        };
+        Returns: Json;
+      };
       tr8_v2_accept_invitation: { Args: { p_token: string }; Returns: Json };
       tr8_v2_assign_task: {
         Args: {
@@ -265,6 +274,7 @@ export type Database = {
       };
       tr8_v2_get_calendar_preferences: { Args: never; Returns: Json };
       tr8_v2_get_context: { Args: never; Returns: Json };
+      tr8_v2_get_google_status: { Args: never; Returns: Json };
       tr8_v2_get_process_status: {
         Args: { p_workspace_id?: string };
         Returns: Json;

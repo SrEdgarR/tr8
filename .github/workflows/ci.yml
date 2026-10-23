@@ -18,6 +18,8 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
+      - run: npm run typecheck:edge
       - run: npm test
+      - run: npm run test:edge
       - run: npm run test:database:static
       - run: npm run build

@@ -20,9 +20,9 @@ describe('panel de procesos en configuración', () => {
     await screen.findByText('Cambio de tarea');
     expect(screen.getByText('Procesamiento automático activo')).toBeInTheDocument();
     expect(screen.getByText('Preparado')).toBeInTheDocument();
-    expect(screen.getByText(/No envía correos ni crea eventos externos/)).toBeInTheDocument();
+    expect(screen.getByText(/confirma la preparación interna/)).toBeInTheDocument();
     expect(screen.getByText('Desactivado')).toBeInTheDocument();
-    expect(screen.getByText('Desconectado')).toBeInTheDocument();
+    expect(screen.queryByText('Desconectado')).not.toBeInTheDocument();
     expect(load).toHaveBeenCalledExactlyOnceWith(expect.any(AbortSignal));
   });
   it('oculta los datos anteriores si falla una actualización y permite reintentar', async () => {

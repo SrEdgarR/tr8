@@ -1,0 +1,9 @@
+project_id = "tr8"
+
+# Callback relays have no user JWT. POST handlers verify Supabase Auth and a live
+# initiating session; the worker verifies its dedicated secret before any work.
+[functions.tr8-google]
+verify_jwt = false
+
+[functions.tr8-google-worker]
+verify_jwt = false
