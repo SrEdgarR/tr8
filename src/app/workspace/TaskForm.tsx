@@ -2,7 +2,8 @@ import { useId, useRef, useState, type FormEvent } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { PRIORITIES, STATUSES } from '../constants';
-import type { CollaborationApi, Priority, Project, Task, TaskInput, TaskStatus, WorkspaceProps } from '../types';
+import type { CalendarApi, CollaborationApi, Priority, Project, Task, TaskInput, TaskStatus, WorkspaceProps } from '../types';
+import CalendarSchedule from './CalendarSchedule';
 import { Dialog, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
 
@@ -16,6 +17,7 @@ interface Props {
   canDelete?: boolean;
   canAssign?: boolean;
   collaboration?: CollaborationApi;
+  calendar?: CalendarApi;
   onCreate: WorkspaceProps['onCreateTask'];
   onUpdate: WorkspaceProps['onUpdateTask'];
   onDelete: WorkspaceProps['onDeleteTask'];
@@ -111,6 +113,7 @@ export default function TaskForm({
   canDelete = !readOnly,
   canAssign = !readOnly,
   collaboration,
+  calendar,
   onCreate,
   onUpdate,
   onDelete,
@@ -134,7 +137,7 @@ export default function TaskForm({
   const archived = Boolean(projects.find(project => project.id === selectedProject)?.archived_at);
   const disabled = busy || archived || readOnly;
 
-  function assignmentSaved(before: Task, saved: Task) {
+  function independentSaved(before: Task, saved: Task, kind: 'assignment' | 'schedule') {
     const fields = [
       'id',
       'workspace_id',
@@ -150,7 +153,10 @@ export default function TaskForm({
       'position',
       'created_at',
     ] as const;
-    const sameContent = (left: Task, right: Task) => fields.every(field => left[field] === right[field]);
+    const scheduleFields = ['scheduled_start_at', 'scheduled_end_at', 'scheduled_time_zone'] as const;
+    const sameContent = (left: Task, right: Task) =>
+      fields.every(field => left[field] === right[field]) &&
+      (kind === 'schedule' ? left.assignee_member_id === right.assignee_member_id : scheduleFields.every(field => left[field] === right[field]));
     if (saved.version !== before.version + 1 || !sameContent(before, saved)) return;
     setOriginalTask(previous => (previous && previous.version === before.version && sameContent(previous, before) ? saved : previous));
   }
@@ -346,10 +352,20 @@ export default function TaskForm({
               api={collaboration}
               canAssign={canAssign && !archived}
               disabled={busy || archived}
-              onSaved={assignmentSaved}
+              onSaved={(before, saved) => independentSaved(before, saved, 'assignment')}
             />
           )}
           {!task && collaboration && <p className="faint">Después de crear la tarea podrás elegir su responsable principal.</p>}
+          {task && calendar && (
+            <CalendarSchedule
+              key={task.id}
+              task={task}
+              api={calendar}
+              disabled={disabled}
+              onSaved={(before, saved) => independentSaved(before, saved, 'schedule')}
+            />
+          )}
+          {!task && calendar && <p className="faint">Después de crear la tarea podrás añadir su bloque de trabajo opcional.</p>}
           {confirmDelete && (
             <div className="pw-confirm" role="alert">
               <strong>¿Eliminar esta tarea?</strong>

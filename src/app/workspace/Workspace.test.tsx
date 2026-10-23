@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import type { Project, Task, WorkspaceProps } from '../types';
+import type { CalendarApi, Project, Task, WorkspaceProps } from '../types';
 import ProjectForm from './ProjectForm';
 import TaskForm from './TaskForm';
 import TasksView from './TasksView';
@@ -83,6 +83,44 @@ function workspaceProps(overrides: Partial<WorkspaceProps> = {}): WorkspaceProps
 describe('espacios y equipos', () => {
   const personal = { id: 'workspace-a', kind: 'personal' as const, name: 'Personal', owner_id: 'personal-owner', version: 1, permissions: [] };
   const team = { id: 'team-a', kind: 'team' as const, name: 'Equipo editorial', owner_id: 'personal-owner', version: 1, permissions: [] };
+
+  it('abre el calendario general mediante su API y conserva lista y tablero por proyecto', async () => {
+    const user = userEvent.setup();
+    const calendar: CalendarApi = {
+      scopeKey: ['calendar', 'test'],
+      profile: vi.fn().mockResolvedValue({ time_zone: 'America/La_Paz', version: 1, updated_at: null }),
+      saveProfile: vi.fn(),
+      items: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+      scheduleTask: vi.fn(),
+    };
+    render(
+      <MemoryRouter initialEntries={[`/projects/${project.id}?workspace=workspace-a&view=board`]}>
+        <Workspace
+          {...workspaceProps({
+            workspace: { ...personal, permissions: ['project.read', 'task.read'] },
+            workspaces: [{ ...personal, permissions: ['project.read', 'task.read'] }],
+            calendar,
+          })}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: 'Tablero' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Calendario' }));
+    await waitFor(() =>
+      expect(calendar.items).toHaveBeenCalledWith(
+        expect.objectContaining({ workspace_ids: ['workspace-a'], project_ids: [project.id] }),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(screen.getByRole('button', { name: 'Calendario' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText(task.title)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Lista' }));
+    expect(screen.getByRole('table', { name: 'Lista de tareas' })).toBeInTheDocument();
+    expect(screen.getByText(task.title)).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: 'Calendario' }));
+    expect(await screen.findByRole('heading', { name: 'Calendario', level: 1 })).toBeInTheDocument();
+    await waitFor(() => expect(calendar.items).toHaveBeenCalledWith(expect.not.objectContaining({ project_ids: [project.id] }), expect.any(AbortSignal)));
+  });
 
   it('permite elegir un equipo sin mezclar los proyectos cargados', async () => {
     const onSelectWorkspace = vi.fn();

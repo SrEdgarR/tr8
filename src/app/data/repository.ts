@@ -13,6 +13,7 @@ import type {
 } from '../types';
 import { dataError, DataError } from './errors';
 import { createCollaborationRepository } from './collaboration';
+import { createCalendarRepository } from './calendar';
 
 export interface WorkspaceData {
   projects: Project[];
@@ -69,6 +70,7 @@ async function rpc<T>(client: SupabaseClient, name: string, parameters: Record<s
 export function createRepository(client: SupabaseClient) {
   return {
     ...createCollaborationRepository(client),
+    ...createCalendarRepository(client),
     async context(): Promise<AppContext> {
       const context = await rpc<AppContext>(client, 'tr8_v2_get_context', {});
       if (context.contract_version !== 2) throw new DataError('TR8 necesita actualizarse. Recarga la página para continuar.', 'CLIENT_UPGRADE_REQUIRED');

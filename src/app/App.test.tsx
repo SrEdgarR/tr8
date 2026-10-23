@@ -4,11 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WorkspaceProps, Project, Task } from './types';
+import type { WorkspaceProps, Project, Task, CalendarPage } from './types';
 import type { WorkspaceData } from './data/repository';
 import { DataError } from './data/errors';
 import App from './App';
 import { ActivityPanel } from './workspace/Collaboration';
+import Calendar from './workspace/Calendar';
 
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
@@ -31,9 +32,14 @@ const mocks = vi.hoisted(() => ({
     deleteTask: vi.fn(),
     roles: vi.fn(),
     activity: vi.fn(),
+    calendarPreferences: vi.fn(),
+    setCalendarPreferences: vi.fn(),
+    calendarItems: vi.fn(),
+    scheduleTask: vi.fn(),
   },
   workspace: null as WorkspaceProps | null,
   showActivity: false,
+  showCalendar: false,
 }));
 
 vi.mock('./data/client', () => ({
@@ -59,6 +65,15 @@ vi.mock('./workspace/Workspace', () => ({
           <p key={task.id}>{task.title}</p>
         ))}
         {mocks.showActivity && !props.loading && props.collaboration && <ActivityPanel api={props.collaboration} />}
+        {mocks.showCalendar && !props.loading && props.calendar && (
+          <Calendar
+            key={JSON.stringify(props.calendar.scopeKey)}
+            api={props.calendar}
+            workspaces={props.workspaces ?? []}
+            projects={props.projects}
+            onOpen={() => {}}
+          />
+        )}
         <button onClick={props.onRetry}>Reintentar datos</button>
       </section>
     );
@@ -148,6 +163,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.workspace = null;
   mocks.showActivity = false;
+  mocks.showCalendar = false;
   mocks.auth.onAuthStateChange.mockImplementation(callback => {
     authListener = callback;
     return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
@@ -192,6 +208,95 @@ afterEach(() => {
 });
 
 describe('sesiones y datos del espacio personal', () => {
+  function calendarSetup() {
+    mocks.showCalendar = true;
+    const context = {
+      contract_version: 2,
+      personal_workspace_id: 'personal-a',
+      external_invites_enabled: false,
+      workspaces: [
+        { id: 'personal-a', name: 'Personal', kind: 'personal', owner_id: 'owner-a', version: 1, permissions: ['project.read', 'task.read'] },
+        { id: 'team-a', name: 'Otro equipo', kind: 'team', owner_id: 'other-owner', version: 1, permissions: ['project.read', 'task.read'] },
+      ],
+    };
+    const date = new Date().toISOString().slice(0, 10);
+    const page: CalendarPage = {
+      items: [
+        {
+          id: 'remote-task:due',
+          kind: 'due',
+          workspace_id: 'team-a',
+          workspace_name: 'Otro equipo',
+          project_id: 'remote-project',
+          project_name: 'Proyecto del otro espacio',
+          project_color: '#123456',
+          project_archived_at: null,
+          task_id: 'remote-task',
+          title: 'Evento privado de otro espacio',
+          status: 'todo',
+          priority: 'none',
+          version: 1,
+          assignee_member_id: null,
+          assignee_name: null,
+          start_date: null,
+          due_date: date,
+          scheduled_start_at: null,
+          scheduled_end_at: null,
+          scheduled_time_zone: null,
+          date,
+          start_at: null,
+          end_at: null,
+          can_edit: false,
+        },
+      ],
+      next_cursor: null,
+    };
+    mocks.repository.context.mockResolvedValue(context);
+    mocks.repository.calendarPreferences.mockResolvedValue({ time_zone: 'America/La_Paz', version: 2, updated_at: null });
+    mocks.repository.calendarItems.mockResolvedValue(page);
+    return context;
+  }
+
+  it('oculta el calendario global ante una denegación sin bloquear el espacio personal y permite volver a comprobar el acceso', async () => {
+    calendarSetup();
+    const { client } = show('/calendar');
+    await screen.findAllByRole('button', { name: /Vencimiento de Evento privado de otro espacio/ });
+    mocks.repository.calendarItems.mockRejectedValue(new DataError('Cambió el acceso al calendario.', 'PT404'));
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['calendar', 'owner-a'] });
+    });
+    await waitFor(() => expect(screen.queryAllByRole('button', { name: /Evento privado de otro espacio/ })).toHaveLength(0));
+    expect(workspace().calendar?.accessError).toContain('Cambió el acceso');
+    expect(workspace().accessUnavailable).toBe(false);
+    expect(screen.getByText('Proyecto privado')).toBeInTheDocument();
+    mocks.repository.calendarItems.mockResolvedValue({ items: [], next_cursor: null });
+    await act(async () => {
+      await workspace().calendar?.retryAccess?.();
+    });
+    await waitFor(() => expect(workspace().calendar?.accessError).toBeNull());
+    expect(screen.getByText('Tarea privada')).toBeInTheDocument();
+  });
+
+  it('retira elementos de otro espacio al cambiar sus permisos mientras la nueva consulta todavía está pendiente', async () => {
+    const context = calendarSetup();
+    const { client } = show('/calendar');
+    await screen.findAllByRole('button', { name: /Vencimiento de Evento privado de otro espacio/ });
+    const pending = deferred<CalendarPage>();
+    mocks.repository.calendarItems.mockReturnValue(pending.promise);
+    mocks.repository.context.mockResolvedValue({
+      ...context,
+      workspaces: context.workspaces.map(space => (space.id === 'team-a' ? { ...space, permissions: [] } : space)),
+    });
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['context', 'owner-a'] });
+    });
+    await waitFor(() => expect(screen.queryAllByRole('button', { name: /Evento privado de otro espacio/ })).toHaveLength(0));
+    expect(workspace().accessUnavailable).toBe(false);
+    expect(screen.getByText('Proyecto privado')).toBeInTheDocument();
+    await act(async () => pending.resolve({ items: [], next_cursor: null }));
+    expect(screen.queryAllByRole('button', { name: /Evento privado de otro espacio/ })).toHaveLength(0);
+  });
+
   it('retira actividad privada inmediatamente al cambiar ACL sin cambiar roles y espera la nueva lectura', async () => {
     mocks.showActivity = true;
     mocks.auth.getSession.mockResolvedValue({ data: { session: session('delegate-a') }, error: null });

@@ -23,6 +23,9 @@ export interface Task {
   owner_id: string;
   project_id: string;
   assignee_member_id: string | null;
+  scheduled_start_at?: string | null;
+  scheduled_end_at?: string | null;
+  scheduled_time_zone?: string | null;
   task_number: number;
   title: string;
   description: string;
@@ -132,6 +135,75 @@ export interface ActivityPage {
   next_before_id: number | null;
 }
 
+export interface CalendarPreferences {
+  time_zone: string | null;
+  version: number;
+  updated_at: string | null;
+}
+
+export interface TaskScheduleInput {
+  scheduled_start_at: string | null;
+  scheduled_end_at: string | null;
+  scheduled_time_zone: string | null;
+}
+
+export interface CalendarItem {
+  id: string;
+  kind: 'block' | 'due' | 'start' | 'unscheduled';
+  workspace_id: string;
+  workspace_name: string;
+  project_id: string;
+  project_name: string;
+  project_color: string;
+  project_archived_at: string | null;
+  task_id: string;
+  title: string;
+  status: TaskStatus;
+  priority: Priority;
+  version: number;
+  assignee_member_id: string | null;
+  assignee_name: string | null;
+  start_date: string | null;
+  due_date: string | null;
+  scheduled_start_at: string | null;
+  scheduled_end_at: string | null;
+  scheduled_time_zone: string | null;
+  date: string | null;
+  start_at: string | null;
+  end_at: string | null;
+  can_edit: boolean;
+}
+
+export interface CalendarQuery {
+  workspace_ids: string[];
+  date_from: string;
+  date_to: string;
+  time_zone: string;
+  project_ids?: string[];
+  assignee_member_ids?: string[];
+  statuses?: TaskStatus[];
+  mine?: boolean;
+  include_archived?: boolean;
+  cursor?: string | null;
+  limit?: number;
+  unscheduled?: boolean;
+}
+
+export interface CalendarPage {
+  items: CalendarItem[];
+  next_cursor: string | null;
+}
+
+export interface CalendarApi {
+  scopeKey: string[];
+  accessError?: string | null;
+  retryAccess?: () => Promise<void>;
+  profile: (signal?: AbortSignal) => Promise<CalendarPreferences>;
+  saveProfile: (zone: string, version: number) => Promise<CalendarPreferences>;
+  items: (input: CalendarQuery, signal?: AbortSignal) => Promise<CalendarPage>;
+  scheduleTask: (task: Task, input: TaskScheduleInput) => Promise<Task>;
+}
+
 export interface CollaborationApi {
   scopeKey: string[];
   roles: () => Promise<WorkspaceRole[]>;
@@ -164,6 +236,7 @@ export interface WorkspaceProps {
   currentUserId?: string;
   capabilities?: Record<string, ProjectCapability>;
   collaboration?: CollaborationApi;
+  calendar?: CalendarApi;
   accessUnavailable?: boolean;
   members?: WorkspaceMember[];
   invitations?: WorkspaceInvitation[];

@@ -8,7 +8,7 @@ import Workspace from './workspace/Workspace';
 import { callbackRequestedRecovery, configuration, supabase } from './data/client';
 import { createRepository, type WorkspaceData } from './data/repository';
 import { dataError, DataError } from './data/errors';
-import type { CollaborationApi, Project, Task, WorkspaceProps, WorkspaceSummary } from './types';
+import type { CalendarApi, CollaborationApi, Project, Task, WorkspaceProps, WorkspaceSummary } from './types';
 
 function LoadingScreen() {
   return (
@@ -273,6 +273,7 @@ function ScopedWorkspace({
   const active = useRef(true);
   const locked = useRef(false);
   const [accessError, setAccessError] = useState<DataError | null>(null);
+  const [calendarAccessError, setCalendarAccessError] = useState<DataError | null>(null);
   useEffect(() => {
     active.current = true;
     return () => {
@@ -317,6 +318,23 @@ function ScopedWorkspace({
     () => ['collaboration', session.user.id, selected.id, scopeRevision, projectRevision],
     [session.user.id, selected.id, scopeRevision, projectRevision],
   );
+  const calendarWorkspaceRevision = JSON.stringify(
+    [...workspaces]
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map(workspace => [workspace.id, workspace.owner_id, [...workspace.permissions].sort()]),
+  );
+  const calendarScope = useMemo(
+    () => ['calendar', session.user.id, selected.id, scopeRevision, projectRevision, calendarWorkspaceRevision, calendarAccessError ? 'access-denied' : 'live'],
+    [session.user.id, selected.id, scopeRevision, projectRevision, calendarWorkspaceRevision, calendarAccessError],
+  );
+  const calendarScopeRef = useRef(calendarScope);
+  useEffect(() => {
+    calendarScopeRef.current = calendarScope;
+    return () => {
+      void queryClient.cancelQueries({ queryKey: calendarScope });
+      queryClient.removeQueries({ queryKey: calendarScope });
+    };
+  }, [calendarScope, queryClient]);
   const previousCollaborationScope = useRef<string[] | null>(null);
   const previousCapabilities = useRef<WorkspaceData['capabilities']>(undefined);
   useEffect(() => {
@@ -380,6 +398,7 @@ function ScopedWorkspace({
         void queryClient.invalidateQueries({ queryKey: ['directory', session.user.id, selected.id, scopeRevision] });
         void queryClient.invalidateQueries({ queryKey: ['collaboration', session.user.id, selected.id, scopeRevision] });
         void queryClient.invalidateQueries({ queryKey: ['context', session.user.id] });
+        void queryClient.invalidateQueries({ queryKey: ['calendar', session.user.id] });
       }
       return row;
     } catch (cause) {
@@ -400,6 +419,7 @@ function ScopedWorkspace({
         void queryClient.invalidateQueries({ queryKey });
         void queryClient.invalidateQueries({ queryKey: ['directory', session.user.id, selected.id, scopeRevision] });
         void queryClient.invalidateQueries({ queryKey: ['collaboration', session.user.id, selected.id, scopeRevision] });
+        void queryClient.invalidateQueries({ queryKey: ['calendar', session.user.id] });
       }
       throw error;
     } finally {
@@ -450,6 +470,38 @@ function ScopedWorkspace({
     assignTask: (task, memberId) => write(() => repository.assignTask(task, memberId), acceptTask),
     activity: (projectId, beforeId) => readCollaboration(() => repository.activity(selected.id, projectId, beforeId)),
   };
+  async function readCalendar<T>(operation: () => Promise<T>): Promise<T> {
+    const requestScope = calendarScope;
+    if (!active.current || accessError || calendarAccessError) throw accessError ?? calendarAccessError ?? new DataError('Este espacio ya no está abierto.');
+    try {
+      const result = await operation();
+      if (!active.current || calendarScopeRef.current !== requestScope) throw new DataError('El acceso cambió. Vuelve a consultar el calendario.');
+      return result;
+    } catch (cause) {
+      const error = dataError(cause);
+      if (active.current && ['42501', 'PT404', 'PGRST301', 'PGRST303'].includes(error.code ?? '')) {
+        setCalendarAccessError(error);
+        void queryClient.invalidateQueries({ queryKey: ['context', session.user.id] });
+      }
+      throw error;
+    }
+  }
+  const calendar: CalendarApi = {
+    scopeKey: calendarScope,
+    accessError: calendarAccessError?.message ?? null,
+    retryAccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['context', session.user.id] });
+      setCalendarAccessError(null);
+      await queryClient.invalidateQueries({ queryKey });
+    },
+    profile: signal => readCalendar(() => repository.calendarPreferences(signal)),
+    saveProfile: (zone, version) => write(() => repository.setCalendarPreferences(zone, version)),
+    items: (input, signal) => readCalendar(() => repository.calendarItems(input, signal)),
+    scheduleTask: (task, input) => {
+      if (task.workspace_id !== selected.id) return Promise.reject(new DataError('Abre el espacio de la tarea antes de programarla.'));
+      return write(() => repository.scheduleTask(task, input), acceptTask);
+    },
+  };
   const failure = accessError ?? mutation.error ?? query.error;
   const unavailable = Boolean(accessError) || (query.error instanceof DataError && ['42501', 'PGRST301', 'PGRST303', 'PT404'].includes(query.error.code ?? ''));
   return (
@@ -459,6 +511,7 @@ function ScopedWorkspace({
       currentUserId={session.user.id}
       capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
       collaboration={collaboration}
+      calendar={calendar}
       accessUnavailable={unavailable}
       members={unavailable || directory.error ? [] : (directory.data?.members ?? [])}
       invitations={unavailable || directory.error ? [] : (directory.data?.invitations ?? [])}

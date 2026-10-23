@@ -64,6 +64,9 @@ export type Database = {
           position: number;
           priority: string;
           project_id: string;
+          scheduled_end_at: string | null;
+          scheduled_start_at: string | null;
+          scheduled_time_zone: string | null;
           start_date: string | null;
           status: string;
           task_number: number;
@@ -82,6 +85,9 @@ export type Database = {
           position?: number;
           priority?: string;
           project_id: string;
+          scheduled_end_at?: string | null;
+          scheduled_start_at?: string | null;
+          scheduled_time_zone?: string | null;
           start_date?: string | null;
           status?: string;
           task_number?: never;
@@ -100,6 +106,9 @@ export type Database = {
           position?: number;
           priority?: string;
           project_id?: string;
+          scheduled_end_at?: string | null;
+          scheduled_start_at?: string | null;
+          scheduled_time_zone?: string | null;
           start_date?: string | null;
           status?: string;
           task_number?: never;
@@ -141,6 +150,9 @@ export type Database = {
           position: number;
           priority: string;
           project_id: string;
+          scheduled_end_at: string | null;
+          scheduled_start_at: string | null;
+          scheduled_time_zone: string | null;
           start_date: string | null;
           status: string;
           task_number: number;
@@ -221,6 +233,9 @@ export type Database = {
           position: number;
           priority: string;
           project_id: string;
+          scheduled_end_at: string | null;
+          scheduled_start_at: string | null;
+          scheduled_time_zone: string | null;
           start_date: string | null;
           status: string;
           task_number: number;
@@ -248,6 +263,7 @@ export type Database = {
         Args: { p_id: string; p_version: number; p_workspace_id: string };
         Returns: undefined;
       };
+      tr8_v2_get_calendar_preferences: { Args: never; Returns: Json };
       tr8_v2_get_context: { Args: never; Returns: Json };
       tr8_v2_get_project_capabilities: {
         Args: { p_project_id: string; p_workspace_id: string };
@@ -268,6 +284,22 @@ export type Database = {
           p_limit?: number;
           p_project_id: string;
           p_workspace_id: string;
+        };
+        Returns: Json;
+      };
+      tr8_v2_list_calendar: {
+        Args: {
+          p_assignee_member_ids?: string[];
+          p_cursor?: string;
+          p_date_from: string;
+          p_date_to: string;
+          p_include_archived?: boolean;
+          p_limit?: number;
+          p_mine?: boolean;
+          p_project_ids?: string[];
+          p_statuses?: string[];
+          p_time_zone: string;
+          p_workspace_ids: string[];
         };
         Returns: Json;
       };
@@ -297,6 +329,19 @@ export type Database = {
         Args: { p_cursor?: string; p_limit?: number; p_workspace_id: string };
         Returns: Json;
       };
+      tr8_v2_list_unscheduled: {
+        Args: {
+          p_assignee_member_ids?: string[];
+          p_cursor?: string;
+          p_include_archived?: boolean;
+          p_limit?: number;
+          p_mine?: boolean;
+          p_project_ids?: string[];
+          p_statuses?: string[];
+          p_workspace_ids: string[];
+        };
+        Returns: Json;
+      };
       tr8_v2_remove_member: {
         Args: { p_member_id: string; p_version: number; p_workspace_id: string };
         Returns: Json;
@@ -312,6 +357,47 @@ export type Database = {
       };
       tr8_v2_revoke_invitation: {
         Args: { p_id: string; p_version: number; p_workspace_id: string };
+        Returns: Json;
+      };
+      tr8_v2_schedule_task: {
+        Args: {
+          p_id: string;
+          p_scheduled_end_at: string;
+          p_scheduled_start_at: string;
+          p_scheduled_time_zone: string;
+          p_version: number;
+          p_workspace_id: string;
+        };
+        Returns: {
+          assignee_member_id: string | null;
+          created_at: string;
+          description: string;
+          due_date: string | null;
+          id: string;
+          owner_id: string;
+          position: number;
+          priority: string;
+          project_id: string;
+          scheduled_end_at: string | null;
+          scheduled_start_at: string | null;
+          scheduled_time_zone: string | null;
+          start_date: string | null;
+          status: string;
+          task_number: number;
+          title: string;
+          updated_at: string;
+          version: number;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'tr8_workspace_tasks';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      tr8_v2_set_calendar_preferences: {
+        Args: { p_time_zone: string; p_version: number };
         Returns: Json;
       };
       tr8_v2_set_member_roles: {
@@ -388,6 +474,9 @@ export type Database = {
           position: number;
           priority: string;
           project_id: string;
+          scheduled_end_at: string | null;
+          scheduled_start_at: string | null;
+          scheduled_time_zone: string | null;
           start_date: string | null;
           status: string;
           task_number: number;

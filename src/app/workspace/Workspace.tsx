@@ -3,6 +3,7 @@ import {
   Archive,
   ArrowRight,
   CheckCheck,
+  CalendarDays,
   ChevronRight,
   Clock3,
   FolderClosed,
@@ -22,7 +23,8 @@ import {
 } from 'lucide-react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { formatDate, PROJECT_STATUSES } from '../constants';
-import type { CollaborationApi, Project, Task, TaskStatus, WorkspaceProps } from '../types';
+import type { CalendarApi, CalendarItem, CollaborationApi, Project, Task, TaskStatus, WorkspaceProps, WorkspaceSummary } from '../types';
+import Calendar from './Calendar';
 import ProjectForm from './ProjectForm';
 import TaskForm from './TaskForm';
 import TasksView from './TasksView';
@@ -41,6 +43,9 @@ type ProjectActions = {
   canCreateProject: boolean;
   canCreateTask: boolean;
   collaboration?: CollaborationApi;
+  calendar?: CalendarApi;
+  calendarWorkspaces?: WorkspaceSummary[];
+  onOpenCalendar?: (item: CalendarItem) => void;
   scopeSearch?: string;
 };
 
@@ -372,6 +377,19 @@ function ProjectPage({
         onCreate={status => onNewTask(project, status)}
         onOpen={onOpen}
         onMove={onMove}
+        calendarContent={
+          actions.calendar && actions.onOpenCalendar ? (
+            <Calendar
+              key={`${project.id}:${actions.calendar.scopeKey.join(':')}`}
+              api={actions.calendar}
+              project={project}
+              workspaceId={project.workspace_id}
+              workspaces={actions.calendarWorkspaces ?? []}
+              projects={projects}
+              onOpen={actions.onOpenCalendar}
+            />
+          ) : undefined
+        }
       />
       {actions.collaboration && actions.can(project.id, 'audit.read') && <ActivityPanel key={project.id} api={actions.collaboration} projectId={project.id} />}
     </div>
@@ -575,7 +593,9 @@ export default function Workspace(props: WorkspaceProps) {
           ? 'Mi cuenta'
           : location.pathname === '/team'
             ? 'Equipo'
-            : 'Inicio');
+            : location.pathname === '/calendar'
+              ? 'Calendario'
+              : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -613,6 +633,9 @@ export default function Workspace(props: WorkspaceProps) {
     params.delete('task');
     setSearchParams(params, { replace: true });
   }
+  function openCalendarItem(item: CalendarItem) {
+    navigate(`/projects/${item.project_id}?workspace=${item.workspace_id}&view=calendar&task=${item.task_id}`);
+  }
   function createTask(project?: Project, status?: TaskStatus) {
     setNewTask({ projectId: project?.id, status });
   }
@@ -622,6 +645,9 @@ export default function Workspace(props: WorkspaceProps) {
     canCreateProject,
     canCreateTask: creatableProjects.length > 0,
     collaboration: props.collaboration,
+    calendar: props.calendar,
+    calendarWorkspaces: props.workspaces,
+    onOpenCalendar: openCalendarItem,
     scopeSearch,
     onEdit: project => {
       if (can(project.id, 'project.edit')) setProjectEditor({ project });
@@ -691,6 +717,12 @@ export default function Workspace(props: WorkspaceProps) {
                 <span>{props.workspace?.kind === 'team' ? 'Tareas del equipo' : 'Mis tareas'}</span>
                 <span className="ct">{activeTasks.filter(task => task.status !== 'done').length}</span>
               </NavLink>
+              {props.calendar && (
+                <NavLink to={`/calendar${scopeSearch}`} className={navClass}>
+                  <CalendarDays className="i" size={16} aria-hidden="true" />
+                  <span>Calendario</span>
+                </NavLink>
+              )}
               {props.workspace?.kind === 'team' && (
                 <NavLink to={`/team${scopeSearch}`} className={navClass}>
                   <Users className="i" size={16} aria-hidden="true" />
@@ -853,6 +885,26 @@ export default function Workspace(props: WorkspaceProps) {
               />
               <Route path="/team" element={<TeamAdministration {...props} />} />
               <Route
+                path="/calendar"
+                element={
+                  props.calendar ? (
+                    <div className="page">
+                      <Calendar
+                        key={props.calendar.scopeKey.join(':')}
+                        api={props.calendar}
+                        workspaces={props.workspaces ?? []}
+                        projects={props.projects}
+                        onOpen={openCalendarItem}
+                      />
+                    </div>
+                  ) : (
+                    <div className="page">
+                      <EmptyState title="Calendario no disponible">Actualiza la aplicación para consultar las fechas de tus proyectos.</EmptyState>
+                    </div>
+                  )
+                }
+              />
+              <Route
                 path="/account"
                 element={<AccountPage email={props.email} pending={pending} onSignOut={props.onSignOut} onPasswordReset={props.onPasswordReset} />}
               />
@@ -912,6 +964,7 @@ export default function Workspace(props: WorkspaceProps) {
           canDelete={selectedTask ? can(selectedTask.project_id, 'task.delete') : false}
           canAssign={selectedTask ? can(selectedTask.project_id, 'task.assign') : false}
           collaboration={props.collaboration}
+          calendar={props.calendar}
           onCreate={props.onCreateTask}
           onUpdate={props.onUpdateTask}
           onDelete={props.onDeleteTask}

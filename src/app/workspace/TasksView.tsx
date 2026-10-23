@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { CalendarDays, Check, Columns3, List, Plus, Search, RotateCcw } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { formatDate, PRIORITIES, STATUSES } from '../constants';
@@ -16,6 +16,7 @@ interface Props {
   onCreate: (status?: TaskStatus) => void;
   onOpen: (task: Task) => void;
   onMove: (task: Task, status: TaskStatus) => Promise<void>;
+  calendarContent?: ReactNode;
 }
 
 function TaskStateSelect({ task, disabled, onMove }: { task: Task; disabled: boolean; onMove: Props['onMove'] }) {
@@ -38,9 +39,20 @@ function TaskStateSelect({ task, disabled, onMove }: { task: Task; disabled: boo
   );
 }
 
-export default function TasksView({ tasks, projects, pending, readOnly = false, canCreate = !readOnly, canEditTask, onCreate, onOpen, onMove }: Props) {
+export default function TasksView({
+  tasks,
+  projects,
+  pending,
+  readOnly = false,
+  canCreate = !readOnly,
+  canEditTask,
+  onCreate,
+  onOpen,
+  onMove,
+  calendarContent,
+}: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const view = searchParams.get('view') === 'board' ? 'board' : 'list';
+  const view = searchParams.get('view') === 'calendar' && calendarContent ? 'calendar' : searchParams.get('view') === 'board' ? 'board' : 'list';
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<TaskStatus | ''>('');
   const [priority, setPriority] = useState<Priority | ''>('');
@@ -67,7 +79,7 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
 
   function changeView(next: string) {
     const params = new URLSearchParams(searchParams);
-    if (next === 'board') params.set('view', 'board');
+    if (next === 'board' || next === 'calendar') params.set('view', next);
     else params.delete('view');
     setSearchParams(params, { replace: true });
   }
@@ -89,222 +101,234 @@ export default function TasksView({ tasks, projects, pending, readOnly = false, 
           <Columns3 size={15} aria-hidden="true" />
           Tablero
         </button>
-      </div>
-      <div className="toolbar pw-toolbar">
-        <label className="pw-search">
-          <Search size={14} aria-hidden="true" />
-          <span className="sr">Buscar tareas</span>
-          <input type="search" placeholder="Buscar tareas…" value={query} onChange={event => setQuery(event.target.value)} />
-        </label>
-        <label className="pw-filter">
-          <span className="sr">Filtrar por estado</span>
-          <select value={status} onChange={event => setStatus(event.target.value as TaskStatus | '')}>
-            <option value="">Todos los estados</option>
-            {STATUSES.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="pw-filter">
-          <span className="sr">Filtrar por prioridad</span>
-          <select value={priority} onChange={event => setPriority(event.target.value as Priority | '')}>
-            <option value="">Todas las prioridades</option>
-            {PRIORITIES.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {hasFilters && (
-          <button className="btn btn-ghost btn-sm" onClick={resetFilters}>
-            Limpiar filtros
+        {calendarContent && (
+          <button className={`pw-view-tab${view === 'calendar' ? ' on' : ''}`} aria-pressed={view === 'calendar'} onClick={() => changeView('calendar')}>
+            <CalendarDays size={15} aria-hidden="true" />
+            Calendario
           </button>
         )}
-        <span className="pw-result-count" role="status">
-          {visible.length} {visible.length === 1 ? 'tarea' : 'tareas'}
-        </span>
       </div>
-      {visible.length === 0 && (view === 'list' || hasFilters) ? (
-        <EmptyState
-          title={hasFilters ? 'No hay coincidencias' : 'Tu siguiente paso empieza aquí'}
-          action={
-            hasFilters ? (
-              <button className="btn btn-secondary" onClick={resetFilters}>
-                Limpiar filtros
-              </button>
-            ) : (
-              canCreate && (
-                <button className="btn btn-primary" disabled={pending} onClick={() => onCreate()}>
-                  <Plus size={14} aria-hidden="true" />
-                  Nueva tarea
-                </button>
-              )
-            )
-          }
-        >
-          {hasFilters
-            ? 'Prueba con otra búsqueda o cambia los filtros.'
-            : readOnly
-              ? 'Este proyecto no tiene tareas.'
-              : 'Crea una tarea y organiza su estado, prioridad y fecha.'}
-        </EmptyState>
-      ) : view === 'list' ? (
-        <div className="pw-task-list" role="table" aria-label="Lista de tareas">
-          <div className="pw-task-row pw-task-list-head" role="row">
-            <span role="columnheader" className="sr">
-              Completar
-            </span>
-            <span role="columnheader">Tarea</span>
-            <span role="columnheader">Estado</span>
-            <span role="columnheader">Prioridad</span>
-            <span role="columnheader">Vencimiento</span>
-          </div>
-          {visible.map(task => (
-            <div key={task.id} className={`pw-task-row${task.status === 'done' ? ' pw-done' : ''}`} role="row">
-              <span role="cell">
-                <button
-                  className={`pw-complete${task.status === 'done' ? ' checked' : ''}`}
-                  disabled={pending || !mayEdit(task)}
-                  aria-label={task.status === 'done' ? `Reabrir ${task.title}` : `Completar ${task.title}`}
-                  onClick={() => {
-                    void onMove(task, task.status === 'done' ? 'todo' : 'done');
-                  }}
-                >
-                  {task.status === 'done' && <Check size={12} aria-hidden="true" />}
-                </button>
-              </span>
-              <span className="pw-task-title-cell" role="cell">
-                <button className="pw-task-title" onClick={() => onOpen(task)}>
-                  {task.title}
-                </button>
-                <span className="pw-task-subtitle">
-                  <span className="mono">
-                    {projectMap.get(task.project_id)?.code}-{task.task_number}
-                  </span>
-                  <span>{projectMap.get(task.project_id)?.name}</span>
-                </span>
-              </span>
-              <span role="cell" className="pw-state-cell">
-                <StatusDot status={task.status} />
-                <TaskStateSelect task={task} disabled={pending || !mayEdit(task)} onMove={onMove} />
-              </span>
-              <span role="cell" className={`pw-priority pw-priority-${task.priority}`}>
-                {PRIORITIES.find(item => item.id === task.priority)?.name}
-              </span>
-              <span role="cell" className={`pw-due${task.due_date && task.due_date < today && task.status !== 'done' ? ' overdue' : ''}`}>
-                {formatDate(task.due_date)}
-              </span>
-            </div>
-          ))}
-        </div>
+      {view === 'calendar' ? (
+        calendarContent
       ) : (
         <>
-          <p className="pw-board-help">
-            {readOnly
-              ? 'Vista de solo lectura: puedes consultar las tareas de este proyecto.'
-              : 'Arrastra las tarjetas entre columnas o utiliza el selector de estado de cada tarea.'}
-          </p>
-          <div className="board pw-board">
-            {STATUSES.map(column => {
-              const items = visible.filter(task => task.status === column.id);
-              return (
-                <section
-                  key={column.id}
-                  className={`bcol${over === column.id ? ' over' : ''}`}
-                  aria-label={`${column.name}: ${items.length} ${items.length === 1 ? 'tarea' : 'tareas'}`}
-                  onDragOver={event => {
-                    if (dragging && !pending && !readOnly) {
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = 'move';
-                      setOver(column.id);
-                    }
-                  }}
-                  onDragLeave={event => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver(null);
-                  }}
-                  onDrop={event => {
-                    event.preventDefault();
-                    setOver(null);
-                    setDragging(null);
-                    if (pending || readOnly) return;
-                    const task = tasks.find(item => item.id === event.dataTransfer.getData('text/plain'));
-                    if (task && mayEdit(task) && task.status !== column.id) void onMove(task, column.id);
-                  }}
-                >
-                  <div className="bcol-h">
-                    <StatusDot status={column.id} />
-                    <span>{column.name}</span>
-                    <span className="cnt">{items.length}</span>
-                    {canCreate && (
-                      <span className="acts">
-                        <button className="ibtn ibtn-xs" aria-label={`Añadir tarea: ${column.name}`} disabled={pending} onClick={() => onCreate(column.id)}>
-                          <Plus size={15} aria-hidden="true" />
-                        </button>
+          <div className="toolbar pw-toolbar">
+            <label className="pw-search">
+              <Search size={14} aria-hidden="true" />
+              <span className="sr">Buscar tareas</span>
+              <input type="search" placeholder="Buscar tareas…" value={query} onChange={event => setQuery(event.target.value)} />
+            </label>
+            <label className="pw-filter">
+              <span className="sr">Filtrar por estado</span>
+              <select value={status} onChange={event => setStatus(event.target.value as TaskStatus | '')}>
+                <option value="">Todos los estados</option>
+                {STATUSES.map(item => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="pw-filter">
+              <span className="sr">Filtrar por prioridad</span>
+              <select value={priority} onChange={event => setPriority(event.target.value as Priority | '')}>
+                <option value="">Todas las prioridades</option>
+                {PRIORITIES.map(item => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {hasFilters && (
+              <button className="btn btn-ghost btn-sm" onClick={resetFilters}>
+                Limpiar filtros
+              </button>
+            )}
+            <span className="pw-result-count" role="status">
+              {visible.length} {visible.length === 1 ? 'tarea' : 'tareas'}
+            </span>
+          </div>
+          {visible.length === 0 && (view === 'list' || hasFilters) ? (
+            <EmptyState
+              title={hasFilters ? 'No hay coincidencias' : 'Tu siguiente paso empieza aquí'}
+              action={
+                hasFilters ? (
+                  <button className="btn btn-secondary" onClick={resetFilters}>
+                    Limpiar filtros
+                  </button>
+                ) : (
+                  canCreate && (
+                    <button className="btn btn-primary" disabled={pending} onClick={() => onCreate()}>
+                      <Plus size={14} aria-hidden="true" />
+                      Nueva tarea
+                    </button>
+                  )
+                )
+              }
+            >
+              {hasFilters
+                ? 'Prueba con otra búsqueda o cambia los filtros.'
+                : readOnly
+                  ? 'Este proyecto no tiene tareas.'
+                  : 'Crea una tarea y organiza su estado, prioridad y fecha.'}
+            </EmptyState>
+          ) : view === 'list' ? (
+            <div className="pw-task-list" role="table" aria-label="Lista de tareas">
+              <div className="pw-task-row pw-task-list-head" role="row">
+                <span role="columnheader" className="sr">
+                  Completar
+                </span>
+                <span role="columnheader">Tarea</span>
+                <span role="columnheader">Estado</span>
+                <span role="columnheader">Prioridad</span>
+                <span role="columnheader">Vencimiento</span>
+              </div>
+              {visible.map(task => (
+                <div key={task.id} className={`pw-task-row${task.status === 'done' ? ' pw-done' : ''}`} role="row">
+                  <span role="cell">
+                    <button
+                      className={`pw-complete${task.status === 'done' ? ' checked' : ''}`}
+                      disabled={pending || !mayEdit(task)}
+                      aria-label={task.status === 'done' ? `Reabrir ${task.title}` : `Completar ${task.title}`}
+                      onClick={() => {
+                        void onMove(task, task.status === 'done' ? 'todo' : 'done');
+                      }}
+                    >
+                      {task.status === 'done' && <Check size={12} aria-hidden="true" />}
+                    </button>
+                  </span>
+                  <span className="pw-task-title-cell" role="cell">
+                    <button className="pw-task-title" onClick={() => onOpen(task)}>
+                      {task.title}
+                    </button>
+                    <span className="pw-task-subtitle">
+                      <span className="mono">
+                        {projectMap.get(task.project_id)?.code}-{task.task_number}
                       </span>
-                    )}
-                  </div>
-                  <div className="bcol-b">
-                    {items.map(task => (
-                      <article
-                        key={task.id}
-                        className={`kcard${task.status === 'done' ? ' done' : ''}${dragging === task.id ? ' dragging' : ''}`}
-                        draggable={!pending && mayEdit(task)}
-                        onDragStart={event => {
-                          event.dataTransfer.setData('text/plain', task.id);
-                          event.dataTransfer.effectAllowed = 'move';
-                          setDragging(task.id);
-                        }}
-                        onDragEnd={() => {
-                          setDragging(null);
-                          setOver(null);
-                        }}
-                      >
-                        <button className="title pw-card-title" onClick={() => onOpen(task)}>
-                          {task.title}
-                        </button>
-                        {task.description && <p className="pw-card-description">{task.description}</p>}
-                        <div className="meta">
-                          <span className="key">
-                            {projectMap.get(task.project_id)?.code}-{task.task_number}
-                          </span>
-                          <span className={`pw-priority pw-priority-${task.priority}`}>{PRIORITIES.find(item => item.id === task.priority)?.name}</span>
-                        </div>
-                        {task.due_date && (
-                          <span className={`pw-card-date${task.due_date < today && task.status !== 'done' ? ' overdue' : ''}`}>
-                            <CalendarDays size={12} aria-hidden="true" />
-                            {formatDate(task.due_date)}
+                      <span>{projectMap.get(task.project_id)?.name}</span>
+                    </span>
+                  </span>
+                  <span role="cell" className="pw-state-cell">
+                    <StatusDot status={task.status} />
+                    <TaskStateSelect task={task} disabled={pending || !mayEdit(task)} onMove={onMove} />
+                  </span>
+                  <span role="cell" className={`pw-priority pw-priority-${task.priority}`}>
+                    {PRIORITIES.find(item => item.id === task.priority)?.name}
+                  </span>
+                  <span role="cell" className={`pw-due${task.due_date && task.due_date < today && task.status !== 'done' ? ' overdue' : ''}`}>
+                    {formatDate(task.due_date)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <p className="pw-board-help">
+                {readOnly
+                  ? 'Vista de solo lectura: puedes consultar las tareas de este proyecto.'
+                  : 'Arrastra las tarjetas entre columnas o utiliza el selector de estado de cada tarea.'}
+              </p>
+              <div className="board pw-board">
+                {STATUSES.map(column => {
+                  const items = visible.filter(task => task.status === column.id);
+                  return (
+                    <section
+                      key={column.id}
+                      className={`bcol${over === column.id ? ' over' : ''}`}
+                      aria-label={`${column.name}: ${items.length} ${items.length === 1 ? 'tarea' : 'tareas'}`}
+                      onDragOver={event => {
+                        if (dragging && !pending && !readOnly) {
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = 'move';
+                          setOver(column.id);
+                        }
+                      }}
+                      onDragLeave={event => {
+                        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver(null);
+                      }}
+                      onDrop={event => {
+                        event.preventDefault();
+                        setOver(null);
+                        setDragging(null);
+                        if (pending || readOnly) return;
+                        const task = tasks.find(item => item.id === event.dataTransfer.getData('text/plain'));
+                        if (task && mayEdit(task) && task.status !== column.id) void onMove(task, column.id);
+                      }}
+                    >
+                      <div className="bcol-h">
+                        <StatusDot status={column.id} />
+                        <span>{column.name}</span>
+                        <span className="cnt">{items.length}</span>
+                        {canCreate && (
+                          <span className="acts">
+                            <button className="ibtn ibtn-xs" aria-label={`Añadir tarea: ${column.name}`} disabled={pending} onClick={() => onCreate(column.id)}>
+                              <Plus size={15} aria-hidden="true" />
+                            </button>
                           </span>
                         )}
-                        <div className="pw-card-bottom">
-                          <TaskStateSelect task={task} disabled={pending || !mayEdit(task)} onMove={onMove} />
-                          <button
-                            className="ibtn ibtn-xs"
-                            disabled={pending || !mayEdit(task)}
-                            aria-label={task.status === 'done' ? `Reabrir ${task.title}` : `Completar ${task.title}`}
-                            onClick={() => {
-                              void onMove(task, task.status === 'done' ? 'todo' : 'done');
+                      </div>
+                      <div className="bcol-b">
+                        {items.map(task => (
+                          <article
+                            key={task.id}
+                            className={`kcard${task.status === 'done' ? ' done' : ''}${dragging === task.id ? ' dragging' : ''}`}
+                            draggable={!pending && mayEdit(task)}
+                            onDragStart={event => {
+                              event.dataTransfer.setData('text/plain', task.id);
+                              event.dataTransfer.effectAllowed = 'move';
+                              setDragging(task.id);
+                            }}
+                            onDragEnd={() => {
+                              setDragging(null);
+                              setOver(null);
                             }}
                           >
-                            {task.status === 'done' ? <RotateCcw size={13} aria-hidden="true" /> : <Check size={14} aria-hidden="true" />}
+                            <button className="title pw-card-title" onClick={() => onOpen(task)}>
+                              {task.title}
+                            </button>
+                            {task.description && <p className="pw-card-description">{task.description}</p>}
+                            <div className="meta">
+                              <span className="key">
+                                {projectMap.get(task.project_id)?.code}-{task.task_number}
+                              </span>
+                              <span className={`pw-priority pw-priority-${task.priority}`}>{PRIORITIES.find(item => item.id === task.priority)?.name}</span>
+                            </div>
+                            {task.due_date && (
+                              <span className={`pw-card-date${task.due_date < today && task.status !== 'done' ? ' overdue' : ''}`}>
+                                <CalendarDays size={12} aria-hidden="true" />
+                                {formatDate(task.due_date)}
+                              </span>
+                            )}
+                            <div className="pw-card-bottom">
+                              <TaskStateSelect task={task} disabled={pending || !mayEdit(task)} onMove={onMove} />
+                              <button
+                                className="ibtn ibtn-xs"
+                                disabled={pending || !mayEdit(task)}
+                                aria-label={task.status === 'done' ? `Reabrir ${task.title}` : `Completar ${task.title}`}
+                                onClick={() => {
+                                  void onMove(task, task.status === 'done' ? 'todo' : 'done');
+                                }}
+                              >
+                                {task.status === 'done' ? <RotateCcw size={13} aria-hidden="true" /> : <Check size={14} aria-hidden="true" />}
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                        {canCreate && (
+                          <button className="addcard" disabled={pending} onClick={() => onCreate(column.id)}>
+                            <Plus size={14} aria-hidden="true" />
+                            Añadir tarea
                           </button>
-                        </div>
-                      </article>
-                    ))}
-                    {canCreate && (
-                      <button className="addcard" disabled={pending} onClick={() => onCreate(column.id)}>
-                        <Plus size={14} aria-hidden="true" />
-                        Añadir tarea
-                      </button>
-                    )}
-                    {readOnly && items.length === 0 && <span className="pw-column-empty">Sin tareas</span>}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
+                        )}
+                        {readOnly && items.length === 0 && <span className="pw-column-empty">Sin tareas</span>}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
