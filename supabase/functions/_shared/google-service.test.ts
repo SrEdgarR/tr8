@@ -388,4 +388,35 @@ describe('Google Tasks capability is tied to the durable OAuth attempt', () => {
     expect(f.remote).toHaveBeenCalledTimes(1);
     expect(f.rpc.mock.calls.some(([action]) => ['save_credentials', 'recover_calendar'].includes(action))).toBe(false);
   });
+
+  it.each([
+    { export_enabled: true, export_list_id: 'selected-list' },
+    { export_enabled: false, export_list_id: null },
+  ])('configures future task export through the authenticated database boundary: %j', async settings => {
+    const f = fixture();
+    const response = await f.handle(f.request({ action: 'tasks_configure_export', request_id: attemptId, expected_version: 4, ...settings }));
+    expect(response.status).toBe(200);
+    expect(f.rpc.mock.calls.find(([action]) => action === 'tasks_configure_export')).toEqual([
+      'tasks_configure_export',
+      { request_id: attemptId, expected_version: 4, ...settings },
+      actor,
+    ]);
+    expect(f.remote).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { export_enabled: 'true', export_list_id: 'list' },
+    { export_enabled: true },
+    { export_enabled: true, export_list_id: '' },
+    { export_enabled: true, export_list_id: 'list\nforeign' },
+    { export_enabled: true, export_list_id: 'x'.repeat(1025) },
+    { export_enabled: true, export_list_id: 'list', actor: actor.id },
+    { export_enabled: true, export_list_id: 'list', backfill: true },
+  ])('rejects malformed or expanded task export settings without a write: %j', async settings => {
+    const f = fixture();
+    const response = await f.handle(f.request({ action: 'tasks_configure_export', request_id: attemptId, expected_version: 4, ...settings }));
+    expect(response.status).toBe(400);
+    expect(f.rpc.mock.calls.some(([action]) => action === 'tasks_configure_export')).toBe(false);
+    expect(f.remote).not.toHaveBeenCalled();
+  });
 });

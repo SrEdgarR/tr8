@@ -2,7 +2,7 @@ import { GoogleProviderError } from './google-provider.ts';
 
 export const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 
-export type TasksOperation = 'tasks.lists.list' | 'tasks.list' | 'tasks.get' | 'tasks.patch' | 'tasks.delete';
+export type TasksOperation = 'tasks.lists.list' | 'tasks.list' | 'tasks.get' | 'tasks.insert' | 'tasks.patch' | 'tasks.delete';
 export type GoogleTasksOperation = TasksOperation;
 export type GoogleTasksStatus = 'needsAction' | 'completed';
 
@@ -27,6 +27,8 @@ export interface GoogleTasksActiveTask {
   hidden?: boolean;
   /** Assigned Docs/Chat tasks need additional restrictions in the worker. */
   assigned: boolean;
+  /** Only TR8's opaque recovery marker; arbitrary Google notes are discarded. */
+  creation_marker?: string;
 }
 
 export interface GoogleTasksDeletedTask {
@@ -54,6 +56,13 @@ export interface GoogleTasksPatch {
   completed?: string | null;
 }
 
+export interface GoogleTasksInsert {
+  title: string;
+  status: GoogleTasksStatus;
+  due: string | null;
+  creation_marker: string;
+}
+
 export interface GoogleTasksProviderOptions {
   fetch?: typeof fetch;
   /** One durable reservation before every HTTP request; false prevents sending. */
@@ -66,7 +75,8 @@ export interface GoogleTasksProviderOptions {
 const base = 'https://tasks.googleapis.com/tasks/v1';
 const bodyLimit = 65_536;
 const pageSize = 25;
-const taskFields = 'id,title,status,due,completed,etag,updated,parent,hidden,deleted,assignmentInfo';
+const taskFields = 'id,title,status,due,completed,etag,updated,parent,hidden,deleted,assignmentInfo,notes';
+const markerPattern = /^tr8:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function object(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -158,6 +168,7 @@ function task(input: unknown): GoogleTasksTask {
       ...(data.parent !== undefined ? { parent: data.parent as string } : {}),
       ...(data.hidden !== undefined ? { hidden: data.hidden as boolean } : {}),
       assigned: data.assignmentInfo !== undefined,
+      ...(typeof data.notes === 'string' && data.notes.length === 40 && markerPattern.test(data.notes) ? { creation_marker: data.notes } : {}),
     };
   } catch {
     return invalidResponse();
@@ -274,6 +285,27 @@ function patchBody(input: GoogleTasksPatch): Record<string, unknown> {
   return body;
 }
 
+function insertBody(input: GoogleTasksInsert): Record<string, unknown> {
+  const value = object(input);
+  if (
+    !value ||
+    Object.keys(value).some(key => !['title', 'status', 'due', 'creation_marker'].includes(key)) ||
+    !text(value.title, 1024) ||
+    !['needsAction', 'completed'].includes(String(value.status)) ||
+    typeof value.creation_marker !== 'string' ||
+    value.creation_marker.length !== 40 ||
+    !markerPattern.test(value.creation_marker)
+  ) {
+    throw new GoogleProviderError('permanent', 'invalid_resource');
+  }
+  return {
+    title: value.title,
+    status: value.status,
+    ...(value.due !== null ? { due: `${civilDate(value.due)}T00:00:00.000Z` } : {}),
+    notes: value.creation_marker,
+  };
+}
+
 /** Tasks protocol only: no hidden polling, OAuth refresh, retries or calendar copies. */
 export class GoogleTasksProvider {
   private readonly fetch: typeof fetch;
@@ -377,6 +409,14 @@ export class GoogleTasksProvider {
     if (!opaque(etag, 512) || etag.trim() === '*') throw new GoogleProviderError('permanent', 'invalid_resource');
     const query = new URLSearchParams({ fields: taskFields, prettyPrint: 'false' });
     return task(await this.request('tasks.patch', `${path}?${query}`, this.authorized(token, 'PATCH', patchBody(patch), etag)));
+  }
+
+  /** Non-idempotent: the caller must persist uncertainty before this single POST. */
+  async insertTask(token: string, listId: string, input: GoogleTasksInsert): Promise<GoogleTasksTask> {
+    const path = resource(listId);
+    const body = insertBody(input);
+    const query = new URLSearchParams({ fields: taskFields, prettyPrint: 'false' });
+    return task(await this.request('tasks.insert', `${path}?${query}`, this.authorized(token, 'POST', body)));
   }
 
   async deleteTask(token: string, listId: string, taskId: string, etag: string): Promise<void> {

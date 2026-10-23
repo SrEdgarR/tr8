@@ -229,12 +229,18 @@ export function createGoogleUserHandler(runtime: GoogleRuntime) {
           return reply(await fail(reason), 200, corsOrigin);
         }
       }
-      if (['tasks_reconcile', 'tasks_pause', 'tasks_resume', 'tasks_select_list', 'tasks_resolve'].includes(action)) {
+      if (['tasks_reconcile', 'tasks_pause', 'tasks_resume', 'tasks_select_list', 'tasks_resolve', 'tasks_configure_export'].includes(action)) {
         checkFields(body, [
           'action',
           'request_id',
           'expected_version',
-          ...(action === 'tasks_select_list' ? ['list_id', 'selected'] : action === 'tasks_resolve' ? ['link_id', 'resolution'] : []),
+          ...(action === 'tasks_select_list'
+            ? ['list_id', 'selected']
+            : action === 'tasks_resolve'
+              ? ['link_id', 'resolution']
+              : action === 'tasks_configure_export'
+                ? ['export_enabled', 'export_list_id']
+                : []),
         ]);
         const input: Record<string, unknown> = { request_id: uuid(body.request_id), expected_version: version(body.expected_version) };
         if (action === 'tasks_select_list') {
@@ -246,6 +252,12 @@ export function createGoogleUserHandler(runtime: GoogleRuntime) {
           if (body.resolution !== 'local' && body.resolution !== 'google') throw new GoogleServiceError('INVALID_INPUT');
           input.link_id = uuid(body.link_id);
           input.resolution = body.resolution;
+        }
+        if (action === 'tasks_configure_export') {
+          if (typeof body.export_enabled !== 'boolean' || (body.export_list_id !== null && typeof body.export_list_id !== 'string'))
+            throw new GoogleServiceError('INVALID_INPUT');
+          input.export_enabled = body.export_enabled;
+          input.export_list_id = body.export_list_id === null ? null : text(body.export_list_id, 1024);
         }
         return reply(await runtime.rpc(action, input, actor), 200, corsOrigin);
       }

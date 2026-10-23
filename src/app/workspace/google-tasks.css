@@ -191,6 +191,26 @@
   margin: 0;
   line-height: 1.6;
 }
+.pw-google-tasks-export .pw-google-tasks-destination {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  cursor: default;
+}
+.pw-google-tasks-destination select {
+  max-width: 100%;
+  min-width: min(210px, 100%);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.pw-google-tasks-destination select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .pw-google-tasks-conflicts {
   display: grid;
   gap: 10px;

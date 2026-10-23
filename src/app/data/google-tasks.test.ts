@@ -50,6 +50,31 @@ describe('Contrato personal de Google Tasks', () => {
     );
   });
 
+  it('acepta el servidor anterior sin habilitar ni inventar la exportación de tareas nuevas', () => {
+    const status = parseGoogleTasksStatus(fixture());
+    expect(status).not.toHaveProperty('outbound');
+    expect(parseGoogleTasksStatus({ ...fixture(), outbound: undefined })).not.toHaveProperty('outbound');
+  });
+
+  it('retiene solo la configuración pública de exportación y la incertidumbre de creación', () => {
+    const outbound = { enabled: true, list_id: 'google-list', enabled_at: '2026-10-23T12:00:00Z', uncertain: 2 };
+    expect(parseGoogleTasksStatus({ ...fixture(), outbound: { ...outbound, marker: 'private', credential_envelope: 'private' } })).toEqual(
+      fixture({ outbound }),
+    );
+  });
+
+  it.each([
+    null,
+    { enabled: 'yes', list_id: 'list', enabled_at: null, uncertain: 0 },
+    { enabled: true, list_id: null, enabled_at: null, uncertain: 0 },
+    { enabled: false, list_id: '', enabled_at: null, uncertain: 0 },
+    { enabled: false, list_id: null, enabled_at: 'tomorrow', uncertain: 0 },
+    { enabled: false, list_id: null, enabled_at: null, uncertain: -1 },
+    { enabled: false, list_id: null, enabled_at: null, uncertain: 0.5 },
+  ])('rechaza configuración de exportación incompatible sin asumir un destino %j', outbound => {
+    expect(() => parseGoogleTasksStatus({ ...fixture(), outbound })).toThrow('Actualiza TR8');
+  });
+
   it('conserva las 2000 listas permitidas por Google, incluidas todas las seleccionadas al final de la colección', () => {
     const lists = Array.from({ length: 2000 }, (_, id) => ({ id: `list-${id}`, title: `Lista ${id}`, selected: id >= 100 }));
     const status = parseGoogleTasksStatus(fixture({ lists }));
@@ -99,6 +124,8 @@ describe('Contrato personal de Google Tasks', () => {
     { action: 'tasks_pause', request_id: 'request', expected_version: 3 },
     { action: 'tasks_resume', request_id: 'request', expected_version: 3 },
     { action: 'tasks_select_list', request_id: 'request', expected_version: 3, list_id: 'list', selected: true },
+    { action: 'tasks_configure_export', request_id: 'request', expected_version: 3, export_enabled: true, export_list_id: 'list' },
+    { action: 'tasks_configure_export', request_id: 'request', expected_version: 3, export_enabled: false, export_list_id: null },
     { action: 'tasks_resolve', request_id: 'request', expected_version: 3, link_id: 'link', resolution: 'local' },
     { action: 'tasks_resolve', request_id: 'request', expected_version: 3, link_id: 'link', resolution: 'google' },
   ])('envía solo los campos autorizados de $action, con versión y cancelación', async input => {

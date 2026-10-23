@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { GoogleProviderError } from './google-provider';
-import { GOOGLE_TASKS_SCOPE, GoogleTasksProvider, type GoogleTasksOperation, type GoogleTasksPatch } from './google-tasks-provider';
+import { GOOGLE_TASKS_SCOPE, GoogleTasksProvider, type GoogleTasksOperation, type GoogleTasksPatch, type GoogleTasksInsert } from './google-tasks-provider';
 
 const remote = {
   id: 'Q29tcGxldGU6dGFzay1pZA',
@@ -12,6 +12,7 @@ const remote = {
   updated: '2026-10-23T12:30:00.000Z',
 };
 const remoteList = { id: 'VGFza0xpc3Q6MQ', title: 'Mis tareas', etag: '"list-version-1"', updated: remote.updated };
+const marker = 'tr8:fdf0c8af-0457-4e04-b41d-83535ffdfd21';
 const json = (body: unknown, status = 200, headers?: HeadersInit) => new Response(JSON.stringify(body), { status, headers });
 
 function adapter(responses: Response[] = []) {
@@ -56,7 +57,7 @@ describe('Google Tasks read protocol', () => {
       expect(url.searchParams.get('showDeleted')).toBe('true');
       expect(url.searchParams.get('showAssigned')).toBe('false');
       expect(url.searchParams.get('pageToken')).toBe(index === 0 ? null : 'next-page');
-      expect(url.searchParams.get('fields')).not.toContain('notes');
+      expect(url.searchParams.get('fields')).toContain('notes');
       expect(url.searchParams.has('syncToken')).toBe(false);
     }
     expect(first.items).toEqual([{ ...remote, deleted: false, due: '2026-10-24', assigned: false }]);
@@ -133,6 +134,99 @@ describe('Google Tasks read protocol', () => {
   ])('rejects malformed active resources without exposing the body %#', async body => {
     const { provider } = adapter([json(body)]);
     await expect(provider.getTask('access', remoteList.id, remote.id)).rejects.toMatchObject({ kind: 'unknown', reason: 'invalid_response' });
+  });
+});
+
+describe('Google Tasks non-idempotent creation', () => {
+  const insertion: GoogleTasksInsert = { title: remote.title, status: 'needsAction', due: '2026-10-24', creation_marker: marker };
+
+  it('sends only a title, completion, civil day and opaque marker in one reserved POST', async () => {
+    const { provider, fetch, beforeRequest } = adapter([json({ ...remote, notes: marker })]);
+    expect(await provider.insertTask('access', remoteList.id, insertion)).toMatchObject({ id: remote.id, creation_marker: marker });
+    const [url, init] = fetch.mock.calls[0];
+    expect(new URL(String(url)).pathname).toBe(`/tasks/v1/lists/${remoteList.id}/tasks`);
+    expect(init).toMatchObject({ method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/json' } });
+    expect(new Headers(init?.headers).has('if-match')).toBe(false);
+    expect(JSON.parse(String(init?.body))).toEqual({ title: remote.title, status: 'needsAction', due: remote.due, notes: marker });
+    expect(beforeRequest).toHaveBeenCalledExactlyOnceWith('tasks.insert');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('can create an undated completed task without inventing a date, description or custom ID', async () => {
+    const { provider, fetch } = adapter([json({ ...remote, due: undefined, status: 'completed', notes: marker })]);
+    await provider.insertTask('access', remoteList.id, { ...insertion, due: null, status: 'completed' });
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ title: remote.title, status: 'completed', notes: marker });
+  });
+
+  it.each([
+    { ...insertion, id: 'custom-id' },
+    { ...insertion, notes: 'private description' },
+    { ...insertion, creation_marker: 'tr8:invalid' },
+    { ...insertion, creation_marker: `${marker}\n` },
+    { ...insertion, title: 'x'.repeat(1025) },
+    { ...insertion, due: '2026-02-30' },
+    { ...insertion, due: undefined },
+    { ...insertion, status: 'done' },
+  ])('rejects unsupported creation data before reserving or sending %#', async input => {
+    const { provider, fetch, beforeRequest } = adapter();
+    await expect(provider.insertTask('access', remoteList.id, input as GoogleTasksInsert)).rejects.toMatchObject({ reason: 'invalid_resource' });
+    expect(beforeRequest).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('extracts only an exact opaque TR8 marker and drops other notes in list/read responses', async () => {
+    const { provider } = adapter([
+      json({
+        items: [
+          { ...remote, notes: marker },
+          { ...remote, id: 'other-id', notes: `Private text\n${marker}` },
+        ],
+      }),
+      json({ ...remote, notes: 'private finances and notes' }),
+    ]);
+    const page = await provider.listTasks('access', remoteList.id);
+    expect(page.items[0]).toHaveProperty('creation_marker', marker);
+    expect(page.items[1]).not.toHaveProperty('creation_marker');
+    expect(page.items[0]).not.toHaveProperty('notes');
+    expect(JSON.stringify(page)).not.toContain('Private text');
+    const read = await provider.getTask('access', remoteList.id, remote.id);
+    expect(read).not.toHaveProperty('notes');
+    expect(read).not.toHaveProperty('creation_marker');
+  });
+
+  it.each([new Response('not-json'), json({}, 503), json({ ...remote, id: undefined }), json({}, 401)])(
+    'never repeats a POST after an invalid response, server error or authorization failure %#',
+    async response => {
+      const { provider, fetch } = adapter([response]);
+      await expect(provider.insertTask('access', remoteList.id, insertion)).rejects.toBeInstanceOf(GoogleProviderError);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(fetch.mock.calls[0][1]?.method).toBe('POST');
+    },
+  );
+
+  it('never repeats a POST when the transport outcome is unknown', async () => {
+    const { provider, fetch } = adapter();
+    await expect(provider.insertTask('access', remoteList.id, insertion)).rejects.toMatchObject({ kind: 'unknown', reason: 'request_unknown' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts a timed-out POST after seven seconds and performs no hidden retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+        await new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('private timeout')), { once: true }));
+        return json(remote);
+      });
+      const beforeRequest = vi.fn(async () => true);
+      const provider = new GoogleTasksProvider({ fetch, beforeRequest, timeoutMs: 60_000 });
+      const pending = expect(provider.insertTask('access', remoteList.id, insertion)).rejects.toMatchObject({ kind: 'unknown' });
+      await vi.advanceTimersByTimeAsync(7000);
+      await pending;
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(beforeRequest).toHaveBeenCalledExactlyOnceWith('tasks.insert');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

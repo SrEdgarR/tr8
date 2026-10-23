@@ -14,6 +14,7 @@ const leaseToken = '24070e77-8883-4dc3-9169-a4da1ca85cc1';
 const listId = 'VGFza3M6bGlzdC1pZA';
 const taskId = 'VGFzazo2NTY0';
 const preparedHash = 'a'.repeat(32);
+const marker = 'tr8:fdf0c8af-0457-4e04-b41d-83535ffdfd21';
 const now = Date.UTC(2026, 9, 23);
 const envelope = { v: 1 as const, kid: 'key-v1', iv: 'synthetic-iv', ciphertext: 'encrypted-synthetic-credentials' };
 const updatedEnvelope = { ...envelope, ciphertext: 'encrypted-renewed-synthetic-credentials' };
@@ -40,7 +41,7 @@ const renewal = () =>
     token_type: 'Bearer',
     scope: `${GOOGLE_CALENDAR_SCOPE} ${GOOGLE_TASKS_SCOPE}`,
   });
-type Kind = 'discover' | 'pull' | 'patch' | 'delete';
+type Kind = 'discover' | 'pull' | 'create' | 'patch' | 'delete';
 type FetchStep = Response | Error | (() => Response | Promise<Response>);
 
 function fixture(kind: Kind, responses: FetchStep[] = []) {
@@ -55,6 +56,7 @@ function fixture(kind: Kind, responses: FetchStep[] = []) {
       ...(kind === 'discover' ? { list_id: null } : { list_id: listId }),
       page_token: null,
       ...(kind === 'patch' || kind === 'delete' ? { link: { id: link, remote_task_id: taskId } } : {}),
+      ...(kind === 'create' ? { link: { id: link, remote_task_id: null }, create_state: 'ready', creation_marker: marker } : {}),
     } as Record<string, unknown>,
     prepareResults: [] as unknown[],
     credentials: structuredClone(saved),
@@ -67,6 +69,13 @@ function fixture(kind: Kind, responses: FetchStep[] = []) {
     finishes: [] as Record<string, unknown>[],
     appliedLists: [] as Record<string, unknown>[],
     appliedPages: [] as Record<string, unknown>[],
+    beginAllowed: true,
+    creationProjection: { title: remote.title, completed: false, start_date: '2026-10-24' },
+    creationHash: preparedHash,
+    bindAllowed: true,
+    recoveryAllowed: true,
+    boundCreations: [] as Record<string, unknown>[],
+    recoveryPages: [] as Record<string, unknown>[],
     trace: [] as string[],
   };
   const rpc = vi.fn<GoogleRuntime['rpc']>(async (action, payload = {}) => {
@@ -84,6 +93,19 @@ function fixture(kind: Kind, responses: FetchStep[] = []) {
       return { applied: state.applyPageAllowed };
     }
     if (action === 'tasks_compare_remote') return state.decision;
+    if (action === 'tasks_begin_create') {
+      if (!state.beginAllowed) return { allowed: false };
+      state.preparation.create_state = 'uncertain';
+      return { allowed: true, marker, projection: structuredClone(state.creationProjection), prepared_hash: state.creationHash };
+    }
+    if (action === 'tasks_bind_create') {
+      state.boundCreations.push(payload);
+      return { applied: state.bindAllowed };
+    }
+    if (action === 'tasks_recover_create_page') {
+      state.recoveryPages.push(payload);
+      return { applied: state.recoveryAllowed, more: payload.next_page_token != null };
+    }
     if (action === 'tasks_finish') {
       // Match the SQL boundary: only a known outbound write can report its
       // remote result, and it must retain the captured local projection hash.
@@ -135,6 +157,205 @@ function fixture(kind: Kind, responses: FetchStep[] = []) {
 const lastFinish = (state: ReturnType<typeof fixture>['state']) => state.finishes.at(-1);
 const reservations = (rpc: ReturnType<typeof fixture>['rpc']) =>
   rpc.mock.calls.filter(([action]) => action === 'tasks_reserve_request').map(([, payload]) => payload?.purpose);
+
+describe('Google Tasks durable creation and recovery', () => {
+  const written = { ...remote, notes: marker };
+
+  it('reserves the POST, persists uncertainty and binds the exact created ID and captured local hash', async () => {
+    const { state, rpc, fetch, run } = fixture('create', [json(written)]);
+    expect(await run()).toEqual({ processed: 1, finished: 1, deferred: 0, timed_out: false });
+    expect(state.preparation.create_state).toBe('uncertain');
+    expect(reservations(rpc)).toEqual(['tasks_insert']);
+    expect(state.trace.indexOf('rpc:tasks_reserve_request')).toBeLessThan(state.trace.indexOf('rpc:tasks_begin_create'));
+    expect(state.trace.indexOf('rpc:tasks_begin_create')).toBeLessThan(state.trace.indexOf('http:POST:tasks.googleapis.com'));
+    expect(state.trace.indexOf('http:POST:tasks.googleapis.com')).toBeLessThan(state.trace.indexOf('rpc:tasks_bind_create'));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ title: remote.title, status: 'needsAction', due: remote.due, notes: marker });
+    expect(state.boundCreations).toEqual([
+      {
+        job_id: jobId,
+        lease_token: leaseToken,
+        prepared_hash: preparedHash,
+        remote: {
+          id: taskId,
+          title: remote.title,
+          completed: false,
+          start_date: '2026-10-24',
+          etag: remote.etag,
+          deleted: false,
+          assigned: false,
+          creation_marker: marker,
+        },
+      },
+    ]);
+    // Bind owns creation acknowledgement; finish must not mislabel it a PATCH.
+    expect(lastFinish(state)).toEqual({ job_id: jobId, lease_token: leaseToken, outcome: 'succeeded' });
+  });
+
+  it('uses the atomic begin snapshot rather than any earlier local projection', async () => {
+    const { state, run, fetch } = fixture('create', [json({ ...written, title: 'Título actualizado', status: 'completed' })]);
+    state.creationProjection = { title: 'Título actualizado', completed: true, start_date: '2026-10-25' };
+    await run();
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({
+      title: 'Título actualizado',
+      status: 'completed',
+      due: '2026-10-25T00:00:00.000Z',
+      notes: marker,
+    });
+  });
+
+  it.each(['budget', 'deleted', 'access-lost'])('sends no POST if the last fence fails due to %s', async reason => {
+    const { state, run, fetch, rpc } = fixture('create');
+    if (reason === 'budget') state.reservations.push({ allowed: false, reason: 'budget_exhausted' });
+    else state.beginAllowed = false;
+    await run();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(state.boundCreations).toEqual([]);
+    if (reason === 'budget') expect(rpc.mock.calls.some(([action]) => action === 'tasks_begin_create')).toBe(false);
+    else expect(state.finishes).toEqual([]);
+  });
+
+  it.each(['local-edit', 'local-delete', 'lost-access'])('binds a known successful POST even after a concurrent %s, leaving SQL to reconcile', async change => {
+    const { state, run, fetch } = fixture('create');
+    fetch.mockImplementationOnce(async () => {
+      // SQL must still receive this result so it can preserve a dirty revision
+      // or enqueue cleanup. Re-preparing against the changed local would lose it.
+      state.prepareResults.push({ valid: false });
+      state.creationProjection = { title: `Concurrent ${change}`, completed: true, start_date: '2026-11-01' };
+      state.creationHash = 'b'.repeat(32);
+      return json(written);
+    });
+    await run();
+    expect(state.boundCreations).toHaveLength(1);
+    expect(state.boundCreations[0]).toMatchObject({ prepared_hash: preparedHash, remote: { id: taskId, title: remote.title } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    () => new Error('private transport failure'),
+    () => new DOMException('timeout', 'AbortError'),
+    () => new Response('not-json'),
+    () => json({}, 503),
+    () => json({ ...written, notes: 'tr8:4dfb28be-1842-4bc5-898e-ad4f03a6b412' }),
+  ])('recovers an uncertain POST by marker on the next invocation without sending another POST %#', async failure => {
+    const { state, run, fetch } = fixture('create', [failure(), json({ items: [written] })]);
+    await run();
+    expect(state.preparation.create_state).toBe('uncertain');
+    expect(state.boundCreations).toEqual([]);
+    expect(lastFinish(state)?.outcome).toBe('retry');
+    await run();
+    expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['POST', 'GET']);
+    expect(state.recoveryPages).toHaveLength(1);
+    expect(state.recoveryPages[0]).toMatchObject({ page_token: null, next_page_token: null, items: [{ id: taskId, creation_marker: marker }] });
+    expect(state.boundCreations).toEqual([]);
+  });
+
+  it('does not refresh and replay a rejected POST, even when the access token unexpectedly expires', async () => {
+    const { state, run, fetch } = fixture('create', [json({}, 401)]);
+    await run();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][1]?.method).toBe('POST');
+    expect(lastFinish(state)).toMatchObject({ outcome: 'needs_reauthorization' });
+    expect(state.preparation.create_state).toBe('uncertain');
+  });
+
+  it('recovers a successful POST whose bind lost its lease without another insertion', async () => {
+    const { state, run, fetch } = fixture('create', [json(written), json({ items: [written] })]);
+    state.bindAllowed = false;
+    expect(await run()).toMatchObject({ finished: 0, deferred: 1 });
+    expect(state.finishes).toEqual([]);
+    await run();
+    expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['POST', 'GET']);
+    expect(state.recoveryPages).toHaveLength(1);
+  });
+
+  it('finishes an already bound create after a lost finish acknowledgement without reading or inserting again', async () => {
+    const { state, run, fetch } = fixture('create');
+    state.preparation.create_state = 'bound';
+    state.preparation.link = { id: link, remote_task_id: taskId };
+    expect(await run()).toMatchObject({ finished: 1 });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(state.boundCreations).toEqual([]);
+    expect(lastFinish(state)).toMatchObject({ outcome: 'succeeded' });
+  });
+
+  it('leaves an expired invocation uncertain after POST success and recovers its identity in the next invocation', async () => {
+    const { state, runtime, run, fetch } = fixture('create', [json({ items: [written] })]);
+    let current = now;
+    fetch.mockImplementationOnce(async () => {
+      current += 40_001;
+      return json(written);
+    });
+    expect(await runGoogleTasksWorker(runtime, { now: () => current })).toMatchObject({ finished: 0, deferred: 1 });
+    expect(state.preparation.create_state).toBe('uncertain');
+    expect(state.boundCreations).toEqual([]);
+    expect(state.finishes).toEqual([]);
+    await run();
+    expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['POST', 'GET']);
+    expect(state.recoveryPages).toHaveLength(1);
+  });
+
+  it('persists a credential renewal before beginning creation but never refreshes and replays a later POST 401', async () => {
+    const { state, run, fetch, rpc } = fixture('create', [renewal(), json({}, 401)]);
+    state.credentials.expiresAt = now;
+    await run();
+    expect(fetch.mock.calls.map(([url, init]) => ({ host: new URL(String(url)).hostname, method: init?.method }))).toEqual([
+      { host: 'oauth2.googleapis.com', method: 'POST' },
+      { host: 'tasks.googleapis.com', method: 'POST' },
+    ]);
+    expect(reservations(rpc)).toEqual(['refresh', 'tasks_insert']);
+    expect(state.trace.indexOf('rpc:tasks_save_credentials')).toBeLessThan(state.trace.indexOf('rpc:tasks_begin_create'));
+    expect(state.preparation.create_state).toBe('uncertain');
+    expect(lastFinish(state)).toMatchObject({ outcome: 'needs_reauthorization' });
+  });
+
+  it.each([{ items: [] }, { items: [written, { ...written, id: 'Second_Matching_ID' }] }])(
+    'passes complete recovery evidence to SQL without inserting when the marker is absent or duplicated %#',
+    async ({ items }) => {
+      const { state, run, fetch } = fixture('create', [json({ items })]);
+      state.preparation.create_state = 'uncertain';
+      await run();
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(fetch.mock.calls[0][1]?.method).toBe('GET');
+      expect(state.recoveryPages[0]).toHaveProperty(
+        'items',
+        items.map(item => expect.objectContaining({ id: item.id, creation_marker: marker })),
+      );
+      expect(state.boundCreations).toEqual([]);
+    },
+  );
+
+  it('recovers one bounded page per invocation using the durable cursor and strips arbitrary provider notes', async () => {
+    const { state, run, fetch, rpc } = fixture('create', [
+      json({ items: [{ ...written, notes: 'private financial description' }, written], nextPageToken: 'next-recovery-page' }),
+    ]);
+    state.preparation.create_state = 'uncertain';
+    state.preparation.page_token = 'current-recovery-page';
+    await run();
+    const request = new URL(String(fetch.mock.calls[0][0]));
+    expect(request.searchParams.get('pageToken')).toBe('current-recovery-page');
+    expect(request.searchParams.get('showDeleted')).toBe('true');
+    expect(state.recoveryPages[0]).toMatchObject({ page_token: 'current-recovery-page', next_page_token: 'next-recovery-page' });
+    expect(JSON.stringify(state.recoveryPages)).not.toContain('private financial description');
+    expect(reservations(rpc)).toEqual(['tasks_list']);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops when a recovery page loses its lease instead of certifying its cursor', async () => {
+    const { state, run, fetch } = fixture('create', [json({ items: [written] })]);
+    state.preparation.create_state = 'uncertain';
+    state.recoveryAllowed = false;
+    expect(await run()).toMatchObject({ finished: 0, deferred: 1 });
+    expect(state.finishes).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes known markers from ordinary pulls to SQL so pending creations cannot be imported a second time', async () => {
+    const { state, run } = fixture('pull', [json({ items: [written] })]);
+    await run();
+    expect(state.appliedPages[0]).toMatchObject({ items: [{ id: taskId, creation_marker: marker }] });
+  });
+});
 
 describe('Google Tasks paginated imports', () => {
   it('applies the discovered lists and continuation cursor under the same lease before finishing', async () => {

@@ -16,10 +16,13 @@ export interface GoogleTasksStatus {
   reason: string | null;
   lists: { id: string; title: string; selected: boolean }[];
   conflict_items: { id: string; title: string; google_title: string | null; reason: string }[];
+  /** Absent until the server supports creation of new Google Tasks. */
+  outbound?: { enabled: boolean; list_id: string | null; enabled_at: string | null; uncertain: number };
 }
 export type GoogleTasksChangeInput =
   | { action: 'tasks_reconcile' | 'tasks_pause' | 'tasks_resume' }
   | { action: 'tasks_select_list'; list_id: string; selected: boolean }
+  | { action: 'tasks_configure_export'; export_enabled: boolean; export_list_id: string | null }
   | { action: 'tasks_resolve'; link_id: string; resolution: 'local' | 'google' };
 export type GoogleTasksChange = GoogleTasksChangeInput & { request_id: string; expected_version: number };
 export interface GoogleTasksApi {
@@ -75,6 +78,24 @@ export function parseGoogleTasksStatus(value: unknown): GoogleTasksStatus {
     return { id: item.id, title: item.title, google_title: item.google_title as string | null, reason: item.reason };
   });
   if (new Set(lists.map(item => item.id)).size !== lists.length || new Set(conflictItems.map(item => item.id)).size !== conflictItems.length) throw malformed();
+  let outbound: GoogleTasksStatus['outbound'];
+  if (value.outbound !== undefined) {
+    if (
+      !record(value.outbound) ||
+      typeof value.outbound.enabled !== 'boolean' ||
+      (value.outbound.list_id !== null && !text(value.outbound.list_id, 1024)) ||
+      !timestamp(value.outbound.enabled_at) ||
+      !count(value.outbound.uncertain) ||
+      (value.outbound.enabled && value.outbound.list_id === null)
+    )
+      throw malformed();
+    outbound = {
+      enabled: value.outbound.enabled,
+      list_id: value.outbound.list_id as string | null,
+      enabled_at: value.outbound.enabled_at as string | null,
+      uncertain: value.outbound.uncertain,
+    };
+  }
   return {
     configured: value.configured,
     enabled: value.enabled,
@@ -88,6 +109,7 @@ export function parseGoogleTasksStatus(value: unknown): GoogleTasksStatus {
     reason: value.reason as string | null,
     lists,
     conflict_items: conflictItems,
+    ...(outbound ? { outbound } : {}),
   };
 }
 
@@ -99,6 +121,8 @@ const messages: Record<string, string> = {
   OPERATION_UNAVAILABLE: 'La operación ya no está disponible. Actualiza el estado de Google Tasks.',
   DEPENDENCY_UNAVAILABLE: 'Google Tasks todavía no está disponible. Tus proyectos y tareas siguen guardados.',
   INVALID_INPUT: 'No se pudo validar esta operación. Actualiza el estado y vuelve a intentarlo.',
+  EXPORT_LIST_REQUIRED: 'Elige una lista activa para las nuevas tareas de TR8.',
+  EXPORT_LIST_UNAVAILABLE: 'La lista de destino ya no está activa. Revisa las listas que quieres sincronizar.',
 };
 async function functionError(error: unknown): Promise<DataError> {
   if (error instanceof FunctionsHttpError) {
@@ -129,6 +153,7 @@ export function createGoogleTasksRepository(client: SupabaseClient) {
           request_id: input.request_id,
           expected_version: input.expected_version,
           ...(input.action === 'tasks_select_list' ? { list_id: input.list_id, selected: input.selected } : {}),
+          ...(input.action === 'tasks_configure_export' ? { export_enabled: input.export_enabled, export_list_id: input.export_list_id } : {}),
           ...(input.action === 'tasks_resolve' ? { link_id: input.link_id, resolution: input.resolution } : {}),
         },
         signal,

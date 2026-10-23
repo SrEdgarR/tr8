@@ -14,10 +14,11 @@ desde Docs o Chat. Se conserva descripción, vencimiento y bloque horario locale
 La fecha `due` de Google se representa como `start_date`: es el día planificado,
 no un plazo. Google Tasks API no expone la hora seleccionada en sus aplicaciones.
 
-Las tareas normales de TR8 conservan su exportación Calendar. Una identidad
+Las tareas existentes de TR8 conservan su exportación Calendar. Una identidad
 vinculada a Google Tasks nunca genera una copia Calendar, incluso si la lista o
-la integración se pausan. Esta versión no crea nuevas tareas Google con POST:
-gestiona por GET/PATCH/DELETE los identificadores existentes que fueron importados.
+la integración se pausan. La ampliación [6b](outbound-tasks.md) añade creación
+opcional de futuras tareas de TR8 mediante un intento de POST y recuperación
+durable por marcador; las ediciones y eliminaciones conservan el mismo ID remoto.
 
 ## OAuth y permisos
 

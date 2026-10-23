@@ -4,7 +4,7 @@ import { credentials, type GoogleCredentials } from './google-service.ts';
 import { GoogleServiceError, object, text, uuid, version, type GoogleRuntime } from './google-runtime.ts';
 import type { GoogleSecretEnvelope } from './google-crypto.ts';
 
-type Kind = 'discover' | 'pull' | 'patch' | 'delete';
+type Kind = 'discover' | 'pull' | 'create' | 'patch' | 'delete';
 interface Job {
   job_id: string;
   lease_token: string;
@@ -19,7 +19,9 @@ interface Prepared {
   credential_envelope: GoogleSecretEnvelope;
   list_id?: string;
   page_token: string | null;
-  link?: { id: string; remote_task_id: string };
+  link?: { id: string; remote_task_id: string | null };
+  create_state?: 'ready' | 'uncertain' | 'bound';
+  creation_marker?: string;
 }
 export interface GoogleTasksWorkerResult {
   processed: number;
@@ -32,6 +34,7 @@ const purposes: Record<GoogleTasksOperation, string> = {
   'tasks.lists.list': 'tasks_lists',
   'tasks.list': 'tasks_list',
   'tasks.get': 'tasks_get',
+  'tasks.insert': 'tasks_insert',
   'tasks.patch': 'tasks_patch',
   'tasks.delete': 'tasks_delete',
 };
@@ -47,12 +50,13 @@ export function normalizedGoogleTask(task: GoogleTasksTask): Record<string, unkn
     completed: task.status === 'completed',
     start_date: task.due,
     assigned: task.assigned,
+    ...(task.creation_marker ? { creation_marker: task.creation_marker } : {}),
   };
 }
 
 function parseJob(input: unknown): Job {
   const value = object(input);
-  if (!['discover', 'pull', 'patch', 'delete'].includes(String(value.kind))) throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
+  if (!['discover', 'pull', 'create', 'patch', 'delete'].includes(String(value.kind))) throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
   return { job_id: uuid(value.job_id), lease_token: uuid(value.lease_token), kind: value.kind as Kind };
 }
 function prepared(input: unknown, job: Job): Prepared | null {
@@ -69,9 +73,17 @@ function prepared(input: unknown, job: Job): Prepared | null {
     page_token: value.page_token == null ? null : text(value.page_token, 4096),
   };
   if (job.kind !== 'discover') result.list_id = text(value.list_id, 1024);
-  if (job.kind === 'patch' || job.kind === 'delete') {
+  if (job.kind === 'patch' || job.kind === 'delete' || job.kind === 'create') {
     const link = object(value.link);
-    result.link = { id: uuid(link.id), remote_task_id: text(link.remote_task_id, 1024) };
+    result.link = { id: uuid(link.id), remote_task_id: job.kind === 'create' && link.remote_task_id == null ? null : text(link.remote_task_id, 1024) };
+  }
+  if (job.kind === 'create') {
+    if (!['ready', 'uncertain', 'bound'].includes(String(value.create_state))) throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
+    result.create_state = value.create_state as 'ready' | 'uncertain' | 'bound';
+    result.creation_marker = text(value.creation_marker, 40);
+    if (!/^tr8:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(result.creation_marker)) {
+      throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
+    }
   }
   return result;
 }
@@ -107,6 +119,7 @@ export async function runGoogleTasksWorker(
     let remote: Record<string, unknown> | undefined;
     let preparedHash: string | null | undefined;
     let confirmedWrite = false;
+    let insertReserved = false;
     async function prepare(): Promise<Prepared> {
       const value = prepared(await rpc('tasks_prepare'), job);
       if (
@@ -116,6 +129,7 @@ export async function runGoogleTasksWorker(
             value.user_id !== projection.user_id ||
             value.generation !== projection.generation ||
             value.list_id !== projection.list_id ||
+            value.creation_marker !== projection.creation_marker ||
             value.link?.id !== projection.link?.id ||
             value.link?.remote_task_id !== projection.link?.remote_task_id))
       )
@@ -135,9 +149,14 @@ export async function runGoogleTasksWorker(
       if (deadline - now() < 8000) throw new GoogleProviderError('retryable', 'invocation_limit', undefined, 30);
       return true;
     }
-    const provider =
-      runtime.tasksProvider?.(operation => reserve(purposes[operation])) ??
-      new GoogleTasksProvider({ beforeRequest: operation => reserve(purposes[operation]) });
+    const provider = runtime.tasksProvider?.(beforeTasksRequest) ?? new GoogleTasksProvider({ beforeRequest: beforeTasksRequest });
+    async function beforeTasksRequest(operation: GoogleTasksOperation): Promise<boolean> {
+      if (operation !== 'tasks.insert') return reserve(purposes[operation]);
+      active();
+      if (!insertReserved) throw new GoogleProviderError('permanent', 'invalid_operation');
+      insertReserved = false;
+      return true;
+    }
     const oauth = runtime.provider(operation => {
       if (operation !== 'oauth.refresh') throw new GoogleProviderError('permanent', 'invalid_operation');
       return reserve('refresh');
@@ -192,13 +211,51 @@ export async function runGoogleTasksWorker(
           }),
         );
         if (applied.applied !== true) throw new Stopped();
+      } else if (job.kind === 'create') {
+        if (projection!.create_state === 'uncertain') {
+          // An uncertain POST is never repeated, even if a scan finds nothing.
+          // SQL preserves this cursor and binds only a single exact marker.
+          const page = await access(token => provider.listTasks(token, projection!.list_id!, { pageToken: projection!.page_token ?? undefined }));
+          const recovered = object(
+            await rpc('tasks_recover_create_page', {
+              page_token: projection!.page_token,
+              items: page.items.map(normalizedGoogleTask),
+              next_page_token: page.nextPageToken ?? null,
+            }),
+          );
+          if (recovered.applied !== true) throw new Stopped();
+        } else if (projection!.create_state === 'ready') {
+          // Reserve first, then persist the exact projection and uncertainty in
+          // one fenced SQL operation. No provider refresh or POST retry follows.
+          if (!(await reserve('tasks_insert'))) throw new GoogleProviderError('retryable', 'budget_exhausted', undefined, 60);
+          const creation = object(await rpc('tasks_begin_create'));
+          if (creation.allowed !== true) throw new Stopped();
+          const marker = text(creation.marker, 40);
+          if (marker !== projection!.creation_marker) throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
+          const body = object(creation.projection);
+          if (typeof body.completed !== 'boolean') throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
+          const hash = text(creation.prepared_hash, 32);
+          if (!/^[0-9a-f]{32}$/.test(hash)) throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
+          insertReserved = true;
+          const written = await checked(() =>
+            provider.insertTask(saved.accessToken, projection!.list_id!, {
+              title: text(body.title, 500),
+              status: body.completed ? 'completed' : 'needsAction',
+              due: body.start_date == null ? null : text(body.start_date, 10),
+              creation_marker: marker,
+            }),
+          );
+          if (written.deleted || written.assigned || written.creation_marker !== marker) throw new GoogleProviderError('unknown', 'invalid_response');
+          const bound = object(await rpc('tasks_bind_create', { remote: normalizedGoogleTask(written), prepared_hash: hash }));
+          if (bound.applied !== true) throw new Stopped();
+        }
       } else {
         let task: GoogleTasksTask;
         try {
-          task = await access(token => provider.getTask(token, projection!.list_id!, projection!.link!.remote_task_id));
+          task = await access(token => provider.getTask(token, projection!.list_id!, projection!.link!.remote_task_id!));
         } catch (cause) {
           if (!(cause instanceof GoogleProviderError) || cause.kind !== 'missing') throw cause;
-          task = { id: projection!.link!.remote_task_id, deleted: true };
+          task = { id: projection!.link!.remote_task_id!, deleted: true };
         }
         remote = normalizedGoogleTask(task);
         const decision = object(await rpc('tasks_compare_remote', { remote }));
@@ -216,7 +273,7 @@ export async function runGoogleTasksWorker(
             provider.patchTask(
               token,
               projection!.list_id!,
-              projection!.link!.remote_task_id,
+              projection!.link!.remote_task_id!,
               {
                 title: text(patch.title, 500),
                 status,
@@ -235,7 +292,7 @@ export async function runGoogleTasksWorker(
             if (task.assigned) throw new GoogleProviderError('permanent', 'unsupported_task');
             await prepare();
             try {
-              await access(token => provider.deleteTask(token, projection!.list_id!, projection!.link!.remote_task_id, text(decision.etag, 1024)));
+              await access(token => provider.deleteTask(token, projection!.list_id!, projection!.link!.remote_task_id!, text(decision.etag, 1024)));
             } catch (cause) {
               if (!(cause instanceof GoogleProviderError) || cause.kind !== 'missing') throw cause;
             }

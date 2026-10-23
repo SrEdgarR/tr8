@@ -59,6 +59,114 @@ afterEach(() => {
 });
 
 describe('Google Tasks en Configuración', () => {
+  it('no ofrece exportar tareas nuevas cuando el servidor anterior aún no anuncia la capacidad', async () => {
+    const { api } = mount();
+    await screen.findByText('Conectado');
+    expect(screen.queryByRole('checkbox', { name: /Enviar mis tareas nuevas/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /Lista de destino/ })).not.toBeInTheDocument();
+    expect(api.change).not.toHaveBeenCalled();
+  });
+
+  it('propone la única lista activa pero exige guardar antes de habilitar la creación y conserva las tareas actuales', async () => {
+    const outbound = { enabled: false, list_id: null, enabled_at: null, uncertain: 0 };
+    const { api, load } = mount(fixture({ outbound }), {}, { embedded: true });
+    const toggle = await screen.findByRole('checkbox', { name: /Enviar mis tareas nuevas/ });
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByRole('combobox', { name: /Lista de destino/ })).toHaveValue('list-a');
+    expect(screen.getByRole('button', { name: 'Guardar envío de tareas nuevas' })).toBeDisabled();
+    fireEvent.click(toggle);
+    expect(api.change).not.toHaveBeenCalled();
+    expect(screen.getByText(/Tus tareas actuales no se exportan ni se mueven/)).toBeInTheDocument();
+    expect(screen.getByText(/La descripción, los comentarios y los demás datos del proyecto permanecen en TR8/)).toBeInTheDocument();
+    const next = fixture({ version: 4, outbound: { enabled: true, list_id: 'list-a', enabled_at: '2026-10-23T13:00:00Z', uncertain: 0 } });
+    vi.mocked(api.change).mockResolvedValue(next);
+    load.mockResolvedValue(next);
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar envío de tareas nuevas' }));
+    await waitFor(() =>
+      expect(api.change).toHaveBeenCalledWith(
+        { action: 'tasks_configure_export', export_enabled: true, export_list_id: 'list-a', expected_version: 3, request_id: expect.any(String) },
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(await screen.findByText(/Las nuevas tareas elegibles de TR8 se enviarán/)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Enviar mis tareas nuevas/ })).toBeChecked();
+  });
+
+  it('exige elegir un destino con varias listas activas y no escoge la primera silenciosamente', async () => {
+    const lists = [
+      { id: 'list-a', title: 'Mis tareas', selected: true },
+      { id: 'list-b', title: 'Compras', selected: true },
+    ];
+    const { api } = mount(fixture({ lists, outbound: { enabled: false, list_id: null, enabled_at: null, uncertain: 0 } }));
+    const select = await screen.findByRole('combobox', { name: /Lista de destino/ });
+    expect(select).toHaveValue('');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Enviar mis tareas nuevas/ }));
+    const save = screen.getByRole('button', { name: 'Guardar envío de tareas nuevas' });
+    expect(save).toBeDisabled();
+    fireEvent.click(save);
+    expect(api.change).not.toHaveBeenCalled();
+    expect(screen.getByText(/Elige explícitamente una lista activa/)).toBeInTheDocument();
+    fireEvent.change(select, { target: { value: 'list-b' } });
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(api.change).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'tasks_configure_export', export_enabled: true, export_list_id: 'list-b' }),
+        expect.any(AbortSignal),
+      ),
+    );
+  });
+
+  it('desactivar futuras creaciones conserva el destino y los vínculos existentes', async () => {
+    const outbound = { enabled: true, list_id: 'list-a', enabled_at: '2026-10-23T13:00:00Z', uncertain: 0 };
+    const { api } = mount(fixture({ outbound }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Enviar mis tareas nuevas/ }));
+    expect(api.change).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar envío de tareas nuevas' }));
+    await waitFor(() =>
+      expect(api.change).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'tasks_configure_export', export_enabled: false, export_list_id: 'list-a' }),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(await screen.findByText(/Las tareas ya vinculadas seguirán sincronizándose/)).toBeInTheDocument();
+  });
+
+  it('descarta el borrador de exportación si la versión cambia antes de guardar', async () => {
+    const outbound = { enabled: false, list_id: null, enabled_at: null, uncertain: 0 };
+    const { api, client } = mount(fixture({ outbound }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Enviar mis tareas nuevas/ }));
+    expect(screen.getByRole('button', { name: 'Guardar envío de tareas nuevas' })).toBeEnabled();
+    await act(async () => client.setQueryData([...api.scopeKey, 'status'], fixture({ version: 4, outbound })));
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Enviar mis tareas nuevas/ })).not.toBeChecked());
+    expect(screen.getByRole('button', { name: 'Guardar envío de tareas nuevas' })).toBeDisabled();
+    expect(api.change).not.toHaveBeenCalled();
+  });
+
+  it('muestra incertidumbre sin ofrecer repetir una creación a ciegas y bloquea el formulario durante acciones comunes', async () => {
+    const { api } = mount(
+      fixture({ outbound: { enabled: true, list_id: 'list-a', enabled_at: '2026-10-23T13:00:00Z', uncertain: 1 } }),
+      {},
+      { embedded: true, connectionBusy: true },
+    );
+    expect(await screen.findByText(/1 creación pendiente de confirmar/)).toBeInTheDocument();
+    expect(screen.getByText(/no se repetirá la creación automáticamente/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Reintentar creación|Crear otra copia/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Enviar mis tareas nuevas/ })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /Lista de destino/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Guardar envío de tareas nuevas' })).toBeDisabled();
+    expect(api.change).not.toHaveBeenCalled();
+  });
+
+  it.each(['creation_uncertain', 'creation_duplicate'])('no presenta %s como una eliminación remota ni permite resolverla reemplazando datos', async reason => {
+    const { api } = mount(fixture({ conflicts: 1, conflict_items: [{ id: 'link-a', title: 'Nueva tarea TR8', google_title: null, reason }] }));
+    expect(await screen.findByText(/No se ha confirmado una identidad única en Google/)).toBeInTheDocument();
+    expect(screen.queryByText('Tarea eliminada en Google')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Elegir TR8' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Elegir Google' })).not.toBeInTheDocument();
+    expect(api.change).not.toHaveBeenCalled();
+  });
+
   it('se integra en la tarjeta Google sin otra sección, cabecera, conectar, refrescar o sincronizar independientes', async () => {
     const { container, onConnect } = mount(fixture(), {}, { embedded: true });
     await screen.findByText('Autorizado');

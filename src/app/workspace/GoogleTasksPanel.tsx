@@ -22,9 +22,13 @@ const reasonLabels: Record<string, string> = {
   temporary_failure: 'Google no está disponible temporalmente. Los cambios pendientes siguen guardados.',
   budget_exhausted: 'Se alcanzó el presupuesto de sincronización. Los cambios esperarán a que se renueve la cuota.',
   list_missing: 'Una lista seleccionada ya no está disponible en Google. Revisa las listas que quieres sincronizar.',
+  creation_uncertain: 'Google no confirmó una creación. TR8 intentará recuperar su identificador y no repetirá la creación automáticamente.',
+  creation_blocked: 'Una creación necesita revisión. Conservamos la tarea en TR8 y no enviaremos otra copia a ciegas.',
 };
 type Conflict = GoogleTasksStatus['conflict_items'][number];
 type Resolution = { item: Conflict; resolution: 'local' | 'google'; version: number };
+type ExportDraft = { enabled: boolean; listId: string; version: number };
+const creationIdentityReasons = new Set(['creation_uncertain', 'creation_duplicate', 'creation_blocked']);
 
 function statusDate(value: string | null, fallback: string) {
   return value ? new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : fallback;
@@ -56,6 +60,7 @@ function PersonalGoogleTasksPanel({ api, onConnect, embedded = false, connection
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resolution, setResolution] = useState<Resolution | null>(null);
+  const [exportDraft, setExportDraft] = useState<ExportDraft | null>(null);
   const query = useQuery({
     queryKey: statusKey,
     queryFn: ({ signal }) => api.load(signal),
@@ -118,9 +123,13 @@ function PersonalGoogleTasksPanel({ api, onConnect, embedded = false, connection
           ? 'Sincronización en pausa. Conservamos las tareas en ambas aplicaciones.'
           : input.action === 'tasks_select_list'
             ? 'Selección guardada. Los próximos cambios solo se sincronizarán en las listas activas.'
-            : input.action === 'tasks_resolve'
-              ? 'Elección guardada. El cambio pendiente se procesará en segundo plano.'
-              : 'Revisión solicitada. Los cambios pendientes se procesarán en segundo plano.',
+            : input.action === 'tasks_configure_export'
+              ? input.export_enabled
+                ? 'Las nuevas tareas elegibles de TR8 se enviarán a Google Tasks. Las tareas anteriores se conservan sin exportarlas.'
+                : 'Envío de tareas nuevas desactivado. Las tareas ya vinculadas seguirán sincronizándose.'
+              : input.action === 'tasks_resolve'
+                ? 'Elección guardada. El cambio pendiente se procesará en segundo plano.'
+                : 'Revisión solicitada. Los cambios pendientes se procesarán en segundo plano.',
       );
       void client.invalidateQueries({ queryKey: api.scopeKey });
     } catch (cause) {
@@ -140,8 +149,20 @@ function PersonalGoogleTasksPanel({ api, onConnect, embedded = false, connection
   }
 
   const canConfigure = Boolean(status?.configured && status.enabled && ['connected', 'paused'].includes(status.state));
+  const outbound = status?.outbound;
+  const selectedLists = status?.lists.filter(list => list.selected) ?? [];
+  const currentExportDraft = exportDraft?.version === status?.version ? exportDraft : null;
+  const exportEnabled = currentExportDraft?.enabled ?? outbound?.enabled ?? false;
+  const exportListId = currentExportDraft?.listId ?? outbound?.list_id ?? (selectedLists.length === 1 ? selectedLists[0].id : '');
+  const exportChanged = Boolean(outbound && (exportEnabled !== outbound.enabled || (exportEnabled && exportListId !== outbound.list_id)));
+  const exportDestinationValid = selectedLists.some(list => list.id === exportListId);
   const currentResolution =
-    resolution && status && resolution.version === status.version && status.conflict_items.some(item => item.id === resolution.item.id) ? resolution : null;
+    resolution &&
+    status &&
+    resolution.version === status.version &&
+    status.conflict_items.some(item => item.id === resolution.item.id && !creationIdentityReasons.has(item.reason))
+      ? resolution
+      : null;
   const Container = embedded ? 'div' : 'section';
   const statusLabel = !status
     ? 'Por comprobar'
@@ -193,6 +214,9 @@ function PersonalGoogleTasksPanel({ api, onConnect, embedded = false, connection
       </p>
       <p className="pw-google-tasks-caption">
         La fecha de Google se guarda como fecha de inicio, sin hora. No crearemos eventos duplicados en el calendario TR8 de Google para estas tareas.
+      </p>
+      <p className="pw-google-tasks-caption">
+        Solo se comparten título, día planificado y estado de completado. La descripción, los comentarios y los demás datos del proyecto permanecen en TR8.
       </p>
       {query.error ? (
         <ErrorNotice>
@@ -261,39 +285,112 @@ function PersonalGoogleTasksPanel({ api, onConnect, embedded = false, connection
               <p>Desactivar una lista detiene sus próximos cambios y conserva las tareas existentes.</p>
             </fieldset>
           )}
+          {status.enabled && outbound && (
+            <fieldset className="pw-google-tasks-lists pw-google-tasks-export" disabled={busy || !canConfigure}>
+              <legend>Tareas nuevas creadas en TR8</legend>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={exportEnabled}
+                  onChange={event => setExportDraft({ enabled: event.currentTarget.checked, listId: exportListId, version: status.version })}
+                />
+                <span>
+                  <strong>Enviar mis tareas nuevas a Google Tasks</strong>
+                  <small>Las nuevas tareas personales propias y las de equipos asignadas a ti.</small>
+                </span>
+              </label>
+              <label className="pw-google-tasks-destination">
+                <span>
+                  <strong>Lista de destino</strong>
+                  <small>Las tareas ya vinculadas conservan su lista original.</small>
+                </span>
+                <select
+                  aria-label="Lista de destino para tareas nuevas"
+                  value={exportDestinationValid ? exportListId : ''}
+                  onChange={event => setExportDraft({ enabled: exportEnabled, listId: event.currentTarget.value, version: status.version })}
+                >
+                  <option value="">{selectedLists.length ? 'Elige una lista activa' : 'Activa primero una lista'}</option>
+                  {selectedLists.map(list => (
+                    <option key={list.id} value={list.id}>
+                      {list.title || 'Lista sin título'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p>
+                Se aplicará solo a tareas creadas después de guardar. Tus tareas actuales no se exportan ni se mueven. Después se sincronizan en ambos sentidos,
+                incluso si desactivas el envío de tareas nuevas.
+              </p>
+              {exportEnabled && !exportDestinationValid && <p role="status">Elige explícitamente una lista activa antes de guardar.</p>}
+              <div className="pw-google-tasks-actions">
+                <button
+                  className="btn btn-secondary btn-sm"
+                  disabled={!exportChanged || (exportEnabled && !exportDestinationValid)}
+                  onClick={() =>
+                    void change(
+                      {
+                        action: 'tasks_configure_export',
+                        export_enabled: exportEnabled,
+                        export_list_id: exportEnabled ? exportListId : outbound.list_id,
+                      },
+                      status,
+                    )
+                  }
+                >
+                  Guardar envío de tareas nuevas
+                </button>
+              </div>
+            </fieldset>
+          )}
+          {status.enabled && outbound && outbound.uncertain > 0 && (
+            <p className="pw-google-tasks-reason" role="status">
+              <TriangleAlert size={15} aria-hidden="true" />
+              {outbound.uncertain} {outbound.uncertain === 1 ? 'creación pendiente de confirmar' : 'creaciones pendientes de confirmar'}. Conservamos las tareas
+              en TR8. La revisión intentará identificar las copias existentes; no se repetirá la creación automáticamente para evitar duplicados.
+            </p>
+          )}
           {status.conflict_items.length > 0 && (
             <div className="pw-google-tasks-conflicts">
               <h3>Cambios que necesitan tu elección</h3>
-              <p>La tarea cambió en ambas aplicaciones. Revisa qué versión conservar antes de reemplazar sus datos.</p>
+              <p>Revisa los cambios antes de reemplazar datos. Una creación sin identidad confirmada se conserva para revisión.</p>
               {status.conflict_items.map(item => (
                 <article key={item.id}>
                   <strong>{item.title || 'Tarea sin título'}</strong>
-                  <dl>
-                    <div>
-                      <dt>TR8</dt>
-                      <dd>{item.title || 'Sin título'}</dd>
-                    </div>
-                    <div>
-                      <dt>Google</dt>
-                      <dd>{item.google_title ?? 'Tarea eliminada en Google'}</dd>
-                    </div>
-                  </dl>
-                  <div className="pw-google-tasks-actions">
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      disabled={busy || !canConfigure}
-                      onClick={() => setResolution({ item, resolution: 'local', version: status.version })}
-                    >
-                      Elegir TR8
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      disabled={busy || !canConfigure}
-                      onClick={() => setResolution({ item, resolution: 'google', version: status.version })}
-                    >
-                      Elegir Google
-                    </button>
-                  </div>
+                  {creationIdentityReasons.has(item.reason) ? (
+                    <p className="pw-google-tasks-caption">
+                      No se ha confirmado una identidad única en Google. La tarea permanece en TR8; no se puede interpretar este estado como un borrado ni
+                      repetir su creación sin confirmación.
+                    </p>
+                  ) : (
+                    <>
+                      <dl>
+                        <div>
+                          <dt>TR8</dt>
+                          <dd>{item.title || 'Sin título'}</dd>
+                        </div>
+                        <div>
+                          <dt>Google</dt>
+                          <dd>{item.google_title ?? 'Tarea eliminada en Google'}</dd>
+                        </div>
+                      </dl>
+                      <div className="pw-google-tasks-actions">
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          disabled={busy || !canConfigure}
+                          onClick={() => setResolution({ item, resolution: 'local', version: status.version })}
+                        >
+                          Elegir TR8
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          disabled={busy || !canConfigure}
+                          onClick={() => setResolution({ item, resolution: 'google', version: status.version })}
+                        >
+                          Elegir Google
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </article>
               ))}
             </div>
