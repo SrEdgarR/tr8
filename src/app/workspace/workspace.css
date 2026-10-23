@@ -340,6 +340,17 @@
 .pw-project-page .proj-h {
   padding-bottom: 14px;
 }
+.personal-workspace .page.flush.pw-project-page {
+  height: auto;
+  min-height: 100%;
+}
+.pw-project-page > .pw-tasks-area {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+.pw-project-page > .pw-activity {
+  flex: 0 0 auto;
+}
 .pw-project-description {
   font-size: var(--fs-sm);
   line-height: 1.5;

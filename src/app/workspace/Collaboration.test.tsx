@@ -157,6 +157,22 @@ function show(ui: React.ReactNode, path = '/') {
 }
 
 describe('colaboración y permisos en la interfaz', () => {
+  it('abre una tarea desde la lista real del proyecto del propietario y conserva el espacio al cerrar', async () => {
+    const user = userEvent.setup();
+    const settings = props();
+    show(<Workspace {...settings} />, `/projects/${project.id}?workspace=team-a`);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: task.title }));
+    expect(await screen.findByRole('dialog', { name: 'Detalle de tarea' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Título')).toHaveValue(task.title);
+    expect(screen.getByLabelText('Título')).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Cerrar ventana' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: project.name })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: task.title }));
+    expect(await screen.findByRole('dialog', { name: 'Detalle de tarea' })).toBeInTheDocument();
+  });
+
   it('crea un rol y espera la confirmación del servidor antes de cerrar el editor', async () => {
     const user = userEvent.setup();
     const settings = props();
