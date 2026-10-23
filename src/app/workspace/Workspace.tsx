@@ -517,11 +517,11 @@ export default function Workspace(props: WorkspaceProps) {
       {mobileNav && <button className="side-scrim" aria-label="Cerrar navegación" onClick={() => setMobileNav(false)} />}
       <aside className="side" aria-label="Navegación principal">
         <div className="side-top">
-          <Link to="/" className="ws" onClick={() => setMobileNav(false)}>
+          <Link to="/" className="ws" aria-label="Inicio de TR8" onClick={() => setMobileNav(false)}>
             <span className="ws-logo brand">
               <img src="/favicon.svg" width="22" height="22" alt="" />
             </span>
-            <span className="ws-name">Gr8r Studio</span>
+            <span className="ws-name">TR8</span>
             <span className="pw-personal-label">Personal</span>
           </Link>
         </div>

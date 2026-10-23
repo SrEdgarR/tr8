@@ -1,23 +1,48 @@
 # Personal application database
 
-The application uses `public.gr8r_projects` and `public.gr8r_tasks`. It does not
+## TR8 migration
+
+Apply the historical initial migration first, then
+`20261023031426_rename_personal_app_to_tr8.sql`. Applied migration files retain
+their original contents; the rename is a separate atomic change. It renames
+existing objects in place and checks that row contents, IDs, versions, object
+identities, sequence state, RLS and grants remain unchanged. Function bodies are
+updated explicitly because PostgreSQL does not rewrite SQL strings on rename.
+
+The hosted project is named `tr8`. Its project reference and API origin remain
+stable. The current browser session migrates once to the `tr8.auth.v1` storage
+namespace, including outstanding PKCE flow verifiers. Old identifiers remain only
+in migration history, rename instructions and this compatibility bridge.
+
+The renamed schema passed 76 SQL assertions against the hosted database. The
+real project, task and owner configuration had identical fingerprints before
+and after the rename and after the test rollback. No fixture users remained.
+
+The post-rename advisors report one Auth warning: leaked-password protection is
+disabled. Supabase provides this check on Pro plans and above; it is not included
+in the current Free project. See the
+[password-protection setting](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+The private config table's policy-free RLS and the initially unused composite
+FK index remain intentional informational notices.
+
+The application uses `public.tr8_projects` and `public.tr8_tasks`. It does not
 read or migrate the original demo's `localStorage` workspace. Preferences may
 remain local; project/task data comes from Supabase.
 
 ## Access
 
 Both tables have row-level security. Every policy requires the authenticated
-user's ID to match `owner_id`, plus the private `gr8r_private.is_owner()` check.
+user's ID to match `owner_id`, plus the private `tr8_private.is_owner()` check.
 That helper reads the current `auth.users` record, requires a confirmed email and
 a non-deleted account,
 and compares it to the administrative allowlist. It ignores user-editable JWT
 metadata. The helper is the only `SECURITY DEFINER` function and has an empty
 search path; all public RPCs use `SECURITY INVOKER` and obey RLS.
 
-`gr8r_private.app_config` contains one row, with `owner_email = NULL` initially.
+`tr8_private.app_config` contains one row, with `owner_email = NULL` initially.
 Until configured, every application account is denied. An administrator must
 set `owner_email` to the lowercase confirmed account email through a trusted
-database connection. Do not expose `gr8r_private` in Data API settings. The
+database connection. Do not expose `tr8_private` in Data API settings. The
 browser receives only the publishable key, never privileged keys.
 
 For local Auth callbacks, configure the project's Auth URL settings with Site URL
@@ -44,16 +69,16 @@ rejected until the project is restored. Task deletion remains available.
 ## RPC contract
 
 All names below are in `public`. Create/update calls return one composite row,
-including server-managed fields; `gr8r_delete_task` returns void.
+including server-managed fields; `tr8_delete_task` returns void.
 
-| Function              | Parameters                                                                                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gr8r_check_access`   | No arguments; returns boolean, not a composite row                                                                                                 |
-| `gr8r_create_project` | `p_id uuid`, `p_name text`, `p_description text`, `p_color text`, `p_status text`                                                                  |
-| `gr8r_create_task`    | `p_id uuid`, `p_project_id uuid`, `p_title text`, `p_description text`, `p_status text`, `p_priority text`, `p_start_date date`, `p_due_date date` |
-| `gr8r_update_project` | `p_id uuid`, `p_version integer`, `p_patch jsonb`                                                                                                  |
-| `gr8r_update_task`    | `p_id uuid`, `p_version integer`, `p_patch jsonb`                                                                                                  |
-| `gr8r_delete_task`    | `p_id uuid`, `p_version integer`                                                                                                                   |
+| Function             | Parameters                                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tr8_check_access`   | No arguments; returns boolean, not a composite row                                                                                                 |
+| `tr8_create_project` | `p_id uuid`, `p_name text`, `p_description text`, `p_color text`, `p_status text`                                                                  |
+| `tr8_create_task`    | `p_id uuid`, `p_project_id uuid`, `p_title text`, `p_description text`, `p_status text`, `p_priority text`, `p_start_date date`, `p_due_date date` |
+| `tr8_update_project` | `p_id uuid`, `p_version integer`, `p_patch jsonb`                                                                                                  |
+| `tr8_update_task`    | `p_id uuid`, `p_version integer`, `p_patch jsonb`                                                                                                  |
+| `tr8_delete_task`    | `p_id uuid`, `p_version integer`                                                                                                                   |
 
 Create calls accept a client UUID as the request identity. Retry with that same
 UUID and payload after an uncertain network outcome. A compatible existing row

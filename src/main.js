@@ -76,4 +76,4 @@ import { ROUTE_NAMES, render, go } from './shell/render.js';
 })();
 
 // Dev-only handle for debugging and screenshot tooling; stripped from production builds.
-if (import.meta.env.DEV) window.__gr8r = { S, D, A, go, render };
+if (import.meta.env.DEV) window.__tr8 = { S, D, A, go, render };

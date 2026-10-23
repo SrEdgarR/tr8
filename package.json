@@ -1,8 +1,8 @@
 {
-  "name": "gr8r-studio",
+  "name": "tr8",
   "version": "1.0.0",
   "private": true,
-  "description": "Gr8r Studio: personal projects and tasks.",
+  "description": "TR8: personal projects and tasks.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:database:static": "node supabase/tests/rename_static.mjs",
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

@@ -1,6 +1,11 @@
-# Gr8r Studio · Personal
+# TR8 · Personal
 
 Aplicación personal de proyectos y tareas con React, TypeScript y Supabase. Conserva los colores, la tipografía, la navegación y los componentes visuales del prototipo original de [Gr8r Studio](https://github.com/gr8rstudio/gr8r-studio).
+
+La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
+`tr8.studio` es el dominio previsto para una compra futura.
+
+![TR8](docs/preview.png)
 
 ## Primer entregable
 
@@ -33,6 +38,7 @@ Abre [la aplicación local](http://127.0.0.1:5173/). Si falta la configuración,
 ```bash
 npm run typecheck
 npm test
+npm run test:database:static
 npm run lint
 npm run format:check
 npm run build          # genera dist/
@@ -41,13 +47,13 @@ npm run preview       # sirve la compilación local
 
 ## Preparar Supabase
 
-El entorno de este entregable usa el proyecto `gr8r-personal` de la organización **Horizon Studios**. Para instalarlo en otro proyecto:
+El entorno de este entregable usa el proyecto `tr8` de la organización **Horizon Studios**. Para instalarlo en otro proyecto:
 
-1. Aplica `supabase/migrations/20261023023410_personal_projects_tasks.sql` mediante Supabase CLI o una conexión administrativa.
+1. Aplica las migraciones de `supabase/migrations/` en orden mediante Supabase CLI o una conexión administrativa. La primera crea el esquema original y `20261023031426_rename_personal_app_to_tr8.sql` cambia sus identificadores a TR8 conservando los datos y permisos.
 2. Configura el propietario desde una conexión de confianza, con su correo en minúsculas:
 
    ```sql
-   update gr8r_private.app_config
+   update tr8_private.app_config
    set owner_email = 'tu-correo@example.com'
    where singleton;
    ```
@@ -86,7 +92,7 @@ src/app/
   test/                 preparación de las pruebas de interfaz
 src/styles/             sistema visual original reutilizado
 supabase/migrations/    esquema y permisos versionados
-supabase/tests/         74 comprobaciones SQL con rollback
+  supabase/tests/         comprobaciones SQL con rollback
 docs/database.md        acceso, funciones y verificación
 ```
 

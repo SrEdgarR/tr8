@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { readConfiguration } from './configuration';
+import { AUTH_STORAGE_KEY, migrateAuthStorage } from './auth-storage';
 
 export const callbackRequestedRecovery =
   new URLSearchParams(location.search).get('auth') === 'recovery' || new URLSearchParams(location.hash.slice(1)).get('type') === 'recovery';
 export const configuration = readConfiguration(import.meta.env);
+if (configuration) migrateAuthStorage();
 export const supabase = configuration
   ? createClient(configuration.url, configuration.publishableKey, {
       auth: {
@@ -11,7 +13,7 @@ export const supabase = configuration
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
-        storageKey: 'gr8r.auth.v1',
+        storageKey: AUTH_STORAGE_KEY,
       },
     })
   : null;

@@ -48,7 +48,7 @@ async function rpc<T>(client: SupabaseClient, name: string, parameters: Record<s
     if (!data.length) throw new DataError('La operación no devolvió el registro guardado. Actualiza los datos.');
     return data[0] as T;
   }
-  if (data === null && name !== 'gr8r_delete_task') throw new DataError('No se pudo confirmar el registro guardado.');
+  if (data === null && name !== 'tr8_delete_task') throw new DataError('No se pudo confirmar el registro guardado.');
   return data as T;
 }
 
@@ -56,9 +56,9 @@ export function createRepository(client: SupabaseClient) {
   return {
     async load(signal?: AbortSignal): Promise<WorkspaceData> {
       const [projects, tasks, access] = await Promise.all([
-        readAll<Project>(client, 'gr8r_projects', signal),
-        readAll<Task>(client, 'gr8r_tasks', signal),
-        rpc<boolean>(client, 'gr8r_check_access', {}),
+        readAll<Project>(client, 'tr8_projects', signal),
+        readAll<Task>(client, 'tr8_tasks', signal),
+        rpc<boolean>(client, 'tr8_check_access', {}),
       ]);
       if (!access)
         throw new DataError('Esta cuenta todavía no está autorizada en este espacio. Comprueba el correo confirmado y la configuración de acceso.', '42501');
@@ -66,7 +66,7 @@ export function createRepository(client: SupabaseClient) {
     },
     createProject(input: ProjectInput, requestId: string): Promise<Project> {
       const value = validateProject(input);
-      return rpc(client, 'gr8r_create_project', {
+      return rpc(client, 'tr8_create_project', {
         p_id: requestId,
         p_name: value.name,
         p_description: value.description,
@@ -75,10 +75,10 @@ export function createRepository(client: SupabaseClient) {
       });
     },
     updateProject(project: Project, input: ProjectInput): Promise<Project> {
-      return rpc(client, 'gr8r_update_project', { p_id: project.id, p_version: project.version, p_patch: validateProject(input) });
+      return rpc(client, 'tr8_update_project', { p_id: project.id, p_version: project.version, p_patch: validateProject(input) });
     },
     archiveProject(project: Project, archived: boolean): Promise<Project> {
-      return rpc(client, 'gr8r_update_project', {
+      return rpc(client, 'tr8_update_project', {
         p_id: project.id,
         p_version: project.version,
         p_patch: { archived_at: archived ? new Date().toISOString() : null },
@@ -86,7 +86,7 @@ export function createRepository(client: SupabaseClient) {
     },
     createTask(input: TaskInput, requestId: string): Promise<Task> {
       const value = validateTask(input);
-      return rpc(client, 'gr8r_create_task', {
+      return rpc(client, 'tr8_create_task', {
         p_id: requestId,
         p_project_id: value.project_id,
         p_title: value.title,
@@ -102,10 +102,10 @@ export function createRepository(client: SupabaseClient) {
       const cleaned = { ...patch };
       if (cleaned.title !== undefined) cleaned.title = cleaned.title.trim();
       if (cleaned.description !== undefined) cleaned.description = cleaned.description.trim();
-      return rpc(client, 'gr8r_update_task', { p_id: task.id, p_version: task.version, p_patch: cleaned });
+      return rpc(client, 'tr8_update_task', { p_id: task.id, p_version: task.version, p_patch: cleaned });
     },
     async deleteTask(task: Task): Promise<void> {
-      await rpc(client, 'gr8r_delete_task', { p_id: task.id, p_version: task.version });
+      await rpc(client, 'tr8_delete_task', { p_id: task.id, p_version: task.version });
     },
   };
 }
