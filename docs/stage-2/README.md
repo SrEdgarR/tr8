@@ -1,6 +1,6 @@
 # Etapa 2 · Colaboración, roles y permisos
 
-Estado: implementación y verificación en curso. El despliegue se realizará después de las pruebas aisladas y la comprobación de preservación. Continúan Supabase Free y Vercel Hobby; las altas externas permanecen desactivadas.
+Estado: implementación y migración verificadas. Continúan Supabase Free y Vercel Hobby; las altas externas permanecen desactivadas.
 
 ## Alcance
 
@@ -58,10 +58,14 @@ Una migración fallida se revierte como transacción. Después de publicarla, so
 ## Registro de verificación · 23 de octubre de 2026
 
 - Base de código: `e81ae1d9ac5866ed4f052725d6cbb8967864f8a8`. Copia privada nueva del contenido y metadatos, con restauración y comparación campo por campo ensayadas en una transacción aislada.
-- Migración de etapa 2 instalada únicamente en prueba en este punto. Preservación ensayada con un proyecto y una tarea respaldados, sin cambios históricos, sin cuentas reales residuales y con rollback completo del ensayo.
+- Migración de etapa 2 instalada en prueba y producción. Preservación ensayada con un proyecto y una tarea respaldados, sin cambios históricos, sin cuentas reales residuales en prueba y con rollback completo del ensayo.
+- Producción: comparación de todos los campos históricos y las 12 tablas privadas antes y después de aplicar la migración, con hashes y conteos idénticos. Se conservan el proyecto, la tarea, sus versiones y tiempos, los OIDs y la secuencia 274 con `is_called=true`. Solo continúa una cuenta habilitada y ninguna tarea histórica recibió un responsable implícito.
+- Aplicación: 113 pruebas aprobadas, TypeScript, ESLint, Prettier, comprobación estática y build. Se mantiene el aviso previo del bundler sobre el tamaño del archivo JavaScript; no se añadieron dependencias.
 - SQL: 113 aserciones nuevas y las 176 de regresión de etapa 1 aprobadas. HTTP: 252 aserciones en 165 solicitudes usando usuarios ficticios y claves públicas.
 - Carrera de versión: una escritura confirmada y un conflicto `PT409`. Seis carreras de revocación/edición comprobaron ambos órdenes válidos; toda solicitud posterior al commit de la revocación se rechazó con el JWT anterior.
-- Revisión independiente: corregidas la exposición de detalles de roles sin `role.read`, la permanencia de editores al perder permisos y la actividad retenida por un observer al perder ACL. Los ámbitos de caché incluyen permisos y capacidades del proyecto; 30 pruebas focales independientes aprobadas.
+- Revisión independiente: corregidas la exposición de detalles de roles sin `role.read`, la permanencia de editores al perder permisos y la actividad retenida por un observer al perder ACL. Los ámbitos de caché incluyen permisos y capacidades del proyecto; 38 pruebas focales independientes aprobadas.
+- Navegador con cuentas ficticias: creación y edición de roles, acceso al proyecto, asignación persistente y separación entre asignar y editar contenido. Lista, tablero y administración comprobados en escritorio y a 390 × 844. Se corrigió la superposición de actividad sobre tareas.
+- Guardar un responsable propio actualiza la versión base únicamente con la respuesta confirmada y validada de esa operación. El borrador permanece intacto; los conflictos remotos anteriores o posteriores y los rechazos `PT409` conservan su protección. Prueba visual completa: cambiar responsable, conservar borrador y guardar después el contenido sin falsa alerta.
 - Advisors: sin advertencias nuevas de esquema o permisos. Se conservan avisos informativos de tablas privadas sin políticas, FKs e índices; la advertencia de protección de contraseñas filtradas es previa y exige Pro. No se cambió de plan para activarla.
 
 ## Límites conservados
