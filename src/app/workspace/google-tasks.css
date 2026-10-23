@@ -1,0 +1,241 @@
+.pw-google-tasks {
+  display: grid;
+  gap: 15px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  margin-top: 20px;
+  font-size: var(--fs-xs);
+}
+.pw-google-tasks-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pw-google-tasks-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.pw-google-tasks h2 {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}
+.pw-google-tasks-heading p {
+  color: var(--text-3);
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+.pw-google-tasks-badge {
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  font-size: var(--fs-2xs);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.pw-google-tasks-badge.is-connected {
+  color: var(--green);
+  background: var(--green-soft);
+}
+.pw-google-tasks-personal,
+.pw-google-tasks-caption {
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+  margin: 0;
+  line-height: 1.6;
+}
+.pw-google-tasks-personal,
+.pw-google-tasks-wait,
+.pw-google-tasks-reason,
+.pw-google-tasks-notice {
+  display: flex;
+  gap: 7px;
+  align-items: start;
+  margin: 0;
+  line-height: 1.6;
+}
+.pw-google-tasks-personal svg,
+.pw-google-tasks-wait svg,
+.pw-google-tasks-reason svg,
+.pw-google-tasks-notice svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.pw-google-tasks-personal svg,
+.pw-google-tasks-notice {
+  color: var(--green);
+}
+.pw-google-tasks-details {
+  display: flex;
+  gap: 9px;
+  background: var(--surface-2);
+  padding: 12px;
+  border-radius: var(--r);
+  line-height: 1.7;
+}
+.pw-google-tasks-details > svg {
+  color: var(--text-3);
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+.pw-google-tasks-details p {
+  margin: 0;
+}
+.pw-google-tasks-reason {
+  padding: 10px 12px;
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-radius: var(--r-sm);
+}
+.pw-google-tasks-wait {
+  color: var(--text-3);
+}
+.pw-google-tasks-stats {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.pw-google-tasks-stats > div {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.pw-google-tasks-stats strong {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.pw-google-tasks-stats span {
+  font-size: var(--fs-2xs);
+  color: var(--text-3);
+}
+.pw-google-tasks-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pw-google-tasks footer {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+  line-height: 1.6;
+}
+.pw-google-tasks-lists {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.pw-google-tasks-lists legend {
+  padding: 0 5px;
+  color: var(--text-3);
+}
+.pw-google-tasks-lists label {
+  display: flex;
+  align-items: start;
+  gap: 9px;
+  padding: 10px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.pw-google-tasks-lists input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.pw-google-tasks-lists label span {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.pw-google-tasks-lists strong {
+  font-weight: 500;
+}
+.pw-google-tasks-lists small,
+.pw-google-tasks-lists p {
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+  margin: 0;
+  line-height: 1.6;
+}
+.pw-google-tasks-conflicts {
+  display: grid;
+  gap: 10px;
+}
+.pw-google-tasks-conflicts h3 {
+  font-size: var(--fs-xs);
+  margin: 0;
+  font-weight: 550;
+}
+.pw-google-tasks-conflicts > p {
+  margin: 0;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+.pw-google-tasks-conflicts article {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+.pw-google-tasks dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.pw-google-tasks dl > div {
+  display: grid;
+  grid-template-columns: 65px minmax(0, 1fr);
+  gap: 8px;
+}
+.pw-google-tasks dt {
+  color: var(--text-3);
+}
+.pw-google-tasks dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.pw-google-tasks-dialog {
+  display: grid;
+  gap: 15px;
+  padding: 20px;
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+}
+.pw-google-tasks-dialog p {
+  margin: 0;
+}
+.pw-google-tasks-dialog .pw-google-tasks-actions {
+  justify-content: flex-end;
+}
+@media (max-width: 700px) {
+  .pw-google-tasks {
+    padding: 16px;
+  }
+  .pw-google-tasks-heading {
+    flex-wrap: wrap;
+  }
+  .pw-google-tasks-badge {
+    margin-left: 44px;
+  }
+  .pw-google-tasks-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pw-google-tasks-stats > div:first-child {
+    grid-column: 1 / -1;
+  }
+  .pw-google-tasks-actions .btn {
+    white-space: normal;
+  }
+}

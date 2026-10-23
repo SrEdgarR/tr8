@@ -4,10 +4,12 @@ import {
   beginAuthURL,
   buildGoogleEvent,
   GOOGLE_CALENDAR_SCOPE,
+  GOOGLE_TASKS_SCOPE,
   GoogleProvider,
   GoogleProviderError,
   nextCivilDate,
   type GoogleEventWrite,
+  type GoogleEventPatch,
   type GoogleOperation,
   type GoogleTaskProjection,
 } from './google-provider';
@@ -34,6 +36,15 @@ const tokenResponse = {
   scope: GOOGLE_CALENDAR_SCOPE,
 };
 const json = (body: unknown, status = 200, headers?: HeadersInit) => new Response(JSON.stringify(body), { status, headers });
+const incoming = {
+  id: write.id,
+  status: 'confirmed',
+  etag: '"remote-version"',
+  summary: 'Evento de Google',
+  start: { date: '2026-10-24' },
+  end: { date: '2026-10-25' },
+  updated: '2026-10-23T12:34:56.123Z',
+};
 
 function adapter(responses: Response[] = []) {
   const fetch = vi.fn<typeof globalThis.fetch>(async () => {
@@ -107,6 +118,63 @@ describe('Google OAuth protocol', () => {
     'https://example.com/callback#fragment',
   ])('rejects unsafe callback configuration %s', redirectUri => {
     expect(() => new GoogleProvider({ ...credentials, redirectUri, beforeRequest: async () => true })).toThrow(GoogleProviderError);
+  });
+});
+
+describe('Optional Google Tasks OAuth grant', () => {
+  it('requests exactly Calendar plus Tasks when the durable attempt enables Tasks', () => {
+    const url = new URL(beginAuthURL({ ...credentials, state: 's'.repeat(43), challenge: 'c'.repeat(43), includeTasks: true }));
+    expect(url.searchParams.get('scope')?.split(' ')).toEqual([GOOGLE_CALENDAR_SCOPE, GOOGLE_TASKS_SCOPE]);
+    expect(url.searchParams.get('include_granted_scopes')).toBe('false');
+    expect(url.searchParams.get('access_type')).toBe('offline');
+    expect(url.href).not.toContain(credentials.clientSecret);
+  });
+
+  it.each([`${GOOGLE_CALENDAR_SCOPE} ${GOOGLE_TASKS_SCOPE}`, `${GOOGLE_TASKS_SCOPE} ${GOOGLE_CALENDAR_SCOPE}`])(
+    'accepts both verified permissions without depending on their order: %s',
+    async scope => {
+      const { provider, beforeRequest, fetch } = adapter([json({ ...tokenResponse, scope })]);
+      const result = await provider.exchange('synthetic-code', 'v'.repeat(43), true);
+      expect(new Set(result.scopes)).toEqual(new Set([GOOGLE_CALENDAR_SCOPE, GOOGLE_TASKS_SCOPE]));
+      expect(result.refreshToken).toBe(tokenResponse.refresh_token);
+      expect(beforeRequest).toHaveBeenCalledExactlyOnceWith('oauth.exchange');
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([GOOGLE_CALENDAR_SCOPE, GOOGLE_TASKS_SCOPE, ''])('rejects an incomplete requested combined grant: %s', async scope => {
+    const { provider } = adapter([json({ ...tokenResponse, scope })]);
+    await expect(provider.exchange('synthetic-code', 'v'.repeat(43), true)).rejects.toMatchObject({ kind: 'reauthorization', reason: 'permission_missing' });
+  });
+
+  it.each(['openid', 'https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/tasks.readonly'])(
+    'rejects permissions beyond the two declared scopes: %s',
+    async additional => {
+      const { provider } = adapter([json({ ...tokenResponse, scope: `${GOOGLE_CALENDAR_SCOPE} ${GOOGLE_TASKS_SCOPE} ${additional}` })]);
+      await expect(provider.exchange('synthetic-code', 'v'.repeat(43), true)).rejects.toMatchObject({ kind: 'permanent', reason: 'unexpected_permissions' });
+    },
+  );
+
+  it('returns both explicitly renewed permissions and a rotated token through one budgeted refresh', async () => {
+    const { provider, fetch, beforeRequest } = adapter([
+      json({ ...tokenResponse, access_token: 'renewed-access', refresh_token: 'renewed-refresh', scope: `${GOOGLE_CALENDAR_SCOPE} ${GOOGLE_TASKS_SCOPE}` }),
+    ]);
+    expect(await provider.refresh('previous-refresh', true)).toEqual({
+      accessToken: 'renewed-access',
+      refreshToken: 'renewed-refresh',
+      expiresIn: 3600,
+      scopes: [GOOGLE_CALENDAR_SCOPE, GOOGLE_TASKS_SCOPE],
+    });
+    expect(new URLSearchParams(String(fetch.mock.calls[0][1]?.body)).get('grant_type')).toBe('refresh_token');
+    expect(new URLSearchParams(String(fetch.mock.calls[0][1]?.body)).get('refresh_token')).toBe('previous-refresh');
+    expect(beforeRequest).toHaveBeenCalledExactlyOnceWith('oauth.refresh');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires reauthorization if an explicit refresh result no longer contains Tasks', async () => {
+    const { provider, fetch } = adapter([json(tokenResponse)]);
+    await expect(provider.refresh('previous-refresh', true)).rejects.toMatchObject({ kind: 'reauthorization', reason: 'permission_missing' });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -302,6 +370,170 @@ describe('Calendar and event resource boundaries', () => {
     await expect(provider.getEvent('access', 'calendar@example.test', '../bad')).rejects.toMatchObject({ reason: 'invalid_resource' });
     expect(fetch).not.toHaveBeenCalled();
     expect(beforeRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('Inbound Calendar pages and conditional patches', () => {
+  it('requests one minimal page with fixed synchronization parameters and no hidden pagination', async () => {
+    const { provider, fetch, beforeRequest } = adapter([
+      json({ items: [{ ...incoming, description: 'private details', attendees: [{ email: 'private@example.test' }] }], nextPageToken: 'page-2/+=' }),
+      json({ items: [], nextSyncToken: 'new-sync/+=' }),
+    ]);
+    const first = await provider.listEvents('access', 'calendar@example.test');
+    expect(first).toEqual({ items: [incoming], nextPageToken: 'page-2/+=' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const firstUrl = new URL(String(fetch.mock.calls[0][0]));
+    expect(firstUrl.pathname).toBe('/calendar/v3/calendars/calendar%40example.test/events');
+    expect(Object.fromEntries(firstUrl.searchParams)).toEqual({
+      maxResults: '25',
+      showDeleted: 'true',
+      singleEvents: 'false',
+      fields:
+        'items(id,etag,status,summary,start,end,updated,recurrence,recurringEventId,originalStartTime,extendedProperties/private),nextPageToken,nextSyncToken',
+    });
+    expect(await provider.listEvents('access', 'calendar@example.test', { pageToken: first.nextPageToken })).toEqual({
+      items: [],
+      nextSyncToken: 'new-sync/+=',
+    });
+    expect(new URL(String(fetch.mock.calls[1][0])).searchParams.get('pageToken')).toBe('page-2/+=');
+    expect(beforeRequest.mock.calls).toEqual([['event.list'], ['event.list']]);
+  });
+
+  it('keeps the original sync token while traversing incremental pages', async () => {
+    const { provider, fetch, beforeRequest } = adapter([json({ nextSyncToken: 'replacement-sync' })]);
+    expect(await provider.listEvents('access', 'calendar@example.test', { syncToken: 'prior-sync/+=', pageToken: 'page-2/+=' })).toEqual({
+      items: [],
+      nextSyncToken: 'replacement-sync',
+    });
+    const url = new URL(String(fetch.mock.calls[0][0]));
+    expect(url.searchParams.get('syncToken')).toBe('prior-sync/+=');
+    expect(url.searchParams.get('pageToken')).toBe('page-2/+=');
+    for (const forbidden of ['timeMin', 'timeMax', 'updatedMin', 'orderBy', 'q', 'privateExtendedProperty', 'sharedExtendedProperty'])
+      expect(url.searchParams.has(forbidden)).toBe(false);
+    expect(beforeRequest).toHaveBeenCalledExactlyOnceWith('event.list');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([json({ error: { errors: [{ reason: 'fullSyncRequired' }] } }, 410), new Response('not-json', { status: 410 })])(
+    'reports an expired sync token without fetching a replacement page',
+    async response => {
+      const { provider, fetch, beforeRequest } = adapter([response]);
+      await expect(provider.listEvents('access', 'calendar@example.test', { syncToken: 'expired' })).rejects.toMatchObject({
+        kind: 'conflict',
+        reason: 'sync_token_expired',
+        httpStatus: 410,
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(beforeRequest).toHaveBeenCalledExactlyOnceWith('event.list');
+    },
+  );
+
+  it('accepts deleted resources with only their id and cancelled status, including recurring instances', async () => {
+    const instanceId = `${write.id}_20261024T120000Z`;
+    const { provider } = adapter([json({ items: [{ id: instanceId, status: 'cancelled', summary: 42 }], nextSyncToken: 'sync' })]);
+    expect(await provider.listEvents('access', 'calendar@example.test')).toEqual({ items: [{ id: instanceId, status: 'cancelled' }], nextSyncToken: 'sync' });
+  });
+
+  it('retains bounded recurrence metadata and timestamp offsets without translating civil dates', async () => {
+    const item = {
+      ...incoming,
+      id: `${write.id}_20261101T053000Z`,
+      start: { dateTime: '2026-11-01T01:30:00-04:00', timeZone: 'America/New_York' },
+      end: { dateTime: '2026-11-01T01:30:00-05:00', timeZone: 'America/New_York' },
+      recurrence: ['RRULE:FREQ=WEEKLY;COUNT=2'],
+      recurringEventId: write.id,
+      originalStartTime: { dateTime: '2026-11-01T01:30:00-04:00', timeZone: 'America/New_York' },
+      extendedProperties: { private: { tr8_link: task.id, tr8_generation: '2' }, shared: { ignored: 'value' } },
+    };
+    const { provider } = adapter([json({ items: [item], nextSyncToken: 'sync' })]);
+    expect((await provider.listEvents('access', 'calendar@example.test')).items).toEqual([
+      { ...item, extendedProperties: { private: item.extendedProperties.private } },
+    ]);
+  });
+
+  it.each([
+    { start: { date: '2026-02-30' } },
+    { end: { date: '2026-10-24' } },
+    { end: { dateTime: '2026-10-24T12:00:00Z' } },
+    { start: { date: '2026-10-24', dateTime: '2026-10-24T12:00:00Z' } },
+    { start: { dateTime: '2026-02-30T12:00:00Z' }, end: { dateTime: '2026-03-01T12:00:00Z' } },
+    { start: { dateTime: '2026-10-24T25:00:00Z' }, end: { dateTime: '2026-10-25T12:00:00Z' } },
+    { start: { dateTime: '2026-10-24T12:00:00', timeZone: 'UTC' }, end: { dateTime: '2026-10-25T12:00:00Z' } },
+    { start: { dateTime: '2026-10-24T12:00:00Z', timeZone: 'Invalid/Zone' }, end: { dateTime: '2026-10-25T12:00:00Z' } },
+    { updated: '2026-02-30T12:00:00Z' },
+    { id: `${write.id}/../bad` },
+    { status: 'unknown' },
+    { summary: 'x'.repeat(1025) },
+    { recurrence: Array.from({ length: 21 }, () => 'RRULE:FREQ=DAILY') },
+    { extendedProperties: { private: { tr8_link: 42 } } },
+  ])('rejects an invalid inbound resource without dropping it or advancing its page %j', async change => {
+    const { provider, fetch } = adapter([json({ items: [{ ...incoming, ...change }], nextSyncToken: 'must-not-be-used' })]);
+    await expect(provider.listEvents('access', 'calendar@example.test')).rejects.toMatchObject({ kind: 'unknown', reason: 'invalid_response' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { items: Array.from({ length: 26 }, () => incoming), nextSyncToken: 'sync' },
+    { items: {}, nextSyncToken: 'sync' },
+    { items: [], nextPageToken: 'page', nextSyncToken: 'sync' },
+    { items: [] },
+    { items: [], nextSyncToken: '' },
+    { items: [], nextPageToken: 'x'.repeat(4097) },
+    { items: [{ id: '../bad', status: 'cancelled' }], nextSyncToken: 'sync' },
+  ])('rejects malformed or oversized pages %j', async page => {
+    const { provider } = adapter([json(page)]);
+    await expect(provider.listEvents('access', 'calendar@example.test')).rejects.toMatchObject({ reason: 'invalid_response' });
+  });
+
+  it('rejects unsafe cursor input and the primary calendar before reserving budget', async () => {
+    const { provider, fetch, beforeRequest } = adapter();
+    for (const cursor of [{ syncToken: '' }, { pageToken: 'x'.repeat(4097) }, { syncToken: 'bad\r\nvalue' }, { timeMin: '2026-01-01' }]) {
+      await expect(provider.listEvents('access', 'calendar@example.test', cursor)).rejects.toMatchObject({ reason: 'invalid_resource' });
+    }
+    await expect(provider.listEvents('access', 'primary')).rejects.toMatchObject({ reason: 'invalid_resource' });
+    expect(beforeRequest).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not list events when the durable budget denies the request', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    const beforeRequest = vi.fn(async () => false);
+    const provider = new GoogleProvider({ ...credentials, fetch, beforeRequest });
+    await expect(provider.listEvents('access', 'calendar@example.test')).rejects.toMatchObject({ reason: 'budget_exhausted' });
+    expect(beforeRequest).toHaveBeenCalledExactlyOnceWith('event.list');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('patches only managed fields conditionally, retaining remote descriptions, attendees and source', async () => {
+    const instanceId = `${write.id}_20261024T120000Z`;
+    const { provider, fetch, beforeRequest } = adapter([json({ id: instanceId, etag: '"next"' })]);
+    const body = { ...write, id: instanceId, extendedProperties: { private: { tr8_link: task.id } }, attendees: [{ email: 'untouched@example.test' }] };
+    await provider.patchEvent('access', 'calendar@example.test', body, '"remote-version"');
+    const init = fetch.mock.calls[0][1]!;
+    expect(init.method).toBe('PATCH');
+    expect(new Headers(init.headers).get('If-Match')).toBe('"remote-version"');
+    expect(new URL(String(fetch.mock.calls[0][0])).pathname).toBe(`/calendar/v3/calendars/calendar%40example.test/events/${instanceId}`);
+    expect(new URL(String(fetch.mock.calls[0][0])).searchParams.get('sendUpdates')).toBe('none');
+    expect(JSON.parse(String(init.body))).toEqual({ summary: write.summary, start: write.start, end: write.end, extendedProperties: body.extendedProperties });
+    expect(beforeRequest).toHaveBeenCalledExactlyOnceWith('event.update');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires a valid etag and bounded patch before sending, then exposes conflicts without retry', async () => {
+    const { provider, fetch, beforeRequest } = adapter([json({}, 412)]);
+    await expect(provider.patchEvent('access', 'calendar@example.test', write, undefined as unknown as string)).rejects.toMatchObject({
+      reason: 'invalid_resource',
+    });
+    await expect(provider.patchEvent('access', 'calendar@example.test', write, 'bad\r\netag')).rejects.toMatchObject({ reason: 'invalid_resource' });
+    await expect(
+      provider.patchEvent('access', 'calendar@example.test', { ...write, start: { date: '2026-02-30' } } as GoogleEventPatch, '"etag"'),
+    ).rejects.toMatchObject({
+      reason: 'invalid_projection',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(beforeRequest).not.toHaveBeenCalled();
+    await expect(provider.patchEvent('access', 'calendar@example.test', write, '"etag"')).rejects.toMatchObject({ reason: 'precondition_failed' });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 

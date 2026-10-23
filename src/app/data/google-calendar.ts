@@ -62,7 +62,7 @@ export interface GoogleCalendarApi {
   scopeKey: string[];
   callbackOrigin: string;
   load: (signal?: AbortSignal) => Promise<GoogleCalendarStatus>;
-  begin: (input: GoogleRequest & { browser_secret: string }, signal?: AbortSignal) => Promise<GoogleAuthorization>;
+  begin: (input: GoogleRequest & { browser_secret: string; tasks_requested?: boolean }, signal?: AbortSignal) => Promise<GoogleAuthorization>;
   complete: (input: GoogleCompletion, signal?: AbortSignal) => Promise<GoogleCalendarStatus>;
   change: (input: GoogleChange, signal?: AbortSignal) => Promise<GoogleCalendarStatus>;
 }
@@ -95,7 +95,7 @@ export function parseGoogleStatus(value: unknown): GoogleCalendarStatus {
     reason: value.reason as GoogleReason | null,
   };
 }
-export function parseGoogleAuthorization(value: unknown): GoogleAuthorization {
+export function parseGoogleAuthorization(value: unknown, includeTasks = false): GoogleAuthorization {
   if (!record(value) || typeof value.authorization_url !== 'string' || typeof value.state !== 'string' || !/^[A-Za-z0-9_-]{32,256}$/.test(value.state))
     throw malformed();
   let url: URL;
@@ -111,7 +111,11 @@ export function parseGoogleAuthorization(value: unknown): GoogleAuthorization {
     url.password ||
     url.hash ||
     url.searchParams.get('state') !== value.state ||
-    url.searchParams.get('scope') !== 'https://www.googleapis.com/auth/calendar.app.created' ||
+    !(
+      includeTasks
+        ? ['https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/tasks']
+        : ['https://www.googleapis.com/auth/calendar.app.created', 'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/tasks']
+    ).includes(url.searchParams.get('scope') ?? '') ||
     url.searchParams.get('response_type') !== 'code' ||
     url.searchParams.get('code_challenge_method') !== 'S256'
   )
@@ -153,9 +157,19 @@ export function createGoogleCalendarRepository(client: SupabaseClient) {
       if (error) throw dataError(error);
       return parseGoogleStatus(data);
     },
-    async beginGoogle(input: GoogleRequest & { browser_secret: string }, signal?: AbortSignal): Promise<GoogleAuthorization> {
+    async beginGoogle(input: GoogleRequest & { browser_secret: string; tasks_requested?: boolean }, signal?: AbortSignal): Promise<GoogleAuthorization> {
       return parseGoogleAuthorization(
-        await invoke({ action: 'begin', request_id: input.request_id, expected_version: input.expected_version, browser_secret: input.browser_secret }, signal),
+        await invoke(
+          {
+            action: 'begin',
+            request_id: input.request_id,
+            expected_version: input.expected_version,
+            browser_secret: input.browser_secret,
+            ...(input.tasks_requested ? { tasks_requested: true } : {}),
+          },
+          signal,
+        ),
+        Boolean(input.tasks_requested),
       );
     },
     async completeGoogle(input: GoogleCompletion, signal?: AbortSignal): Promise<GoogleCalendarStatus> {

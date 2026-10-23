@@ -1,9 +1,19 @@
 /** Google Calendar protocol adapter. Each method performs exactly one budgeted HTTP request. */
 export const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.app.created';
+export const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 
 export type GoogleFailureKind = 'retryable' | 'permanent' | 'reauthorization' | 'missing' | 'conflict' | 'unknown';
 export type GoogleOperation =
-  'oauth.exchange' | 'oauth.refresh' | 'oauth.revoke' | 'calendar.get' | 'calendar.insert' | 'event.get' | 'event.insert' | 'event.update' | 'event.delete';
+  | 'oauth.exchange'
+  | 'oauth.refresh'
+  | 'oauth.revoke'
+  | 'calendar.get'
+  | 'calendar.insert'
+  | 'event.get'
+  | 'event.list'
+  | 'event.insert'
+  | 'event.update'
+  | 'event.delete';
 
 /** Sanitized error: never retains a response body, token, request, cause or arbitrary Google message. */
 export class GoogleProviderError extends Error {
@@ -37,6 +47,31 @@ export interface GoogleEventResource {
   etag?: string;
   extendedProperties?: { private: Record<string, string> };
 }
+
+export type GoogleEventTime = { date: string } | { dateTime: string; timeZone?: string };
+
+/** Only fields used by the inbound synchronization contract; never attendee or description data. */
+export interface GoogleInboundEventResource extends GoogleEventResource {
+  summary?: string;
+  start?: GoogleEventTime;
+  end?: GoogleEventTime;
+  updated?: string;
+  recurrence?: string[];
+  recurringEventId?: string;
+  originalStartTime?: GoogleEventTime;
+}
+
+export interface GoogleEventPage {
+  items: GoogleInboundEventResource[];
+  nextPageToken?: string;
+  nextSyncToken?: string;
+}
+
+/** PATCH deliberately leaves descriptions, guests, sources and reminders untouched. */
+export type GoogleEventPatch = Pick<GoogleEventProjection, 'summary' | 'start' | 'end'> & {
+  id: string;
+  extendedProperties?: { private: Record<string, string> };
+};
 
 export interface GoogleEventProjection {
   summary: string;
@@ -83,6 +118,9 @@ const calendarBase = 'https://www.googleapis.com/calendar/v3';
 const bodyLimit = 65_536;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const eventId = /^[0-9a-v]{5,1024}$/;
+const returnedEventId = /^[0-9a-v]{5,1024}(?:_\d{8}(?:T\d{6}Z)?)?$/;
+const eventListFields =
+  'items(id,etag,status,summary,start,end,updated,recurrence,recurringEventId,originalStartTime,extendedProperties/private),nextPageToken,nextSyncToken';
 
 function object(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -114,7 +152,7 @@ function redirectUri(value: string): string {
   }
 }
 
-export function beginAuthURL(input: { state: string; challenge: string; clientId: string; redirectUri: string }): string {
+export function beginAuthURL(input: { state: string; challenge: string; clientId: string; redirectUri: string; includeTasks?: boolean }): string {
   if (!/^[A-Za-z0-9_-]{43,128}$/.test(input.state) || !/^[A-Za-z0-9_-]{43}$/.test(input.challenge) || !string(input.clientId, 512))
     throw new GoogleProviderError('permanent', 'invalid_configuration');
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -122,7 +160,7 @@ export function beginAuthURL(input: { state: string; challenge: string; clientId
     client_id: input.clientId,
     redirect_uri: redirectUri(input.redirectUri),
     response_type: 'code',
-    scope: GOOGLE_CALENDAR_SCOPE,
+    scope: input.includeTasks ? `${GOOGLE_CALENDAR_SCOPE} ${GOOGLE_TASKS_SCOPE}` : GOOGLE_CALENDAR_SCOPE,
     state: input.state,
     code_challenge: input.challenge,
     code_challenge_method: 'S256',
@@ -177,7 +215,7 @@ async function readBody(response: Response): Promise<unknown> {
   }
 }
 
-function responseError(status: number, body: unknown, wait: number | undefined): GoogleProviderError {
+function responseError(status: number, body: unknown, wait: number | undefined, operation?: GoogleOperation): GoogleProviderError {
   const error = object(object(body)?.error);
   const entries = Array.isArray(error?.errors) ? error.errors : [];
   const reasons = entries.map(entry => object(entry)?.reason);
@@ -193,6 +231,7 @@ function responseError(status: number, body: unknown, wait: number | undefined):
   }
   if (status >= 500 || status === 408) return new GoogleProviderError('retryable', 'provider_unavailable', status, wait);
   if (status === 404) return new GoogleProviderError('missing', 'not_found', status);
+  if (status === 410 && operation === 'event.list') return new GoogleProviderError('conflict', 'sync_token_expired', status);
   if (status === 410 && reasons.includes('deleted')) return new GoogleProviderError('missing', 'deleted', status);
   if (status === 409) return new GoogleProviderError('conflict', 'already_exists', status);
   if (status === 412) return new GoogleProviderError('conflict', 'precondition_failed', status);
@@ -200,7 +239,7 @@ function responseError(status: number, body: unknown, wait: number | undefined):
   return new GoogleProviderError('permanent', 'request_rejected', status);
 }
 
-function tokens(body: unknown, requireScope: boolean): GoogleTokens {
+function tokens(body: unknown, requireScope: boolean, requireTasks = false): GoogleTokens {
   const data = object(body);
   if (
     !data ||
@@ -217,7 +256,10 @@ function tokens(body: unknown, requireScope: boolean): GoogleTokens {
   if ((requireScope || scopes.length > 0) && !scopes.includes(GOOGLE_CALENDAR_SCOPE)) {
     throw new GoogleProviderError('reauthorization', 'permission_missing');
   }
-  if (scopes.some(scope => scope !== GOOGLE_CALENDAR_SCOPE)) {
+  if (requireTasks && (requireScope || scopes.length > 0) && !scopes.includes(GOOGLE_TASKS_SCOPE)) {
+    throw new GoogleProviderError('reauthorization', 'permission_missing');
+  }
+  if (scopes.some(scope => ![GOOGLE_CALENDAR_SCOPE, GOOGLE_TASKS_SCOPE].includes(scope))) {
     throw new GoogleProviderError('permanent', 'unexpected_permissions');
   }
   return {
@@ -240,7 +282,7 @@ function calendar(body: unknown): GoogleCalendarResource {
 
 function event(body: unknown): GoogleEventResource {
   const data = object(body);
-  if (!data || !string(data.id, 1024) || !eventId.test(data.id)) {
+  if (!data || !string(data.id, 1024) || !returnedEventId.test(data.id)) {
     throw new GoogleProviderError('unknown', 'invalid_response');
   }
   const properties = object(object(data.extendedProperties)?.private);
@@ -257,13 +299,95 @@ function event(body: unknown): GoogleEventResource {
   };
 }
 
+function invalidResponse(): never {
+  throw new GoogleProviderError('unknown', 'invalid_response');
+}
+
+function validCivilDate(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    civilDate(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validTimestamp(value: unknown): value is string {
+  if (!string(value, 64)) return false;
+  const match = /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.exec(value);
+  return Boolean(match && validCivilDate(match[1]) && Number.isFinite(Date.parse(value)));
+}
+
+function eventTime(value: unknown): GoogleEventTime {
+  const data = object(value);
+  if (!data || (data.date === undefined) === (data.dateTime === undefined)) return invalidResponse();
+  if (data.timeZone !== undefined && (typeof data.timeZone !== 'string' || !validTimeZone(data.timeZone))) return invalidResponse();
+  if (data.date !== undefined) {
+    if (!validCivilDate(data.date)) return invalidResponse();
+    return { date: data.date };
+  }
+  if (!validTimestamp(data.dateTime)) return invalidResponse();
+  return { dateTime: data.dateTime, ...(data.timeZone !== undefined ? { timeZone: data.timeZone as string } : {}) };
+}
+
+function inboundEvent(value: unknown): GoogleInboundEventResource {
+  const data = object(value);
+  if (!data || !string(data.id, 1024) || !returnedEventId.test(data.id)) return invalidResponse();
+  if (!['confirmed', 'tentative', 'cancelled'].includes(String(data.status))) return invalidResponse();
+  // Google guarantees only the id for deleted events; never require their old payload.
+  if (data.status === 'cancelled') return { id: data.id, status: 'cancelled' };
+  if (data.etag !== undefined && !string(data.etag, 512)) return invalidResponse();
+  if (data.summary !== undefined && data.summary !== '' && !string(data.summary, 1024)) return invalidResponse();
+  if (data.updated !== undefined && !validTimestamp(data.updated)) return invalidResponse();
+  if (data.recurringEventId !== undefined && (!string(data.recurringEventId, 1024) || !returnedEventId.test(data.recurringEventId))) return invalidResponse();
+  if (data.recurrence !== undefined && (!Array.isArray(data.recurrence) || data.recurrence.length > 20 || !data.recurrence.every(rule => string(rule, 2048))))
+    return invalidResponse();
+  const start = eventTime(data.start);
+  const end = eventTime(data.end);
+  if ('date' in start !== 'date' in end) return invalidResponse();
+  if ('date' in start && 'date' in end && end.date <= start.date) return invalidResponse();
+  if ('dateTime' in start && 'dateTime' in end && Date.parse(end.dateTime) < Date.parse(start.dateTime)) return invalidResponse();
+  if (data.extendedProperties !== undefined) {
+    const properties = object(data.extendedProperties);
+    if (!properties || (properties.private !== undefined && !object(properties.private))) return invalidResponse();
+    const entries = Object.entries(object(properties.private) ?? {});
+    if (entries.length > 20 || entries.some(([key, property]) => !/^[A-Za-z0-9_-]{1,44}$/.test(key) || !string(property, 1024))) return invalidResponse();
+  }
+  return {
+    ...event(data),
+    ...(data.summary !== undefined ? { summary: data.summary as string } : {}),
+    start,
+    end,
+    ...(data.updated !== undefined ? { updated: data.updated as string } : {}),
+    ...(data.recurrence !== undefined ? { recurrence: [...(data.recurrence as string[])] } : {}),
+    ...(data.recurringEventId !== undefined ? { recurringEventId: data.recurringEventId as string } : {}),
+    ...(data.originalStartTime !== undefined ? { originalStartTime: eventTime(data.originalStartTime) } : {}),
+  };
+}
+
+function eventPage(value: unknown): GoogleEventPage {
+  const data = object(value);
+  if (!data || (data.items !== undefined && (!Array.isArray(data.items) || data.items.length > 25))) return invalidResponse();
+  for (const key of ['nextPageToken', 'nextSyncToken']) {
+    if (data[key] !== undefined && !string(data[key], 4096)) return invalidResponse();
+  }
+  if (data.nextPageToken !== undefined && data.nextSyncToken !== undefined) return invalidResponse();
+  if (data.nextPageToken === undefined && data.nextSyncToken === undefined) return invalidResponse();
+  return {
+    items: ((data.items ?? []) as unknown[]).map(inboundEvent),
+    ...(data.nextPageToken !== undefined ? { nextPageToken: data.nextPageToken as string } : {}),
+    ...(data.nextSyncToken !== undefined ? { nextSyncToken: data.nextSyncToken as string } : {}),
+  };
+}
+
 function calendarPath(id: string): string {
   if (!string(id, 2048) || id === 'primary') throw new GoogleProviderError('permanent', 'invalid_resource');
   return `${calendarBase}/calendars/${encodeURIComponent(id)}`;
 }
 
 function eventPath(calendarId: string, id?: string): string {
-  if (id !== undefined && !eventId.test(id)) throw new GoogleProviderError('permanent', 'invalid_resource');
+  if (id !== undefined && (!string(id, 1024) || !returnedEventId.test(id))) throw new GoogleProviderError('permanent', 'invalid_resource');
   return `${calendarPath(calendarId)}/events${id === undefined ? '' : `/${encodeURIComponent(id)}`}`;
 }
 
@@ -322,14 +446,14 @@ export class GoogleProvider {
         if (operation === 'calendar.insert' && (response.status >= 500 || response.status === 408)) {
           throw new GoogleProviderError('unknown', 'provisioning_unknown', response.status);
         }
-        if (!response.ok) throw responseError(response.status, null, retryAfter(response, this.now()));
+        if (!response.ok) throw responseError(response.status, null, retryAfter(response, this.now()), operation);
         throw new GoogleProviderError('unknown', unknownReason, response.status);
       }
       if (!response.ok) {
         if (operation === 'calendar.insert' && (response.status >= 500 || response.status === 408)) {
           throw new GoogleProviderError('unknown', 'provisioning_unknown', response.status);
         }
-        throw responseError(response.status, body, retryAfter(response, this.now()));
+        throw responseError(response.status, body, retryAfter(response, this.now()), operation);
       }
       return body;
     } catch (error) {
@@ -340,30 +464,34 @@ export class GoogleProvider {
     }
   }
 
-  private async oauth(operation: 'oauth.exchange' | 'oauth.refresh', parameters: Record<string, string>): Promise<GoogleTokens> {
+  private async oauth(operation: 'oauth.exchange' | 'oauth.refresh', parameters: Record<string, string>, requireTasks = false): Promise<GoogleTokens> {
     const body = await this.request(operation, 'https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ client_id: this.options.clientId, client_secret: this.options.clientSecret, ...parameters }).toString(),
     });
-    return tokens(body, operation === 'oauth.exchange');
+    return tokens(body, operation === 'oauth.exchange', requireTasks);
   }
 
-  exchange(code: string, verifier: string): Promise<GoogleTokens> {
+  exchange(code: string, verifier: string, requireTasks = false): Promise<GoogleTokens> {
     if (!string(code, 4096) || !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier)) {
       throw new GoogleProviderError('permanent', 'invalid_oauth_attempt');
     }
-    return this.oauth('oauth.exchange', {
-      grant_type: 'authorization_code',
-      code,
-      code_verifier: verifier,
-      redirect_uri: this.options.redirectUri,
-    });
+    return this.oauth(
+      'oauth.exchange',
+      {
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: verifier,
+        redirect_uri: this.options.redirectUri,
+      },
+      requireTasks,
+    );
   }
 
-  refresh(refreshToken: string): Promise<GoogleTokens> {
+  refresh(refreshToken: string, requireTasks = false): Promise<GoogleTokens> {
     if (!string(refreshToken, 16_384)) throw new GoogleProviderError('reauthorization', 'authorization_expired');
-    return this.oauth('oauth.refresh', { grant_type: 'refresh_token', refresh_token: refreshToken });
+    return this.oauth('oauth.refresh', { grant_type: 'refresh_token', refresh_token: refreshToken }, requireTasks);
   }
 
   async revoke(token: string): Promise<void> {
@@ -407,7 +535,23 @@ export class GoogleProvider {
     return event(await this.request('event.get', eventPath(calendarId, id), this.authorized(accessToken)));
   }
 
+  /** Exactly one page and one budget reservation. Cursor persistence belongs to the worker. */
+  async listEvents(accessToken: string, calendarId: string, cursor: { syncToken?: string; pageToken?: string } = {}): Promise<GoogleEventPage> {
+    if (!object(cursor) || Object.keys(cursor).some(key => !['syncToken', 'pageToken'].includes(key))) {
+      throw new GoogleProviderError('permanent', 'invalid_resource');
+    }
+    const query = new URLSearchParams({ maxResults: '25', showDeleted: 'true', singleEvents: 'false', fields: eventListFields });
+    for (const key of ['syncToken', 'pageToken'] as const) {
+      if (cursor[key] !== undefined) {
+        if (!string(cursor[key], 4096)) throw new GoogleProviderError('permanent', 'invalid_resource');
+        query.set(key, cursor[key]);
+      }
+    }
+    return eventPage(await this.request('event.list', `${eventPath(calendarId)}?${query}`, this.authorized(accessToken)));
+  }
+
   async insertEvent(accessToken: string, calendarId: string, body: GoogleEventWrite): Promise<GoogleEventResource> {
+    if (!eventId.test(body.id)) throw new GoogleProviderError('permanent', 'invalid_resource');
     eventPath(calendarId, body.id);
     return event(await this.request('event.insert', `${eventPath(calendarId)}?sendUpdates=none`, this.authorized(accessToken, 'POST', eventBody(body))));
   }
@@ -418,9 +562,48 @@ export class GoogleProvider {
     );
   }
 
+  async patchEvent(accessToken: string, calendarId: string, body: GoogleEventPatch, etag: string): Promise<GoogleEventResource> {
+    if (!string(etag, 512)) throw new GoogleProviderError('permanent', 'invalid_resource');
+    const projection = patchBody(body);
+    return event(
+      await this.request('event.update', `${eventPath(calendarId, body.id)}?sendUpdates=none`, this.authorized(accessToken, 'PATCH', projection, etag)),
+    );
+  }
+
   async deleteEvent(accessToken: string, calendarId: string, id: string, etag?: string): Promise<void> {
     await this.request('event.delete', `${eventPath(calendarId, id)}?sendUpdates=none`, this.authorized(accessToken, 'DELETE', undefined, etag));
   }
+}
+
+function patchBody(body: GoogleEventPatch): Omit<GoogleEventPatch, 'id'> {
+  if (!string(body.summary, 1008)) throw new GoogleProviderError('permanent', 'invalid_projection');
+  let start: GoogleEventTime;
+  let end: GoogleEventTime;
+  try {
+    start = eventTime(body.start);
+    end = eventTime(body.end);
+    if ('date' in start !== 'date' in end) throw new Error();
+    if ('date' in start && 'date' in end && end.date <= start.date) throw new Error();
+    if ('dateTime' in start && 'dateTime' in end && Date.parse(end.dateTime) <= Date.parse(start.dateTime)) throw new Error();
+  } catch {
+    throw new GoogleProviderError('permanent', 'invalid_projection');
+  }
+  const privateProperties = object(body.extendedProperties?.private);
+  if (body.extendedProperties !== undefined && (!object(body.extendedProperties) || !privateProperties)) {
+    throw new GoogleProviderError('permanent', 'invalid_projection');
+  }
+  if (
+    privateProperties &&
+    (Object.keys(privateProperties).length > 20 ||
+      Object.entries(privateProperties).some(([key, value]) => !/^[A-Za-z0-9_-]{1,44}$/.test(key) || !string(value, 1024)))
+  )
+    throw new GoogleProviderError('permanent', 'invalid_projection');
+  return {
+    summary: body.summary,
+    start: start as GoogleEventPatch['start'],
+    end: end as GoogleEventPatch['end'],
+    ...(privateProperties ? { extendedProperties: { private: { ...(privateProperties as Record<string, string>) } } } : {}),
+  };
 }
 
 function eventBody(body: GoogleEventWrite): GoogleEventWrite {

@@ -36,6 +36,27 @@ function Privacy() {
         </p>
       </section>
       <section>
+        <h2>Google Tasks, si lo activas</h2>
+        <p>
+          Google Tasks es un servicio diferente de los eventos de Calendar. Puedes ampliar voluntariamente la conexión para importar las tareas de las listas
+          que elijas a un proyecto personal Google Tasks. Se sincronizan título, día de programación y estado; las descripciones, notas y datos financieros no
+          se copian.
+        </p>
+        <p>
+          Google exige el permiso general <code>tasks</code>, que permite gestionar tus tareas y no se puede limitar técnicamente a una lista. TR8 aplica tu
+          selección de listas y solo modifica las tareas que haya vinculado. Las tareas asignadas desde Docs o Chat no se importan. No se crea un segundo evento
+          de Calendar para las tareas importadas.
+        </p>
+        <p>
+          Las ediciones, finalización y eliminación de tareas vinculadas se sincronizan en ambos sentidos. Si existen cambios incompatibles se conservan para
+          que elijas cuál aplicar. La API de Google Tasks permite el día de programación, pero no su hora. El vencimiento de TR8 continúa siendo independiente.
+        </p>
+        <p>
+          Puedes pausar Google Tasks sin revocar la conexión común. Desconectar Google detiene ambas integraciones y conserva las tareas de Google Tasks y sus
+          proyectos importados; la opción de retirar copias solo se refiere a los eventos de Calendar registrados por TR8.
+        </p>
+      </section>
+      <section>
         <h2>Protección de la conexión</h2>
         <p>
           Las funciones de Supabase procesan la autorización y la sincronización. Las credenciales de Google se guardan cifradas en el servidor, con una clave
@@ -92,6 +113,10 @@ function About() {
         <p>
           La integración opcional lleva tus tareas personales y las asignadas a ti a un calendario secundario llamado TR8. La sincronización va de TR8 a Google;
           tus proyectos y tareas siguen gestionándose desde TR8.
+        </p>
+        <p>
+          También puedes activar Google Tasks para sincronizar en ambos sentidos las tareas de las listas elegidas, sin duplicarlas como eventos. La conexión
+          necesita un consentimiento adicional.
         </p>
         <p>
           La conexión se inicia desde Configuración y requiere tu consentimiento. Antes de conectar puedes{' '}

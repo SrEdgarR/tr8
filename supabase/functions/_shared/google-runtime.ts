@@ -1,5 +1,6 @@
 import { decryptGoogleSecret, encryptGoogleSecret, type GoogleSecretEnvelope } from './google-crypto.ts';
 import { GoogleProvider, type GoogleOperation } from './google-provider.ts';
+import { GoogleTasksProvider, type GoogleTasksOperation } from './google-tasks-provider.ts';
 
 export interface GoogleActor {
   id: string;
@@ -14,6 +15,7 @@ export interface GoogleRuntime {
   authenticate(request: Request): Promise<GoogleActor>;
   rpc(action: string, payload?: Record<string, unknown>, actor?: GoogleActor): Promise<unknown>;
   provider(beforeRequest: (operation: GoogleOperation) => Promise<boolean | void>): GoogleProvider;
+  tasksProvider?(beforeRequest: (operation: GoogleTasksOperation) => Promise<boolean | void>): GoogleTasksProvider;
   encrypt(plaintext: string, purpose: string, userId: string, generation: string): Promise<GoogleSecretEnvelope>;
   decrypt(envelope: GoogleSecretEnvelope, purpose: string, userId: string, generation: string): Promise<string>;
 }
@@ -192,6 +194,10 @@ export function createGoogleRuntime(get: (name: string) => string | undefined, f
     provider(beforeRequest) {
       if (!configured) throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
       return new GoogleProvider({ clientId, clientSecret, redirectUri: callbackUri, beforeRequest, fetch: fetcher });
+    },
+    tasksProvider(beforeRequest) {
+      if (!configured) throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
+      return new GoogleTasksProvider({ beforeRequest, fetch: fetcher });
     },
     async encrypt(plaintext, purpose, userId, generation) {
       return encryptGoogleSecret({ key: keys[activeKeyId], keyId: activeKeyId, purpose, userId, generation, plaintext });

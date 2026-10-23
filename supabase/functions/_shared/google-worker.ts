@@ -1,6 +1,7 @@
 import { sha256Base64Url, type GoogleSecretEnvelope } from './google-crypto.ts';
 import {
   buildGoogleEvent,
+  GOOGLE_TASKS_SCOPE,
   GoogleProviderError,
   type GoogleEventResource,
   type GoogleEventWrite,
@@ -10,6 +11,7 @@ import {
 } from './google-provider.ts';
 import { boundedJson, errorReply, GoogleServiceError, object, reply, text, uuid, version, type GoogleRuntime } from './google-runtime.ts';
 import { credentials, reserveGoogleRequest, type GoogleCredentials } from './google-service.ts';
+import { runGoogleTasksWorker } from './google-tasks-worker.ts';
 
 type JobKind = 'provision' | 'reconcile_scan' | 'upsert' | 'delete' | 'revoke';
 interface Job {
@@ -178,6 +180,7 @@ async function processJob(runtime: GoogleRuntime, job: Job, control: Control): P
     if (allowed) {
       requestCount++;
       if (operation === 'calendar.insert') calendarCreationReserved = true;
+      if (control.deadline - control.now() < 8000) throw new GoogleProviderError('retryable', 'invocation_limit', undefined, 30);
     }
     return allowed;
   }
@@ -185,8 +188,13 @@ async function processJob(runtime: GoogleRuntime, job: Job, control: Control): P
   async function refresh(): Promise<void> {
     if (refreshed) throw new GoogleProviderError('reauthorization', 'authorization_expired');
     refreshed = true;
-    const renewed = await checked(control, () => provider.refresh(saved.refreshToken));
-    saved = { accessToken: renewed.accessToken, refreshToken: renewed.refreshToken ?? saved.refreshToken, expiresAt: control.now() + renewed.expiresIn * 1000 };
+    const renewed = await checked(control, () => provider.refresh(saved.refreshToken, saved.scopes?.includes(GOOGLE_TASKS_SCOPE)));
+    saved = {
+      accessToken: renewed.accessToken,
+      refreshToken: renewed.refreshToken ?? saved.refreshToken,
+      expiresAt: control.now() + renewed.expiresIn * 1000,
+      ...(saved.scopes ? { scopes: saved.scopes } : {}),
+    };
     const nextEnvelope = await checked(control, () => runtime.encrypt(JSON.stringify(saved), 'credentials', prepared!.user_id, String(prepared!.generation)));
     if ((await rpc('save_credentials', { credential_envelope: nextEnvelope })) !== true) throw new StopJob();
     await prepare();
@@ -361,7 +369,13 @@ export function createGoogleWorkerHandler(runtime: GoogleRuntime) {
       ) {
         throw new GoogleServiceError('INVALID_INPUT');
       }
-      return reply(await runGoogleWorker(runtime, { limit: body.limit as 1 | 2 | undefined }));
+      const started = Date.now();
+      const calendar = await runGoogleWorker(runtime, { limit: body.limit as 1 | 2 | undefined });
+      if (runtime.tasksProvider && Date.now() - started < 35_000) {
+        const tasks = await runGoogleTasksWorker(runtime, { limit: body.limit as 1 | 2 | undefined, deadlineMs: 45_000 - (Date.now() - started) });
+        return reply({ ...calendar, tasks });
+      }
+      return reply(calendar);
     } catch (error) {
       return errorReply(error);
     }

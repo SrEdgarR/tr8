@@ -1,7 +1,8 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GoogleCalendarApi, GoogleCalendarStatus, GoogleCompletion } from '../data/google-calendar';
+import type { GoogleTasksApi, GoogleTasksStatus } from '../data/google-tasks';
 import { DataError } from '../data/errors';
 import { googleAuthorization, googleFixture } from '../test/google-calendar';
 import GoogleCalendarPanel from './GoogleCalendarPanel';
@@ -15,7 +16,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 const clients: QueryClient[] = [];
-function mount(initial: GoogleCalendarStatus = googleFixture(), overrides: Partial<GoogleCalendarApi> = {}) {
+function mount(initial: GoogleCalendarStatus = googleFixture(), overrides: Partial<GoogleCalendarApi> = {}, tasksApi?: GoogleTasksApi) {
   const load = vi.fn().mockResolvedValue(initial);
   const api: GoogleCalendarApi = {
     scopeKey: ['google-calendar', 'owner-a'],
@@ -30,16 +31,113 @@ function mount(initial: GoogleCalendarStatus = googleFixture(), overrides: Parti
   clients.push(client);
   const view = render(
     <QueryClientProvider client={client}>
-      <GoogleCalendarPanel key={api.scopeKey.join(':')} api={api} />
+      <GoogleCalendarPanel key={api.scopeKey.join(':')} api={api} tasksApi={tasksApi} />
     </QueryClientProvider>,
   );
   return { ...view, api, load, client };
+}
+function disconnectedTasks(): GoogleTasksApi {
+  const status: GoogleTasksStatus = {
+    configured: true,
+    enabled: false,
+    state: 'disconnected',
+    version: 0,
+    last_sync_at: null,
+    next_sync_at: null,
+    pending: 0,
+    failed: 0,
+    conflicts: 0,
+    reason: null,
+    lists: [],
+    conflict_items: [],
+  };
+  return { scopeKey: ['google-tasks', 'owner-a'], load: vi.fn().mockResolvedValue(status), change: vi.fn().mockResolvedValue(status) };
+}
+function tasksAuthorization() {
+  const authorization = googleAuthorization();
+  const url = new URL(authorization.authorization_url);
+  url.searchParams.set('scope', 'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/tasks');
+  return { ...authorization, authorization_url: url.href };
 }
 afterEach(() => {
   clients.splice(0).forEach(client => client.clear());
   vi.restoreAllMocks();
 });
 describe('Google Calendar en Configuración', () => {
+  it('revisa el permiso de todas las tareas y permite cancelar sin abrir OAuth ni mutar la conexión', async () => {
+    const open = vi.spyOn(popupApi, 'openGooglePopup');
+    const tasksApi = disconnectedTasks();
+    const { api } = mount(googleFixture({ state: 'connected', generation: 1, version: 5 }), {}, tasksApi);
+    fireEvent.click(await screen.findByRole('button', { name: 'Conectar Google Tasks' }));
+    const dialog = screen.getByRole('dialog', { name: 'Añadir Google Tasks' });
+    expect(dialog).toHaveTextContent('Google no permite limitar ese permiso a una lista');
+    expect(dialog).toHaveTextContent('en TR8 elegirás las listas activas');
+    expect(dialog).toHaveTextContent('Se conserva el acceso al calendario TR8 ya conectado');
+    expect(dialog).toHaveTextContent('no podemos leer ni modificar la hora');
+    expect(open).not.toHaveBeenCalled();
+    expect(api.begin).not.toHaveBeenCalled();
+    expect(tasksApi.change).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(open).not.toHaveBeenCalled();
+    expect(api.begin).not.toHaveBeenCalled();
+  });
+
+  it('solo amplía OAuth con Tasks después del consentimiento explícito y actualiza su estado al volver', async () => {
+    const authorization = tasksAuthorization();
+    const completion = deferred<GoogleCompletion>();
+    const authorize = vi.fn();
+    const cancel = vi.fn();
+    const open = vi.spyOn(popupApi, 'openGooglePopup').mockReturnValue({ result: completion.promise, authorize, cancel });
+    const tasksApi = disconnectedTasks();
+    const initial = googleFixture({ state: 'connected', generation: 1, version: 5 });
+    const { api, load } = mount(initial, { begin: vi.fn().mockResolvedValue(authorization) }, tasksApi);
+    fireEvent.click(await screen.findByRole('button', { name: 'Conectar Google Tasks' }));
+    expect(open).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Continuar con Google' }));
+    await waitFor(() => expect(authorize).toHaveBeenCalledWith(authorization));
+    expect(api.begin).toHaveBeenCalledExactlyOnceWith(
+      { request_id: expect.any(String), expected_version: 5, browser_secret: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/), tasks_requested: true },
+      expect.any(AbortSignal),
+    );
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(api.complete).not.toHaveBeenCalled();
+    const next = { ...initial, version: 6 };
+    vi.mocked(api.complete).mockResolvedValue(next);
+    load.mockResolvedValue(next);
+    const beforeTasksRefresh = vi.mocked(tasksApi.load).mock.calls.length;
+    await act(async () => completion.resolve({ state: authorization.state, browser_secret: 'memory-only' }));
+    await waitFor(() => expect(api.complete).toHaveBeenCalledWith({ state: authorization.state, browser_secret: 'memory-only' }, expect.any(AbortSignal)));
+    await waitFor(() => expect(vi.mocked(tasksApi.load).mock.calls.length).toBeGreaterThan(beforeTasksRefresh));
+    expect(cancel).toHaveBeenCalled();
+    expect(tasksApi.change).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('mantiene Calendar sin permisos de Tasks cuando se usa su botón original', async () => {
+    const completion = deferred<GoogleCompletion>();
+    const cancel = vi.fn();
+    const authorize = vi.fn();
+    vi.spyOn(popupApi, 'openGooglePopup').mockReturnValue({ result: completion.promise, cancel, authorize });
+    const { api, unmount } = mount(googleFixture(), {}, disconnectedTasks());
+    fireEvent.click(await screen.findByRole('button', { name: 'Conectar Google Calendar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Conectar Google Calendar' });
+    expect(dialog).not.toHaveTextContent('gestionar tus tareas de Google Tasks');
+    expect(dialog).toHaveTextContent('Si ya activaste Google Tasks, al reconectar conservaremos el permiso que ya autorizaste');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continuar con Google' }));
+    await waitFor(() => expect(api.begin).toHaveBeenCalledTimes(1));
+    expect(api.begin).toHaveBeenCalledWith(
+      { request_id: expect.any(String), expected_version: 1, browser_secret: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) },
+      expect.any(AbortSignal),
+    );
+    expect(vi.mocked(api.begin).mock.calls[0][0]).not.toHaveProperty('tasks_requested');
+    expect(new URL(vi.mocked(authorize).mock.calls[0][0].authorization_url).searchParams.get('scope')).toBe(
+      'https://www.googleapis.com/auth/calendar.app.created',
+    );
+    unmount();
+    await act(async () => completion.resolve({ state: googleAuthorization().state, browser_secret: 'late' }));
+    expect(api.complete).not.toHaveBeenCalled();
+  });
   it('adopta provisioning → connected automáticamente y vuelve a consultar cada 30 segundos', async () => {
     vi.useFakeTimers();
     focusManager.setFocused(true);

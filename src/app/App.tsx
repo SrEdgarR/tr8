@@ -11,6 +11,7 @@ import GoogleCalendarReturn from './workspace/GoogleCalendarReturn';
 import PublicInformation from './PublicInformation';
 import type { ProcessesApi } from './data/processes';
 import type { GoogleCalendarApi } from './data/google-calendar';
+import { createGoogleTasksRepository, type GoogleTasksApi } from './data/google-tasks';
 import { callbackRequestedRecovery, configuration, supabase } from './data/client';
 import { createRepository, type WorkspaceData } from './data/repository';
 import { dataError, DataError } from './data/errors';
@@ -125,6 +126,7 @@ function ConnectedApp({ client }: { client: SupabaseClient }) {
 
 function WorkspaceContext({ client, session }: { client: SupabaseClient; session: Session }) {
   const repository = useMemo(() => createRepository(client), [client]);
+  const tasksRepository = useMemo(() => createGoogleTasksRepository(client), [client]);
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -187,11 +189,26 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
       change: (input, signal) => ownConnection(() => repository.changeGoogle(input, signal), signal),
     };
   }, [repository, session.user.id]);
+  const googleTasks = useMemo<GoogleTasksApi>(() => {
+    async function ownTasks<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+      if (!active.current || signal?.aborted) throw new DataError('La sesión cambió. Vuelve a abrir la configuración.');
+      const result = await operation();
+      if (!active.current || signal?.aborted) throw new DataError('La sesión cambió durante la operación con Google Tasks.');
+      return result;
+    }
+    return {
+      scopeKey: ['google-tasks', session.user.id],
+      load: signal => ownTasks(() => tasksRepository.googleTasksStatus(signal), signal),
+      change: (input, signal) => ownTasks(() => tasksRepository.changeGoogleTasks(input, signal), signal),
+    };
+  }, [tasksRepository, session.user.id]);
   useEffect(
     () => () => {
-      const key = ['google-calendar', session.user.id];
-      void queryClient.cancelQueries({ queryKey: key });
-      queryClient.removeQueries({ queryKey: key });
+      for (const prefix of ['google-calendar', 'google-tasks']) {
+        const key = [prefix, session.user.id];
+        void queryClient.cancelQueries({ queryKey: key });
+        queryClient.removeQueries({ queryKey: key });
+      }
     },
     [queryClient, session.user.id],
   );
@@ -267,6 +284,7 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
       client={client}
       session={session}
       google={google}
+      googleTasks={googleTasks}
       selected={selected}
       workspaces={context.data.workspaces}
       onSelectWorkspace={id => {
@@ -294,6 +312,7 @@ function ScopedWorkspace({
   onSelectWorkspace,
   onCreateTeam,
   google,
+  googleTasks,
 }: {
   client: SupabaseClient;
   session: Session;
@@ -302,6 +321,7 @@ function ScopedWorkspace({
   onSelectWorkspace: (id: string) => void;
   onCreateTeam: NonNullable<WorkspaceProps['onCreateTeam']>;
   google: GoogleCalendarApi;
+  googleTasks: GoogleTasksApi;
 }) {
   const queryClient = useQueryClient();
   const repository = useMemo(() => createRepository(client), [client]);
@@ -562,7 +582,7 @@ function ScopedWorkspace({
       capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
       collaboration={collaboration}
       calendar={calendar}
-      integrations={<GoogleCalendarPanel key={google.scopeKey.join(':')} api={google} />}
+      integrations={<GoogleCalendarPanel key={google.scopeKey.join(':')} api={google} tasksApi={googleTasks} />}
       processes={
         <ProcessesPanel
           key={processes.scopeKey.join(':')}

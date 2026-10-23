@@ -10,6 +10,64 @@ function repositoryFor(data: unknown, error: unknown = null) {
   return { rpc, invoke, query, repository: createGoogleCalendarRepository({ rpc, functions: { invoke } } as unknown as SupabaseClient) };
 }
 describe('contrato personal de Google Calendar', () => {
+  it('exige los dos permisos al solicitar Tasks y permite conservar un permiso de Tasks ya autorizado', () => {
+    const authorization = googleAuthorization();
+    const url = new URL(authorization.authorization_url);
+    url.searchParams.set('scope', 'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/tasks');
+    const tasksAuthorization = { ...authorization, authorization_url: url.href };
+    expect(parseGoogleAuthorization(tasksAuthorization, true)).toEqual(tasksAuthorization);
+    expect(parseGoogleAuthorization(tasksAuthorization)).toEqual(tasksAuthorization);
+    expect(() => parseGoogleAuthorization(authorization, true)).toThrow('Actualiza TR8');
+    for (const scope of [
+      'https://www.googleapis.com/auth/tasks',
+      'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/tasks.readonly',
+      'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/tasks openid',
+      'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/drive',
+      'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/tasks',
+      '',
+    ]) {
+      const badUrl = new URL(url);
+      badUrl.searchParams.set('scope', scope);
+      expect(() => parseGoogleAuthorization({ ...authorization, authorization_url: badUrl.href }, true)).toThrow('Actualiza TR8');
+      expect(() => parseGoogleAuthorization({ ...authorization, authorization_url: badUrl.href })).toThrow('Actualiza TR8');
+    }
+  });
+
+  it('envía tasks_requested solo cuando se pide y verifica la URL ampliada antes de devolverla', async () => {
+    const authorization = googleAuthorization();
+    const url = new URL(authorization.authorization_url);
+    url.searchParams.set('scope', 'https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/tasks');
+    const tasksAuthorization = { ...authorization, authorization_url: url.href };
+    const { repository, invoke } = repositoryFor(tasksAuthorization);
+    const signal = new AbortController().signal;
+    expect(
+      await repository.beginGoogle({ request_id: 'tasks-request', expected_version: 5, browser_secret: 'browser-only', tasks_requested: true }, signal),
+    ).toEqual(tasksAuthorization);
+    expect(invoke).toHaveBeenLastCalledWith('tr8-google', {
+      body: { action: 'begin', request_id: 'tasks-request', expected_version: 5, browser_secret: 'browser-only', tasks_requested: true },
+      signal,
+      timeout: 60000,
+    });
+    invoke.mockResolvedValue({ data: authorization, error: null });
+    await expect(
+      repository.beginGoogle({ request_id: 'missing-scope', expected_version: 5, browser_secret: 'browser-only', tasks_requested: true }),
+    ).rejects.toMatchObject({ code: 'CLIENT_UPGRADE_REQUIRED' });
+    await repository.beginGoogle({ request_id: 'calendar-request', expected_version: 5, browser_secret: 'browser-only', tasks_requested: false }, signal);
+    expect(invoke).toHaveBeenLastCalledWith('tr8-google', {
+      body: { action: 'begin', request_id: 'calendar-request', expected_version: 5, browser_secret: 'browser-only' },
+      signal,
+      timeout: 60000,
+    });
+    invoke.mockResolvedValue({ data: tasksAuthorization, error: null });
+    expect(await repository.beginGoogle({ request_id: 'retained-scope', expected_version: 5, browser_secret: 'browser-only' })).toEqual(tasksAuthorization);
+    const unsafeUrl = new URL(url);
+    unsafeUrl.searchParams.set('scope', `${url.searchParams.get('scope')} https://www.googleapis.com/auth/drive`);
+    invoke.mockResolvedValue({ data: { ...authorization, authorization_url: unsafeUrl.href }, error: null });
+    await expect(repository.beginGoogle({ request_id: 'unexpected-scope', expected_version: 5, browser_secret: 'browser-only' })).rejects.toMatchObject({
+      code: 'CLIENT_UPGRADE_REQUIRED',
+    });
+  });
   it('consulta solo su propia conexión y elimina campos ajenos al contrato', async () => {
     const data = { ...googleFixture(), access_token: 'never reach application state', calendar_id: 'private' };
     const { repository, rpc, query } = repositoryFor(data);
@@ -32,7 +90,7 @@ describe('contrato personal de Google Calendar', () => {
     ])
       expect(() => parseGoogleStatus(value)).toThrow('Actualiza TR8');
   });
-  it('acepta exclusivamente Google con su state, un solo scope y PKCE S256', () => {
+  it('acepta exclusivamente Google con su state, los permisos previstos y PKCE S256', () => {
     const authorization = googleAuthorization();
     expect(parseGoogleAuthorization(authorization)).toEqual(authorization);
     for (const edit of [

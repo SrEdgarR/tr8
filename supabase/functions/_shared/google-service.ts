@@ -1,11 +1,12 @@
 import { generatePkce, randomBase64Url, sha256Base64Url, type GoogleSecretEnvelope } from './google-crypto.ts';
-import { beginAuthURL, GOOGLE_CALENDAR_SCOPE, GoogleProviderError, type GoogleOperation } from './google-provider.ts';
+import { beginAuthURL, GOOGLE_CALENDAR_SCOPE, GOOGLE_TASKS_SCOPE, GoogleProviderError, type GoogleOperation } from './google-provider.ts';
 import { boundedJson, errorReply, GoogleServiceError, object, reply, text, uuid, version, type GoogleActor, type GoogleRuntime } from './google-runtime.ts';
 
 export interface GoogleCredentials {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
+  scopes?: string[];
 }
 const operations: Record<GoogleOperation, string> = {
   'oauth.exchange': 'oauth',
@@ -14,6 +15,7 @@ const operations: Record<GoogleOperation, string> = {
   'calendar.get': 'calendar_get',
   'calendar.insert': 'calendar_create',
   'event.get': 'event_get',
+  'event.list': 'event_list',
   'event.insert': 'event_upsert',
   'event.update': 'event_upsert',
   'event.delete': 'event_delete',
@@ -41,6 +43,9 @@ export function credentials(value: string): GoogleCredentials {
       accessToken: text(result.accessToken, 16_384),
       refreshToken: text(result.refreshToken, 16_384),
       expiresAt: typeof result.expiresAt === 'number' && Number.isFinite(result.expiresAt) ? result.expiresAt : 0,
+      ...(Array.isArray(result.scopes) && result.scopes.every(scope => typeof scope === 'string' && [GOOGLE_CALENDAR_SCOPE, GOOGLE_TASKS_SCOPE].includes(scope))
+        ? { scopes: result.scopes as string[] }
+        : {}),
     };
   } catch {
     throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
@@ -116,7 +121,8 @@ export function createGoogleUserHandler(runtime: GoogleRuntime) {
       if (!runtime.configured || status.configured !== true) throw new GoogleServiceError('DEPENDENCY_UNAVAILABLE', 503);
       const provider = runtime.provider(operation => reserveGoogleRequest(runtime, operation, actor));
       if (action === 'begin') {
-        checkFields(body, ['action', 'request_id', 'expected_version', 'browser_secret']);
+        checkFields(body, ['action', 'request_id', 'expected_version', 'browser_secret', 'tasks_requested']);
+        if (body.tasks_requested !== undefined && typeof body.tasks_requested !== 'boolean') throw new GoogleServiceError('INVALID_INPUT');
         const requestId = uuid(body.request_id);
         const state = randomBase64Url();
         const stateHash = await sha256Base64Url(state);
@@ -132,6 +138,7 @@ export function createGoogleUserHandler(runtime: GoogleRuntime) {
               browser_hash: await sha256Base64Url(browserSecret(body.browser_secret)),
               pkce_envelope: pkceEnvelope,
               app_origin: runtime.appOrigin,
+              ...(body.tasks_requested === true ? { tasks_requested: true } : {}),
             },
             actor,
           ),
@@ -150,6 +157,7 @@ export function createGoogleUserHandler(runtime: GoogleRuntime) {
               challenge: await sha256Base64Url(storedVerifier),
               clientId: runtime.clientId,
               redirectUri: runtime.callbackUri,
+              includeTasks: initiated.tasks_requested === true,
             }),
             state: storedState,
           },
@@ -172,8 +180,9 @@ export function createGoogleUserHandler(runtime: GoogleRuntime) {
           const material = object(JSON.parse(await runtime.decrypt(envelope(attempt.pkce_envelope), `pkce:${stateHash}`, actor.id, '0')));
           if (material.state !== body.state) throw new GoogleServiceError('AUTH_REQUIRED', 401);
           const verifier = browserSecret(material.verifier);
-          const tokens = await provider.exchange(text(oauthResult.code, 4096), verifier);
+          const tokens = await provider.exchange(text(oauthResult.code, 4096), verifier, attempt.tasks_requested === true);
           if (!tokens.scopes.includes(GOOGLE_CALENDAR_SCOPE)) return reply(await fail('scope_missing'), 200, corsOrigin);
+          if (attempt.tasks_requested === true && !tokens.scopes.includes(GOOGLE_TASKS_SCOPE)) return reply(await fail('scope_missing'), 200, corsOrigin);
           const generation = String(version(attempt.generation));
           const refreshToken = tokens.refreshToken;
           const existingCalendar = typeof attempt.calendar_id === 'string' ? attempt.calendar_id : null;
@@ -187,12 +196,22 @@ export function createGoogleUserHandler(runtime: GoogleRuntime) {
             }
           }
           if (!refreshToken) return reply(await fail('refresh_missing'), 200, corsOrigin);
-          const secret: GoogleCredentials = { accessToken: tokens.accessToken, refreshToken, expiresAt: Date.now() + tokens.expiresIn * 1000 };
+          const secret: GoogleCredentials = {
+            accessToken: tokens.accessToken,
+            refreshToken,
+            expiresAt: Date.now() + tokens.expiresIn * 1000,
+            scopes: tokens.scopes,
+          };
           const credentialEnvelope = await runtime.encrypt(JSON.stringify(secret), 'credentials', actor.id, generation);
           return reply(
             await runtime.rpc(
               'complete_authorization',
-              { attempt_id: attemptId, credential_envelope: credentialEnvelope, keep_existing_calendar: Boolean(existingCalendar) },
+              {
+                attempt_id: attemptId,
+                credential_envelope: credentialEnvelope,
+                keep_existing_calendar: Boolean(existingCalendar),
+                ...(attempt.tasks_requested === true ? { tasks_granted: true } : {}),
+              },
               actor,
             ),
             200,
@@ -209,6 +228,26 @@ export function createGoogleUserHandler(runtime: GoogleRuntime) {
               : 'oauth_exchange_failed';
           return reply(await fail(reason), 200, corsOrigin);
         }
+      }
+      if (['tasks_reconcile', 'tasks_pause', 'tasks_resume', 'tasks_select_list', 'tasks_resolve'].includes(action)) {
+        checkFields(body, [
+          'action',
+          'request_id',
+          'expected_version',
+          ...(action === 'tasks_select_list' ? ['list_id', 'selected'] : action === 'tasks_resolve' ? ['link_id', 'resolution'] : []),
+        ]);
+        const input: Record<string, unknown> = { request_id: uuid(body.request_id), expected_version: version(body.expected_version) };
+        if (action === 'tasks_select_list') {
+          if (typeof body.selected !== 'boolean') throw new GoogleServiceError('INVALID_INPUT');
+          input.list_id = text(body.list_id, 1024);
+          input.selected = body.selected;
+        }
+        if (action === 'tasks_resolve') {
+          if (body.resolution !== 'local' && body.resolution !== 'google') throw new GoogleServiceError('INVALID_INPUT');
+          input.link_id = uuid(body.link_id);
+          input.resolution = body.resolution;
+        }
+        return reply(await runtime.rpc(action, input, actor), 200, corsOrigin);
       }
       const changes = ['reconcile', 'disconnect', 'retry_cleanup', 'abandon_cleanup', 'recover_calendar', 'rebuild_missing'];
       if (!changes.includes(action)) throw new GoogleServiceError('INVALID_INPUT');
@@ -231,9 +270,14 @@ export function createGoogleUserHandler(runtime: GoogleRuntime) {
         );
         let accessToken = saved.accessToken;
         if (saved.expiresAt < Date.now() + 30_000) {
-          const renewed = await provider.refresh(saved.refreshToken);
+          const renewed = await provider.refresh(saved.refreshToken, saved.scopes?.includes(GOOGLE_TASKS_SCOPE));
           accessToken = renewed.accessToken;
-          const next = { accessToken, refreshToken: renewed.refreshToken ?? saved.refreshToken, expiresAt: Date.now() + renewed.expiresIn * 1000 };
+          const next = {
+            accessToken,
+            refreshToken: renewed.refreshToken ?? saved.refreshToken,
+            expiresAt: Date.now() + renewed.expiresIn * 1000,
+            ...(saved.scopes ? { scopes: saved.scopes } : {}),
+          };
           payload.credential_envelope = await runtime.encrypt(JSON.stringify(next), 'credentials', actor.id, String(version(connection.generation)));
           // Persist a rotated refresh token before another network call can
           // fail or the process can stop. This does not change the user CAS.
