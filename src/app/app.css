@@ -1,0 +1,38 @@
+.app-status {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  text-align: center;
+  max-width: 620px;
+  margin: auto;
+}
+.app-status > svg {
+  color: var(--accent);
+}
+.app-status h1 {
+  font-size: var(--fs-2xl);
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+.app-status p {
+  color: var(--text-2);
+  margin: 0;
+  line-height: 1.7;
+}
+.app-spinner {
+  animation: app-spin 1s linear infinite;
+}
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-spinner {
+    animation: none;
+  }
+}
