@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, ChevronLeft, ChevronRight, List, RefreshCw } from 'lucide-react';
+import { CalendarDays, Check, ChevronLeft, ChevronRight, CircleCheck, Globe2, List, LoaderCircle, RefreshCw, Save, UserRound } from 'lucide-react';
 import { STATUSES } from '../constants';
 import type { CalendarApi, CalendarItem, CalendarQuery, Project, TaskStatus, WorkspaceSummary } from '../types';
 import { Busy, Dialog, EmptyState, ErrorNotice, StatusDot } from './ui';
@@ -272,16 +272,24 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
         </div>
       )}
       <section className="pw-calendar-zone" aria-label="Zona horaria del calendario">
-        <div>
-          <h2>Zona horaria</h2>
-          <p className="faint">
-            {zone
-              ? `Visualización en ${zone}.`
-              : detectedZone
-                ? 'Usamos la zona de tu dispositivo en el primer acceso.'
-                : 'No pudimos detectar la zona del dispositivo. Elige una para empezar.'}{' '}
-            Esta preferencia es personal.
-          </p>
+        <div className="pw-calendar-zone-heading">
+          <span className="pw-calendar-zone-icon">
+            <Globe2 size={18} aria-hidden="true" />
+          </span>
+          <div className="pw-calendar-zone-title">
+            <h2>Zona horaria</h2>
+            <p className="faint">
+              {zone
+                ? 'Elige cómo ves las fechas y horas de tus proyectos.'
+                : detectedZone
+                  ? 'Usamos la zona de tu dispositivo en el primer acceso.'
+                  : 'No pudimos detectar la zona del dispositivo. Elige una para empezar.'}
+            </p>
+          </div>
+          <span className="pw-calendar-zone-personal">
+            <UserRound size={12} aria-hidden="true" />
+            Personal
+          </span>
         </div>
         <TimeZonePicker
           label="Zona horaria de visualización"
@@ -289,13 +297,32 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
           onChange={setZoneInput}
           disabled={savingZone || profile.isPending || !!profile.error}
         />
-        <button
-          className="btn btn-secondary btn-sm"
-          disabled={savingZone || profile.isPending || !!profile.error || zoneDraft === zone || !validTimeZone(zoneDraft)}
-          onClick={() => void saveZone()}
-        >
-          {savingZone ? 'Guardando…' : zone ? 'Guardar zona' : 'Confirmar zona'}
-        </button>
+        <div className="pw-calendar-zone-footer">
+          <span className={`pw-calendar-zone-state${zone && zoneDraft === zone ? ' is-saved' : ''}`}>
+            {zone && zoneDraft === zone ? <CircleCheck size={14} aria-hidden="true" /> : <Globe2 size={14} aria-hidden="true" />}
+            {zone && zoneDraft === zone ? 'Zona guardada en tu cuenta' : zone ? `Actual: ${zone}` : 'Se aplicará a tu calendario personal'}
+          </span>
+          <button
+            className={`btn btn-sm${validTimeZone(zoneDraft) && zoneDraft !== zone ? ' btn-primary' : ' btn-secondary'}`}
+            disabled={savingZone || profile.isPending || !!profile.error || zoneDraft === zone || !validTimeZone(zoneDraft)}
+            onClick={() => void saveZone()}
+          >
+            {savingZone ? (
+              <LoaderCircle className="pw-spin" size={14} aria-hidden="true" />
+            ) : zone && zoneDraft === zone ? (
+              <Check size={14} aria-hidden="true" />
+            ) : (
+              <Save size={14} aria-hidden="true" />
+            )}
+            {savingZone ? 'Guardando…' : zone ? 'Guardar zona' : 'Confirmar zona'}
+          </button>
+        </div>
+        {zoneNotice && (
+          <div className="pw-calendar-notice" role="status">
+            <CircleCheck size={14} aria-hidden="true" />
+            <span>{zoneNotice}</span>
+          </div>
+        )}
       </section>
       {profile.error && (
         <ErrorNotice>
@@ -306,11 +333,6 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
         </ErrorNotice>
       )}
       {zoneError && <ErrorNotice>{zoneError}</ErrorNotice>}
-      {zoneNotice && (
-        <p className="pw-calendar-notice" role="status">
-          {zoneNotice}
-        </p>
-      )}
       {profile.isPending && <Busy>Cargando tu preferencia horaria…</Busy>}
       {zone && (
         <>

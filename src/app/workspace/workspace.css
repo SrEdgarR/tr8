@@ -5,7 +5,6 @@
 .pw-calendar.in-project {
   padding: 20px var(--gutter);
 }
-.pw-calendar-zone,
 .pw-calendar-controls,
 .pw-calendar-navigation,
 .pw-calendar-zone-editor,
@@ -16,9 +15,11 @@
   flex-wrap: wrap;
 }
 .pw-calendar-zone {
-  padding: 16px;
+  display: grid;
+  gap: 16px;
+  padding: 20px;
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
   background: var(--surface);
   margin-bottom: 20px;
 }
@@ -28,21 +29,131 @@
   font-size: var(--fs-sm);
   margin: 0;
 }
-.pw-calendar-zone > div:first-child {
-  flex: 1 1 220px;
+.pw-calendar-zone-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.pw-calendar-zone .pw-field {
-  flex: 1 1 200px;
-  max-width: 300px;
+.pw-calendar-zone-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r);
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.pw-calendar-zone-title {
+  flex: 1;
+  min-width: 0;
+}
+.pw-calendar-zone-title h2 {
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}
+.pw-calendar-zone-title p {
+  margin: 4px 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.pw-calendar-zone-personal {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+  padding: 4px 8px;
+}
+.pw-calendar-zone-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.pw-calendar-zone-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.pw-calendar-zone-state.is-saved svg {
+  color: var(--green);
 }
 .pw-time-zone-picker {
-  position: relative;
-  flex: 1 1 320px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  width: 100%;
   min-width: 0;
-  max-width: 480px;
 }
-.pw-calendar-zone .pw-time-zone-picker .pw-field {
-  max-width: none;
+.pw-time-zone-search {
+  min-width: 0;
+}
+.pw-time-zone-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.pw-time-zone-input {
+  position: relative;
+}
+.pw-time-zone-input input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: var(--h-lg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: 0 32px 0 34px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  transition:
+    border-color var(--dur),
+    box-shadow var(--dur);
+}
+.pw-time-zone-input input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.pw-time-zone-input input::placeholder {
+  color: var(--text-4);
+}
+.pw-time-zone-search-icon,
+.pw-time-zone-chevron {
+  position: absolute;
+  top: calc(var(--h-lg) / 2);
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+}
+.pw-time-zone-search-icon {
+  left: 11px;
+}
+.pw-time-zone-chevron {
+  right: 11px;
+  transition: transform var(--dur);
+}
+.pw-time-zone-input:focus-within .pw-time-zone-search-icon {
+  color: var(--accent);
+}
+.pw-time-zone-input.is-open .pw-time-zone-chevron {
+  transform: translateY(-50%) rotate(180deg);
+}
+.pw-time-zone-input.is-disabled input {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 .pw-time-zone-hint,
 .pw-time-zone-preview,
@@ -50,36 +161,113 @@
   font-size: var(--fs-xs);
   overflow-wrap: anywhere;
 }
+.pw-time-zone-hint {
+  margin: 8px 0 0;
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+  font-weight: 400;
+  line-height: 1.5;
+}
 .pw-time-zone-preview {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 10px;
-  padding: 10px 12px;
-  background: var(--bg);
+  gap: 9px;
+  padding: 14px 16px;
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r);
   color: var(--text-2);
 }
-.pw-time-zone-preview strong {
+.pw-time-zone-preview-heading,
+.pw-time-zone-date,
+.pw-time-zone-current {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pw-time-zone-preview-heading {
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+}
+.pw-time-zone-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  font-size: 10px;
+}
+.pw-time-zone-live::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-full);
+  background: var(--green);
+}
+.pw-time-zone-clock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pw-time-zone-clock > strong {
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 550;
+  letter-spacing: -0.035em;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+}
+.pw-time-zone-offset {
+  padding: 3px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xs);
+  font-size: var(--fs-2xs);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.pw-time-zone-current {
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+}
+.pw-time-zone-preview > span {
+  line-height: 1.5;
 }
 .pw-time-zone-results {
   position: absolute;
   z-index: 30;
-  top: 62px;
+  top: calc(100% + 6px);
   left: 0;
   right: 0;
-  max-height: 340px;
+  max-height: min(360px, 55dvh);
   overflow-y: auto;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
   background: var(--surface);
-  box-shadow: 0 8px 24px #0003;
+  box-shadow: var(--shadow-pop);
 }
 .pw-time-zone-results p {
-  padding: 8px 12px;
+  padding: 10px 12px;
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+  line-height: 1.5;
+}
+.pw-time-zone-results .pw-time-zone-country {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+}
+.pw-time-zone-message {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pw-time-zone-results .pw-time-zone-sources {
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+}
+.pw-time-zone-sources a:hover {
+  color: var(--accent);
 }
 .pw-time-zone-results ul {
   list-style: none;
@@ -87,23 +275,57 @@
   padding: 0;
 }
 .pw-time-zone-results [role='option'] {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr) auto 14px;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: 10px 12px;
   border: 0;
-  border-bottom: 1px solid var(--border);
   background: transparent;
   color: var(--text-2);
+  transition:
+    background var(--dur),
+    color var(--dur);
+}
+.pw-time-zone-place-icon {
+  color: var(--text-3);
+}
+.pw-time-zone-place,
+.pw-time-zone-option-clock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.pw-time-zone-place strong {
+  color: var(--text);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.pw-time-zone-place > span,
+.pw-time-zone-option-clock > span {
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+}
+.pw-time-zone-option-clock {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pw-time-zone-option-clock strong {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.pw-time-zone-option-check {
+  color: var(--accent);
 }
 .pw-time-zone-results [role='option']:hover,
 .pw-time-zone-results [role='option'][aria-selected='true'] {
   background: var(--surface-2);
   color: var(--text);
 }
-.pw-calendar-zone p,
 .pw-calendar-caption {
   margin: 5px 0 0;
   font-size: var(--fs-xs);
@@ -297,11 +519,23 @@
 .pw-calendar-schedule > p {
   margin: 0;
 }
-.pw-calendar-zone-editor .pw-field {
-  flex: 1 1 210px;
-}
 .pw-calendar-zone-editor {
-  align-items: end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+.pw-calendar-zone-editor .pw-time-zone-picker {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.pw-calendar-zone-editor > button {
+  margin-top: 23px;
+}
+.pw-calendar-zone-editor .pw-time-zone-clock > strong {
+  font-size: var(--fs-xl);
+}
+.pw-calendar-zone-editor .pw-time-zone-preview {
+  padding: 12px;
 }
 .pw-calendar-schedule > button {
   justify-self: start;
@@ -323,7 +557,19 @@
   margin: 12px 0;
 }
 .pw-calendar-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 10px 12px;
+  background: var(--green-soft);
+  border-radius: var(--r-sm);
+  color: var(--text-2);
   font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.pw-calendar-notice svg {
+  margin-top: 2px;
+  color: var(--green);
 }
 .pw-calendar-mobile-agenda {
   display: none;
@@ -351,12 +597,26 @@
   .pw-calendar-filters .pw-calendar-check {
     flex-basis: 100%;
   }
-  .pw-calendar-zone .pw-field {
-    max-width: none;
+  .pw-calendar-zone {
+    padding: 16px;
   }
   .pw-time-zone-picker {
-    flex-basis: 100%;
-    max-width: none;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .pw-calendar-zone-footer {
+    flex-wrap: wrap;
+  }
+  .pw-calendar-zone-footer > button {
+    width: 100%;
+    --h: var(--h-lg);
+  }
+  .pw-calendar-zone-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pw-calendar-zone-editor > button {
+    margin-top: 0;
+    justify-self: start;
   }
 }
 .personal-workspace {
