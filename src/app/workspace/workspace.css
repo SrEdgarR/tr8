@@ -5,6 +5,18 @@
 .pw-calendar.in-project {
   padding: 20px var(--gutter);
 }
+.pw-settings {
+  max-width: 1080px;
+}
+.pw-settings-eyebrow,
+.pw-calendar-zone-caption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pw-calendar-zone-caption svg {
+  flex-shrink: 0;
+}
 .pw-calendar-controls,
 .pw-calendar-navigation,
 .pw-calendar-zone-editor,
@@ -375,6 +387,20 @@
   border-radius: var(--r);
   overflow: hidden;
 }
+.pw-calendar-grid,
+.pw-calendar-agenda {
+  animation: pw-calendar-reveal 180ms ease-out;
+}
+@keyframes pw-calendar-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .pw-calendar-weekdays,
 .pw-calendar-days {
   display: grid;
@@ -393,6 +419,13 @@
   padding: 7px 5px;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.pw-calendar-day:focus-within {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
 }
 .pw-calendar-day:nth-child(7n) {
   border-right: 0;
@@ -410,6 +443,10 @@
   height: 24px;
   font-size: var(--fs-xs);
   margin-bottom: 4px;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
 }
 .pw-calendar-day.today .pw-calendar-day-number {
   background: var(--accent);
@@ -430,11 +467,56 @@
   color: var(--text);
   min-width: 0;
   overflow-wrap: anywhere;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
-.pw-calendar-entry:hover {
+.pw-calendar-entry:focus-visible {
   background: var(--surface-2);
   border-color: var(--accent-line);
   border-left-color: var(--project-color);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pw-calendar-entry:active {
+  transform: translateY(0);
+}
+.pw-calendar-navigation button,
+.pw-calendar .pw-segment button {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+.pw-calendar-navigation button:active,
+.pw-calendar .pw-segment button:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) and (pointer: fine) {
+  .pw-calendar-day:hover {
+    background: var(--surface-2);
+  }
+  .pw-calendar-day:hover .pw-calendar-day-number {
+    transform: translateY(-1px);
+  }
+  .pw-calendar-day.has-entries:hover .pw-calendar-day-number {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 50%;
+  }
+  .pw-calendar-day.today:hover .pw-calendar-day-number {
+    color: white;
+    background: var(--accent);
+  }
+  .pw-calendar-entry:hover {
+    background: var(--surface-2);
+    border-color: var(--accent-line);
+    border-left-color: var(--project-color);
+    box-shadow: 0 3px 9px #00000008;
+    transform: translateY(-1px);
+  }
 }
 .pw-calendar-entry.completed > strong {
   text-decoration: line-through;
@@ -1637,6 +1719,18 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .pw-calendar-grid,
+  .pw-calendar-agenda {
+    animation: none;
+  }
+  .pw-calendar-day,
+  .pw-calendar-day-number,
+  .pw-calendar-entry,
+  .pw-calendar-navigation button,
+  .pw-calendar .pw-segment button {
+    transition: none;
+    transform: none !important;
+  }
   .pw-spin {
     animation: none;
   }

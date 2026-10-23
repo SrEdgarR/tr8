@@ -84,6 +84,38 @@ describe('espacios y equipos', () => {
   const personal = { id: 'workspace-a', kind: 'personal' as const, name: 'Personal', owner_id: 'personal-owner', version: 1, permissions: [] };
   const team = { id: 'team-a', kind: 'team' as const, name: 'Equipo editorial', owner_id: 'personal-owner', version: 1, permissions: [] };
 
+  it('abre Configuración desde la navegación y conserva separadas las preferencias, los procesos y Mi cuenta', async () => {
+    const user = userEvent.setup();
+    const calendar: CalendarApi = {
+      scopeKey: ['settings', 'test'],
+      profile: vi.fn().mockResolvedValue({ time_zone: 'America/La_Paz', version: 2, updated_at: null }),
+      saveProfile: vi.fn(),
+      items: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+      scheduleTask: vi.fn(),
+    };
+    render(
+      <MemoryRouter initialEntries={['/?workspace=workspace-a']}>
+        <Workspace
+          {...workspaceProps({ workspace: personal, workspaces: [personal], calendar })}
+          processes={<section aria-label="Procesos en segundo plano">Estado de los procesos</section>}
+        />
+      </MemoryRouter>,
+    );
+    const settingsLink = screen.getByRole('link', { name: 'Configuración' });
+    expect(settingsLink).toHaveAttribute('href', '/settings?workspace=workspace-a');
+    await user.click(settingsLink);
+    expect(screen.getByRole('heading', { name: 'Configuración', level: 1 })).toBeInTheDocument();
+    const input = await screen.findByRole('combobox', { name: 'Zona horaria de visualización' });
+    await waitFor(() => expect(input).toBeEnabled());
+    expect(input).toHaveValue('America/La_Paz');
+    expect(screen.getByRole('region', { name: 'Procesos en segundo plano' })).toBeInTheDocument();
+    expect(calendar.items).not.toHaveBeenCalled();
+    expect(calendar.saveProfile).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('link', { name: /personal@example.com/ }));
+    expect(screen.getByRole('heading', { name: 'Mi cuenta', level: 1 })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Procesos en segundo plano' })).not.toBeInTheDocument();
+  });
+
   it('abre el calendario general mediante su API y conserva lista y tablero por proyecto', async () => {
     const user = userEvent.setup();
     const calendar: CalendarApi = {

@@ -1,0 +1,219 @@
+.pw-processes {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  margin-top: 20px;
+  font-size: var(--fs-xs);
+}
+.pw-processes-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pw-processes-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.pw-processes-heading h2 {
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  margin: 0;
+}
+.pw-processes-heading p {
+  margin: 4px 0 0;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+.pw-processes-scope {
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  padding: 4px 8px;
+  font-size: var(--fs-2xs);
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+  max-width: 180px;
+}
+.pw-processes-channels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.pw-processes-channels > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface-2);
+  border-radius: var(--r);
+}
+.pw-processes-channels svg {
+  color: var(--text-3);
+}
+.pw-processes-off {
+  font-size: var(--fs-2xs);
+  color: var(--text-3);
+  margin-left: auto;
+}
+.pw-processes-explanation {
+  display: flex;
+  gap: 7px;
+  align-items: start;
+  line-height: 1.6;
+  color: var(--text-3);
+  margin: 0;
+}
+.pw-processes-explanation svg {
+  color: var(--green);
+  margin-top: 3px;
+}
+.pw-process-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.pw-process-stats > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.pw-process-stats svg {
+  color: var(--text-3);
+  align-self: center;
+}
+.pw-process-stats strong {
+  color: var(--text);
+  font-size: var(--fs-lg);
+  font-variant-numeric: tabular-nums;
+}
+.pw-process-stats span {
+  grid-column: 1/-1;
+  color: var(--text-3);
+}
+.pw-process-runtime {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+}
+.pw-process-runtime > span:first-child {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.pw-process-runtime .active svg {
+  color: var(--green);
+}
+.pw-process-budget {
+  color: var(--amber);
+  line-height: 1.6;
+  padding: 10px 12px;
+  background: var(--amber-soft);
+  border-radius: var(--r-sm);
+  margin: 0;
+}
+.pw-process-jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pw-process-job {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.pw-process-job-icon {
+  color: var(--text-3);
+}
+.pw-process-job > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.pw-process-job strong {
+  font-weight: 500;
+  color: var(--text);
+}
+.pw-process-job > div > span {
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+}
+.pw-process-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-2xs);
+  color: var(--text-3);
+}
+.pw-process-state.succeeded {
+  color: var(--green);
+}
+.pw-process-state.dead,
+.pw-process-state.unknown {
+  color: var(--amber);
+}
+.pw-process-empty {
+  display: grid;
+  justify-items: center;
+  padding: 18px 12px;
+  border-top: 1px solid var(--border);
+  gap: 8px;
+  color: var(--text-3);
+  text-align: center;
+}
+.pw-process-empty svg {
+  color: var(--green);
+}
+.pw-process-empty p,
+.pw-process-footnote {
+  font-size: var(--fs-2xs);
+  line-height: 1.5;
+  color: var(--text-3);
+  margin: 0;
+}
+.pw-processes footer {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+}
+@media (max-width: 700px) {
+  .pw-processes {
+    padding: 16px;
+  }
+  .pw-processes-channels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pw-process-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pw-processes-heading {
+    flex-wrap: wrap;
+  }
+  .pw-processes-scope {
+    margin-left: 44px;
+  }
+  .pw-process-job {
+    flex-wrap: wrap;
+  }
+  .pw-process-state {
+    margin-left: 24px;
+  }
+  .pw-processes footer {
+    flex-wrap: wrap;
+  }
+}

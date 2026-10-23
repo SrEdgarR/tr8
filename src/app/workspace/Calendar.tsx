@@ -1,23 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, Check, ChevronLeft, ChevronRight, CircleCheck, Globe2, List, LoaderCircle, RefreshCw, Save, UserRound } from 'lucide-react';
+import { useMemo, useState, type CSSProperties } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { CalendarDays, ChevronLeft, ChevronRight, Globe2, List, RefreshCw } from 'lucide-react';
 import { STATUSES } from '../constants';
 import type { CalendarApi, CalendarItem, CalendarQuery, Project, TaskStatus, WorkspaceSummary } from '../types';
 import { Busy, Dialog, EmptyState, ErrorNotice, StatusDot } from './ui';
 import { errorMessage } from './helpers';
-import {
-  addCivilDays,
-  addCivilMonths,
-  blockLastDate,
-  dateInTimeZone,
-  detectDeviceTimeZone,
-  formatCivilDate,
-  formatTime,
-  monthDays,
-  monthStart,
-  validTimeZone,
-} from './CalendarTime';
-import TimeZonePicker from './TimeZonePicker';
+import { addCivilDays, addCivilMonths, blockLastDate, dateInTimeZone, formatCivilDate, formatTime, monthDays, monthStart } from './CalendarTime';
+import { CalendarZoneEditor } from './CalendarZoneSettings';
+import useCalendarZonePreferences from './useCalendarZonePreferences';
 
 interface Props {
   api: CalendarApi;
@@ -102,49 +92,8 @@ function CalendarAgenda({ items, zone, from, onOpen }: { items: CalendarItem[]; 
 }
 
 export default function Calendar({ api, workspaces, workspaceId, project, projects, onOpen }: Props) {
-  const client = useQueryClient();
-  const profileKey = useMemo(() => [...api.scopeKey, 'profile'], [api.scopeKey]);
-  const profile = useQuery({ queryKey: profileKey, queryFn: ({ signal }) => api.profile(signal), retry: false });
-  const [detectedZone] = useState(detectDeviceTimeZone);
-  const automaticAttempt = useRef(false);
-  const [zoneInput, setZoneInput] = useState<string | null>(null);
-  const [zoneError, setZoneError] = useState<string | null>(null);
-  const [zoneNotice, setZoneNotice] = useState('');
-  const zone = profile.error ? null : (profile.data?.time_zone ?? null);
-  const zoneDraft = zoneInput ?? zone ?? detectedZone ?? '';
-  const { mutate: persistZone, isPending: savingZone } = useMutation({
-    mutationFn: ({ nextZone, version }: { nextZone: string; version: number; automatic: boolean; key: string[] }) => api.saveProfile(nextZone, version),
-    onMutate: async variables => {
-      setZoneError(null);
-      setZoneNotice('');
-      await client.cancelQueries({ queryKey: variables.key, exact: true });
-    },
-    onSuccess: (saved, variables) => {
-      client.setQueryData(variables.key, saved);
-      if (!variables.automatic) setZoneInput(null);
-      setZoneNotice(
-        variables.automatic
-          ? `Detectamos y guardamos la zona de tu dispositivo: ${saved.time_zone}. Puedes cambiarla cuando quieras.`
-          : 'Zona horaria guardada. Los vencimientos conservan su fecha y los bloques conservan sus instantes.',
-      );
-    },
-    onError: async cause => {
-      setZoneError(errorMessage(cause));
-      if (cause && typeof cause === 'object' && 'code' in cause && cause.code === 'PT409') {
-        // Another tab may have initialized the preference. Adopt it; never overwrite it.
-        const current = await profile.refetch();
-        if (current.data?.time_zone) setZoneNotice('Se cargó la zona guardada desde otra sesión. Revisa la hora antes de cambiarla.');
-      }
-    },
-    retry: false,
-  });
-
-  useEffect(() => {
-    if (automaticAttempt.current || !detectedZone || !profile.data || profile.data.time_zone !== null || profile.error || api.accessError || zoneInput !== null)
-      return;
-    automaticAttempt.current = true;
-    persistZone({ nextZone: detectedZone, version: profile.data.version, automatic: true, key: profileKey });
-  }, [detectedZone, profile.data, profile.error, api.accessError, zoneInput, persistZone, profileKey]);
+  const zoneState = useCalendarZonePreferences(api, true);
+  const { profile, zone } = zoneState;
   const [month, setMonth] = useState<string | null>(null);
   const currentMonth = month ?? monthStart(dateInTimeZone(new Date(), zone ?? 'America/La_Paz'));
   const [view, setView] = useState<'month' | 'agenda'>('month');
@@ -240,17 +189,6 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
       : false;
   });
 
-  async function saveZone() {
-    if (savingZone || !profile.data || profile.error) return;
-    setZoneError(null);
-    setZoneNotice('');
-    if (!validTimeZone(zoneDraft)) {
-      setZoneError('Selecciona una zona de los resultados o escribe una zona IANA válida.');
-      return;
-    }
-    persistZone({ nextZone: zoneDraft, version: profile.data.version, automatic: false, key: profileKey });
-  }
-
   if (api.accessError)
     return (
       <ErrorNotice>
@@ -271,69 +209,7 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
           </div>
         </div>
       )}
-      <section className="pw-calendar-zone" aria-label="Zona horaria del calendario">
-        <div className="pw-calendar-zone-heading">
-          <span className="pw-calendar-zone-icon">
-            <Globe2 size={18} aria-hidden="true" />
-          </span>
-          <div className="pw-calendar-zone-title">
-            <h2>Zona horaria</h2>
-            <p className="faint">
-              {zone
-                ? 'Elige cómo ves las fechas y horas de tus proyectos.'
-                : detectedZone
-                  ? 'Usamos la zona de tu dispositivo en el primer acceso.'
-                  : 'No pudimos detectar la zona del dispositivo. Elige una para empezar.'}
-            </p>
-          </div>
-          <span className="pw-calendar-zone-personal">
-            <UserRound size={12} aria-hidden="true" />
-            Personal
-          </span>
-        </div>
-        <TimeZonePicker
-          label="Zona horaria de visualización"
-          value={zoneDraft}
-          onChange={setZoneInput}
-          disabled={savingZone || profile.isPending || !!profile.error}
-        />
-        <div className="pw-calendar-zone-footer">
-          <span className={`pw-calendar-zone-state${zone && zoneDraft === zone ? ' is-saved' : ''}`}>
-            {zone && zoneDraft === zone ? <CircleCheck size={14} aria-hidden="true" /> : <Globe2 size={14} aria-hidden="true" />}
-            {zone && zoneDraft === zone ? 'Zona guardada en tu cuenta' : zone ? `Actual: ${zone}` : 'Se aplicará a tu calendario personal'}
-          </span>
-          <button
-            className={`btn btn-sm${validTimeZone(zoneDraft) && zoneDraft !== zone ? ' btn-primary' : ' btn-secondary'}`}
-            disabled={savingZone || profile.isPending || !!profile.error || zoneDraft === zone || !validTimeZone(zoneDraft)}
-            onClick={() => void saveZone()}
-          >
-            {savingZone ? (
-              <LoaderCircle className="pw-spin" size={14} aria-hidden="true" />
-            ) : zone && zoneDraft === zone ? (
-              <Check size={14} aria-hidden="true" />
-            ) : (
-              <Save size={14} aria-hidden="true" />
-            )}
-            {savingZone ? 'Guardando…' : zone ? 'Guardar zona' : 'Confirmar zona'}
-          </button>
-        </div>
-        {zoneNotice && (
-          <div className="pw-calendar-notice" role="status">
-            <CircleCheck size={14} aria-hidden="true" />
-            <span>{zoneNotice}</span>
-          </div>
-        )}
-      </section>
-      {profile.error && (
-        <ErrorNotice>
-          {errorMessage(profile.error)}{' '}
-          <button className="btn btn-secondary btn-sm" onClick={() => void profile.refetch()}>
-            Reintentar zona
-          </button>
-        </ErrorNotice>
-      )}
-      {zoneError && <ErrorNotice>{zoneError}</ErrorNotice>}
-      {profile.isPending && <Busy>Cargando tu preferencia horaria…</Busy>}
+      {!zone && <CalendarZoneEditor state={zoneState} initial />}
       {zone && (
         <>
           <div className="pw-calendar-controls">
@@ -437,6 +313,10 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
             Los filtros ofrecen proyectos del espacio abierto y proyectos y responsables de los elementos cargados. Para elegir otro proyecto, ábrelo desde la
             navegación o cambia de espacio.
           </p>
+          <p className="pw-calendar-caption pw-calendar-zone-caption">
+            <Globe2 size={12} aria-hidden="true" />
+            <span>Horas en {zone}. Puedes cambiar la zona en Configuración.</span>
+          </p>
           <p className="pw-calendar-caption">
             Bloque y vencimiento pueden aparecer por separado para una misma tarea. Las fechas sin hora son de día completo.
           </p>
@@ -467,7 +347,7 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
                         return (
                           <section
                             key={day}
-                            className={`pw-calendar-day${day.slice(0, 7) !== currentMonth.slice(0, 7) ? ' outside' : ''}${day === dateInTimeZone(new Date(), zone) ? ' today' : ''}`}
+                            className={`pw-calendar-day${entries.length ? ' has-entries' : ''}${day.slice(0, 7) !== currentMonth.slice(0, 7) ? ' outside' : ''}${day === dateInTimeZone(new Date(), zone) ? ' today' : ''}`}
                             aria-label={formatCivilDate(day)}
                           >
                             <span className="pw-calendar-day-number" aria-hidden="true">

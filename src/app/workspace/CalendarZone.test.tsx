@@ -6,6 +6,7 @@ import type { CalendarApi, CalendarPreferences, WorkspaceSummary } from '../type
 import { DataError } from '../data/errors';
 import * as CalendarTime from './CalendarTime';
 import Calendar from './Calendar';
+import CalendarSettings from './CalendarZoneSettings';
 
 const emptyProfile: CalendarPreferences = { time_zone: null, version: 1, updated_at: null };
 const savedProfile = (zone: string, version = 2): CalendarPreferences => ({ time_zone: zone, version, updated_at: '2026-10-23T12:00:00Z' });
@@ -60,7 +61,8 @@ describe('preferencia horaria automática del calendario', () => {
     rerenderCalendar(api);
     expect(api.saveProfile).toHaveBeenCalledTimes(1);
     expect(api.items).toHaveBeenCalledWith(expect.objectContaining({ time_zone: 'Asia/Tokyo' }), expect.any(AbortSignal));
-    expect(screen.getByText(/Detectamos y guardamos la zona de tu dispositivo/)).toHaveTextContent('Asia/Tokyo');
+    expect(screen.queryByRole('region', { name: 'Zona horaria del calendario' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Horas en Asia\/Tokyo/)).toBeInTheDocument();
   });
 
   it('respeta la preferencia existente aunque el dispositivo tenga otra zona y adopta cambios posteriores sin sobrescribirlos', async () => {
@@ -68,13 +70,14 @@ describe('preferencia horaria automática del calendario', () => {
     const api = calendarApi({ profile });
     const { client } = mount(api, true);
     await screen.findByRole('button', { name: 'Mes siguiente' });
-    expect(screen.getByRole('combobox', { name: 'Zona horaria de visualización' })).toHaveValue('America/La_Paz');
+    expect(screen.queryByRole('combobox', { name: 'Zona horaria de visualización' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Horas en America\/La_Paz/)).toBeInTheDocument();
     expect(api.saveProfile).not.toHaveBeenCalled();
     profile.mockResolvedValue(savedProfile('Europe/Madrid', 4));
     await act(async () => {
       await client.refetchQueries({ queryKey: [...api.scopeKey, 'profile'], exact: true });
     });
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Zona horaria de visualización' })).toHaveValue('Europe/Madrid'));
+    await screen.findByText(/Horas en Europe\/Madrid/);
     expect(api.saveProfile).not.toHaveBeenCalled();
     expect(api.items).toHaveBeenLastCalledWith(expect.objectContaining({ time_zone: 'Europe/Madrid' }), expect.any(AbortSignal));
   });
@@ -108,8 +111,8 @@ describe('preferencia horaria automática del calendario', () => {
     const profile = vi.fn().mockResolvedValueOnce(emptyProfile).mockResolvedValue(savedProfile('Pacific/Auckland', 2));
     const api = calendarApi({ profile, saveProfile: vi.fn().mockRejectedValue(new DataError('Conflicto de versión', 'PT409')) });
     const { client } = mount(api);
-    await screen.findByText('Se cargó la zona guardada desde otra sesión. Revisa la hora antes de cambiarla.');
-    expect(screen.getByRole('combobox', { name: 'Zona horaria de visualización' })).toHaveValue('Pacific/Auckland');
+    await screen.findByText(/Horas en Pacific\/Auckland/);
+    expect(screen.queryByRole('region', { name: 'Zona horaria del calendario' })).not.toBeInTheDocument();
     expect(api.saveProfile).toHaveBeenCalledExactlyOnceWith('Asia/Tokyo', 1);
     await act(async () => {
       await client.refetchQueries({ queryKey: [...api.scopeKey, 'profile'], exact: true });
@@ -150,5 +153,60 @@ describe('preferencia horaria automática del calendario', () => {
     await waitFor(() => expect(denied.profile).toHaveBeenCalled());
     expect(denied.saveProfile).not.toHaveBeenCalled();
     expect(denied.items).not.toHaveBeenCalled();
+  });
+});
+
+describe('zona horaria en Configuración', () => {
+  function mountSettings(api: CalendarApi) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    return { ...render(<CalendarSettings api={api} processes={<div>Procesos en segundo plano</div>} />, { wrapper }), client };
+  }
+
+  it('permite editar la preferencia guardada y la comparte con el calendario sin volver a mostrar el editor allí', async () => {
+    const api = calendarApi({ profile: vi.fn().mockResolvedValue(savedProfile('America/La_Paz', 3)) });
+    const { client, rerender } = mountSettings(api);
+    const input = await screen.findByRole('combobox', { name: 'Zona horaria de visualización' });
+    await waitFor(() => expect(input).toBeEnabled());
+    expect(input).toHaveValue('America/La_Paz');
+    expect(screen.getByText('Procesos en segundo plano')).toBeInTheDocument();
+    expect(api.saveProfile).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: 'Europe/Madrid' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar zona' }));
+    await screen.findByText(/Zona horaria guardada\. Los vencimientos/);
+    expect(api.saveProfile).toHaveBeenCalledExactlyOnceWith('Europe/Madrid', 3);
+    expect(screen.getByRole('combobox', { name: 'Zona horaria de visualización' })).toHaveValue('Europe/Madrid');
+    expect(client.getQueryData([...api.scopeKey, 'profile'])).toEqual(savedProfile('Europe/Madrid', 4));
+    vi.mocked(api.profile).mockResolvedValue(savedProfile('Europe/Madrid', 4));
+    rerender(<Calendar api={api} workspaces={spaces} projects={[]} onOpen={vi.fn()} />);
+    await screen.findByRole('button', { name: 'Mes siguiente' });
+    expect(screen.queryByRole('region', { name: 'Zona horaria del calendario' })).not.toBeInTheDocument();
+    expect(api.items).toHaveBeenCalledWith(expect.objectContaining({ time_zone: 'Europe/Madrid' }), expect.any(AbortSignal));
+  });
+
+  it('no guarda una zona automática solo por visitar Configuración con un perfil nuevo', async () => {
+    const api = calendarApi();
+    mountSettings(api);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar zona' })).toBeEnabled());
+    expect(api.saveProfile).not.toHaveBeenCalled();
+    expect(api.items).not.toHaveBeenCalled();
+  });
+
+  it('conserva el borrador después de un conflicto y exige otra acción explícita con la versión actual', async () => {
+    const profile = vi.fn().mockResolvedValueOnce(savedProfile('America/La_Paz', 3)).mockResolvedValue(savedProfile('Asia/Tokyo', 4));
+    const saveProfile = vi.fn().mockRejectedValueOnce(new DataError('Conflicto de versión', 'PT409')).mockResolvedValue(savedProfile('Europe/Madrid', 5));
+    const api = calendarApi({ profile, saveProfile });
+    mountSettings(api);
+    const input = await screen.findByRole('combobox', { name: 'Zona horaria de visualización' });
+    await waitFor(() => expect(input).toBeEnabled());
+    fireEvent.change(input, { target: { value: 'Europe/Madrid' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar zona' }));
+    await screen.findByText('Se cargó la zona guardada desde otra sesión. Revisa la hora antes de cambiarla.');
+    expect(input).toHaveValue('Europe/Madrid');
+    expect(screen.getByText('Actual: Asia/Tokyo')).toBeInTheDocument();
+    expect(saveProfile).toHaveBeenCalledExactlyOnceWith('Europe/Madrid', 3);
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar zona' }));
+    await screen.findByText(/Zona horaria guardada\. Los vencimientos/);
+    expect(saveProfile).toHaveBeenNthCalledWith(2, 'Europe/Madrid', 4);
   });
 });

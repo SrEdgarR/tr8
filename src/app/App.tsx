@@ -5,6 +5,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { CircleAlert, LoaderCircle, LockKeyhole } from 'lucide-react';
 import AuthScreen from './auth/AuthScreen';
 import Workspace from './workspace/Workspace';
+import ProcessesPanel from './workspace/ProcessesPanel';
+import type { ProcessesApi } from './data/processes';
 import { callbackRequestedRecovery, configuration, supabase } from './data/client';
 import { createRepository, type WorkspaceData } from './data/repository';
 import { dataError, DataError } from './data/errors';
@@ -286,6 +288,9 @@ function ScopedWorkspace({
       const collaborationKey = ['collaboration', session.user.id, selected.id, scopeRevision];
       void queryClient.cancelQueries({ queryKey: collaborationKey });
       queryClient.removeQueries({ queryKey: collaborationKey });
+      const processKey = ['processes', session.user.id, selected.id, scopeRevision];
+      void queryClient.cancelQueries({ queryKey: processKey });
+      queryClient.removeQueries({ queryKey: processKey });
     };
   }, [queryClient, queryKey, session.user.id, selected.id, scopeRevision]);
   const query = useQuery({
@@ -399,6 +404,7 @@ function ScopedWorkspace({
         void queryClient.invalidateQueries({ queryKey: ['collaboration', session.user.id, selected.id, scopeRevision] });
         void queryClient.invalidateQueries({ queryKey: ['context', session.user.id] });
         void queryClient.invalidateQueries({ queryKey: ['calendar', session.user.id] });
+        void queryClient.invalidateQueries({ queryKey: ['processes', session.user.id] });
       }
       return row;
     } catch (cause) {
@@ -504,6 +510,14 @@ function ScopedWorkspace({
   };
   const failure = accessError ?? mutation.error ?? query.error;
   const unavailable = Boolean(accessError) || (query.error instanceof DataError && ['42501', 'PGRST301', 'PGRST303', 'PT404'].includes(query.error.code ?? ''));
+  const processes: ProcessesApi = {
+    scopeKey: ['processes', session.user.id, selected.id, scopeRevision],
+    load: async signal => {
+      const status = await repository.processStatus(selected.id, signal);
+      if (!active.current) throw new DataError('El espacio cambió. Vuelve a consultar sus procesos.');
+      return status;
+    },
+  };
   return (
     <Workspace
       workspace={selected}
@@ -512,6 +526,14 @@ function ScopedWorkspace({
       capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
       collaboration={collaboration}
       calendar={calendar}
+      processes={
+        <ProcessesPanel
+          key={processes.scopeKey.join(':')}
+          api={processes}
+          disabled={unavailable || !selected.permissions.includes('project.read')}
+          workspaceName={selected.kind === 'personal' ? 'Mi espacio personal' : selected.name}
+        />
+      }
       accessUnavailable={unavailable}
       members={unavailable || directory.error ? [] : (directory.data?.members ?? [])}
       invitations={unavailable || directory.error ? [] : (directory.data?.invitations ?? [])}

@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  Settings2,
   UserRound,
   Users,
   X,
@@ -25,6 +26,7 @@ import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useS
 import { formatDate, PROJECT_STATUSES } from '../constants';
 import type { CalendarApi, CalendarItem, CollaborationApi, Project, Task, TaskStatus, WorkspaceProps, WorkspaceSummary } from '../types';
 import Calendar from './Calendar';
+import CalendarSettings from './CalendarZoneSettings';
 import ProjectForm from './ProjectForm';
 import TaskForm from './TaskForm';
 import TasksView from './TasksView';
@@ -536,7 +538,7 @@ function AccountPage({ email, pending, onSignOut, onPasswordReset }: Pick<Worksp
   );
 }
 
-export default function Workspace(props: WorkspaceProps) {
+export default function Workspace(props: WorkspaceProps & { processes?: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -589,13 +591,15 @@ export default function Workspace(props: WorkspaceProps) {
       ? 'Proyectos'
       : location.pathname === '/tasks'
         ? 'Mis tareas'
-        : location.pathname === '/account'
-          ? 'Mi cuenta'
-          : location.pathname === '/team'
-            ? 'Equipo'
-            : location.pathname === '/calendar'
-              ? 'Calendario'
-              : 'Inicio');
+        : location.pathname === '/settings'
+          ? 'Configuración'
+          : location.pathname === '/account'
+            ? 'Mi cuenta'
+            : location.pathname === '/team'
+              ? 'Equipo'
+              : location.pathname === '/calendar'
+                ? 'Calendario'
+                : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -751,6 +755,10 @@ export default function Workspace(props: WorkspaceProps) {
           </nav>
         </div>
         <div className="side-bot">
+          <NavLink to={`/settings${scopeSearch}`} className={navClass} onClick={() => setMobileNav(false)}>
+            <Settings2 className="i" size={16} aria-hidden="true" />
+            <span>Configuración</span>
+          </NavLink>
           <NavLink to={`/account${scopeSearch}`} className={navClass} onClick={() => setMobileNav(false)}>
             <span className="pw-avatar small">{props.email.charAt(0).toUpperCase()}</span>
             <span className="trunc">{props.email}</span>
@@ -904,6 +912,7 @@ export default function Workspace(props: WorkspaceProps) {
                   )
                 }
               />
+              <Route path="/settings" element={<CalendarSettings api={props.calendar} processes={props.processes} />} />
               <Route
                 path="/account"
                 element={<AccountPage email={props.email} pending={pending} onSignOut={props.onSignOut} onPasswordReset={props.onPasswordReset} />}

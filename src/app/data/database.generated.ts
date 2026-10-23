@@ -265,6 +265,10 @@ export type Database = {
       };
       tr8_v2_get_calendar_preferences: { Args: never; Returns: Json };
       tr8_v2_get_context: { Args: never; Returns: Json };
+      tr8_v2_get_process_status: {
+        Args: { p_workspace_id?: string };
+        Returns: Json;
+      };
       tr8_v2_get_project_capabilities: {
         Args: { p_project_id: string; p_workspace_id: string };
         Returns: Json;
