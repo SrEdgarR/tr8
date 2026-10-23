@@ -1,6 +1,6 @@
 # Etapa 3 · Calendario interno
 
-Estado: implementación y pruebas aisladas completadas; verificación visual y publicación pendientes. Se mantienen Supabase Free, Vercel Hobby y las altas e invitaciones externas desactivadas.
+Estado: implementación, migración y verificación visual completadas. Se mantienen Supabase Free, Vercel Hobby y las altas e invitaciones externas desactivadas.
 
 ## Funciones
 
@@ -56,10 +56,13 @@ La copia no contiene contraseñas, sesiones ni claves privilegiadas. No sustituy
 
 - Base de código: `28575a589fae5de8a7064dac09eb8da7c9da2e54`. Copia nueva privada de un proyecto, una tarea, identidad mínima y 12 tablas privadas; secuencia 274, `is_called=true`.
 - Restauración de esa copia y migración ensayadas con rollback. Comparación campo por campo aprobada, sin residuos de la cuenta real en prueba.
-- SQL: 125 aserciones nuevas, 176 de etapa 1 y 113 de etapa 2, todas aprobadas. La migración está instalada en `tr8-test`; las migraciones aplicadas no se reescriben.
+- SQL: 125 aserciones nuevas, 176 de etapa 1 y 113 de etapa 2, todas aprobadas. La migración está instalada en prueba y producción; las migraciones aplicadas no se reescriben.
 - HTTP real en prueba: 324 aserciones en 203 solicitudes, con Auth y clave pública. Cubiertos cursores, espacios múltiples, fechas civiles, DST, permisos, archivos, limpieza de responsables y revocación con el JWT anterior. Una programación simultánea ganó y otra recibió `PT409`. Se restauraron los roles de los participantes sintéticos.
 - Aplicación: 165 pruebas aprobadas, TypeScript, ESLint, Prettier, comprobación estática y build. Sin dependencias nuevas; permanece el aviso previo del bundler sobre el tamaño de JavaScript.
 - Revisión independiente: 85 pruebas focales aprobadas y sin bloqueantes de seguridad abiertos. Se verificaron borradores y conflictos remotos antes y después de guardar el bloque, así como la retirada de elementos de otros espacios al perder permisos.
 - Advisors de prueba: sin nuevas advertencias de esquema, permisos o rendimiento. Continúa la advertencia previa de protección de contraseñas filtradas que exige Pro; se mantiene Free.
 
-La prueba visual y la comprobación final de producción se registrarán antes del cierre de la entrega.
+- Navegador en preview: mes y agenda general, apertura de una tarea de otro espacio en su proyecto correcto, calendario por proyecto, zona UTC conservando vencimientos, lista «Sin programar» y agenda móvil a 390 × 844. Sin errores de consola.
+- Reprogramación real en prueba: un bloque de 3.615 segundos pasó al día siguiente conservando esa duración y sus segundos, sin cambiar el vencimiento. El borrador del título permaneció y se guardó después sin conflicto falso ni pérdida del bloque. La comprobación consultó los valores persistidos, además de la respuesta visual.
+- Producción: hashes y conteos de todos los campos históricos de proyectos, tareas y las 12 tablas privadas idénticos antes y después de la migración. Se conservaron OIDs, secuencia 274, versiones y tiempos; ninguna tarea recibió un bloque ni una cuenta una zona implícita. Continúa una única cuenta habilitada y la configuración de altas externas apagada.
+- Advisors de producción: sin nuevas advertencias de esquema, autorización o rendimiento. La vuelta al cliente anterior sigue siendo compatible con las firmas anteriores preservadas.

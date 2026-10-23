@@ -20,6 +20,7 @@ const ACTION_NAMES: Record<string, string> = {
   'project.updated': 'Actualizó un proyecto',
   'task.created': 'Creó una tarea',
   'task.updated': 'Actualizó una tarea',
+  'task.scheduled': 'Cambió el bloque horario de una tarea',
   'task.deleted': 'Eliminó una tarea',
 };
 
