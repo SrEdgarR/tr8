@@ -1,8 +1,10 @@
 # Etapa 5 · Contrato de base de datos y trabajador Google
 
-Estado: candidato de implementación; no demuestra por sí solo provisión OAuth,
-activación del cron, credenciales reales ni sincronización con Google. La
-publicación requiere pruebas y recibo de despliegue del coordinador.
+Estado: esquema y funciones instalados en producción; autorización personal de
+Google pendiente. La infraestructura y el cron están preparados según la decisión
+del propietario de conectar directamente producción. Este contrato no demuestra
+por sí solo consentimiento ni entrega real de eventos; las comprobaciones y el
+despliegue se registran en el README de esta etapa.
 
 ## Fronteras
 
@@ -247,5 +249,6 @@ para compensación y seguimiento. Su crecimiento debe medirse.
 La prueba SQL aislada verifica límites de rol, sesiones, consumo OAuth,
 idempotencia, provisión incierta, IDs persistidos, proyección fresca, presupuestos,
 concesiones vencidas, desconexión concurrente, limpieza sin contenido privado y
-preservación de filas previas. No sustituye las pruebas reales del proveedor ni
-autoriza activar secretos o el cron sin completar esas puertas.
+preservación de filas previas. No acredita consentimiento ni entrega real al
+proveedor. La conexión personal requiere la autorización del propietario desde
+la aplicación publicada.

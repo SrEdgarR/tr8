@@ -9,7 +9,7 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 
 ![TR8](docs/preview.png)
 
-## Funciones actuales · Etapa 4A
+## Funciones de TR8
 
 - Cuenta confirmada con Supabase Auth: inicio/cierre de sesión y recuperación de contraseña. El registro público está cerrado.
 - Espacio personal privado, varios equipos, selector de espacio y directorio mínimo de miembros.
@@ -20,17 +20,24 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 - Lista y tablero sobre los mismos datos, con búsqueda y filtros. El tablero permite arrastrar tareas entre estados; el selector ofrece una alternativa con teclado.
 - Calendario general y por proyecto, mes y agenda, filtros, vencimientos de día completo y bloques horarios independientes. Zona IANA detectada al primer acceso, búsqueda por país o ciudad con hora en directo, edición posterior en Configuración y reprogramación con versión esperada. Transiciones y foco accesible con movimiento reducido.
 - Procesos internos durables: registro transaccional de cambios, reservas, reintentos, presupuesto compartido y consulta de procesos propios en Configuración. Un trabajo «Preparado» confirma su revisión interna; no una entrega externa.
+- Google Calendar opcional por usuario: calendario secundario TR8 y sincronización en una dirección de tareas personales y asignadas. La implementación está publicada; la autorización real de Google sigue pendiente.
 - Inicio con resumen y próximos vencimientos. Los datos se guardan en Postgres y se recuperan al volver a entrar.
 - Acceso por identidad habilitada, membresía, permisos y proyecto, aplicado en Postgres mediante RLS y RPC verificadas. La caché está separada por usuario y espacio.
 - Actividad de equipos y proyectos, filtrada por el acceso vigente. Retirar un miembro o su acceso conserva el trabajo y elimina responsabilidades que dejen de ser válidas.
 
-Las altas e invitaciones externas permanecen desactivadas, por decisión del propietario, hasta disponer de correo y provisión de cuentas adecuados. Se pueden administrar miembros existentes y preparar roles y proyectos. El correo opcional de etapa 4B sigue pendiente de proveedor y remitente verificado; Google Calendar está en publicación y Pulso continúa pendiente. Se mantienen Supabase Free y Vercel Hobby. La etapa 4A está implementada y su migración instalada en prueba y producción; sus garantías y verificaciones se registran en [la documentación de entrega](docs/stage-4/README.md).
+Las altas e invitaciones externas permanecen desactivadas, por decisión del propietario, hasta disponer de correo y provisión de cuentas adecuados. Se pueden administrar miembros existentes y preparar roles y proyectos. El correo opcional de etapa 4B sigue pendiente de proveedor y remitente verificado; Google Calendar está publicado y Pulso continúa pendiente. Se mantienen Supabase Free y Vercel Hobby. La etapa 4A está implementada y su migración instalada en prueba y producción; sus garantías y verificaciones se registran en [la documentación de entrega](docs/stage-4/README.md).
 
 ## Especificación y evolución
 
-La [etapa 5 de Google Calendar](docs/stage-5/README.md) está en **publicación en curso; conexión real pendiente**. Añade una conexión personal opcional, calendario secundario y cola externa. Por decisión del propietario se omite la aceptación OAuth en prueba y se conectará directamente producción, con su consentimiento y conservando sus proyectos y tareas actuales. Las verificaciones técnicas ya realizadas se mantienen como evidencia histórica; no acreditan una entrega real de eventos. La integración Google del entorno Supabase de prueba queda desactivada y sin credenciales activas de Google.
+La [etapa 5 de Google Calendar](docs/stage-5/README.md) está **publicada; autorización Google pendiente**. Las dos migraciones están aplicadas en producción y las funciones de Google están desplegadas. La comparación con la copia privada confirmó que el proyecto, tarea, cuenta habilitada, dieciséis tablas privadas anteriores y secuencia conservaron sus datos. La publicación del código [1852f1f](https://github.com/SrEdgarR/tr8/commit/1852f1f3b4dba1cea7bb1ede94bad731c9c8e44a) fue verificada en Vercel como `READY`, con el alias [tr8.vercel.app](https://tr8.vercel.app/), y [CI terminó correctamente](https://github.com/SrEdgarR/tr8/actions/runs/40023189791), incluidas 250 pruebas de aplicación y 167 de funciones.
+
+La comprobación de producción pasó 32 verificaciones en seis solicitudes HTTPS sin llamar a Google. La interfaz autenticada mostró los datos conservados, el botón de conexión y su diálogo; se comprobaron el foco inicial, Escape y el ajuste a 390 píxeles sin desbordamiento horizontal. Las páginas públicas de información y privacidad también se renderizaron correctamente. Esta evidencia acredita la publicación, sin afirmar una autorización ni entrega de eventos externos.
+
+Por decisión del propietario se omite la aceptación OAuth en prueba y se conectará directamente producción con su consentimiento. Las verificaciones técnicas ya realizadas se mantienen como evidencia histórica; no acreditan una entrega real de eventos. La integración Google del entorno Supabase de prueba queda desactivada, con sus dos cron inactivos y sin credenciales activas del cliente OAuth.
 
 La configuración utiliza un único proyecto personal de Google Cloud, `tr8-sredgar`, y su cliente web de producción. La comprobación directa debe confirmar el consentimiento, estado de la conexión y efectos observados sobre datos existentes antes de afirmar sincronización. Se mantienen los planes gratuitos y las altas externas desactivadas.
+
+El programador de Google está preparado en producción con límites de 500 solicitudes diarias y 10.000 mensuales. Al comprobar la instalación no había conexiones ni trabajos de Google y no se habían realizado llamadas al proveedor. La tarea actual no tiene fecha ni bloque horario; no debe esperarse una copia de evento hasta que exista una tarea elegible.
 
 La [especificación técnica y el plan por etapas](docs/stage-0/README.md) documentan
 la evolución acordada hacia espacios personales, equipos, roles, calendarios,

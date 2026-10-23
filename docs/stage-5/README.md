@@ -1,6 +1,34 @@
 # Etapa 5 · Google Calendar
 
-Estado: **publicación en curso; conexión real pendiente**. Por decisión expresa del propietario se omite la aceptación OAuth en un entorno aislado y se procederá directamente en producción, conservando los proyectos y tareas existentes. La conexión requiere su consentimiento real. Este documento no acredita todavía una publicación final ni entrega de eventos; los resultados de producción se registrarán cuando exista evidencia.
+Estado: **publicada; autorización Google pendiente**. Las migraciones y funciones están instaladas en producción, la interfaz está publicada y se verificaron Vercel `READY` y CI satisfactorio para la versión de código registrada abajo. Por decisión expresa del propietario se omite la aceptación OAuth en un entorno aislado y se conectará directamente producción con su consentimiento. Todavía no se ha realizado la autorización real ni demostrado entrega de eventos.
+
+## Preparación de producción verificada
+
+Se aplicaron las migraciones canónicas `20261023195952_google_calendar_stage5.sql` y `20261023202750_google_calendar_reeligibility.sql`, conservando sus archivos inmutables. Producción tiene nueve migraciones registradas. La comparación de la copia actualizada antes y después de instalar confirmó igualdad de proyectos, tareas, las dieciséis tablas privadas anteriores y la secuencia; solo se excluyó de la comparación la hora de captura de la propia copia.
+
+La copia privada previa tiene SHA-256 `06f03b2c351dea1932d31a193d056d0ab6e5ff264978be03e2bf88860a7961bc`. Se conservaron **un proyecto, una tarea y una cuenta habilitada**. La tarea existente no tiene fecha ni bloque horario; por ahora no existe una tarea elegible para crear su copia en Google. No se agregaron datos ficticios en producción.
+
+Las funciones `tr8-google` y `tr8-google-worker` están `ACTIVE`, versión 1, con el mismo código comprobado previamente en las funciones de prueba. Se configuraron seis variables privadas de servidor, sin incorporar secretos al navegador o a Git. El despertar tiene el secreto en Vault, fuera de los contratos públicos, y el endpoint fijo del trabajador corresponde a producción.
+
+En producción la configuración y el programador de Google están habilitados, con sus dos cron activos y presupuesto de 500 solicitudes diarias y 10.000 mensuales. En la comprobación de instalación había **cero conexiones y cero trabajos Google**. No se realizaron solicitudes a Google: la infraestructura espera el consentimiento del propietario.
+
+En Supabase de prueba, la configuración y el programador de Google están desactivados, los dos cron de Google inactivos y las variables del identificador y secreto del cliente OAuth retiradas. No hay credenciales activas de Google para continuar allí una sincronización.
+
+## Publicación verificada
+
+Los recibos siguientes corresponden al código de etapa 5 del commit [1852f1f](https://github.com/SrEdgarR/tr8/commit/1852f1f3b4dba1cea7bb1ede94bad731c9c8e44a), publicado en `SrEdgarR/tr8`. Identifican la versión comprobada de la interfaz y no afirman que ese SHA siga siendo el último commit después de actualizar esta documentación.
+
+| Comprobación          | Resultado                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Vercel                | `READY`, destino `production`, despliegue `dpl_JCQdYcaMeXsYAud5yDxrc6PKMc47`                                                         |
+| URL del despliegue    | [tr8-9t5d4odm1-mr-xpras-projects.vercel.app](https://tr8-9t5d4odm1-mr-xpras-projects.vercel.app)                                     |
+| Alias comprobado      | [tr8.vercel.app](https://tr8.vercel.app/)                                                                                            |
+| Compilación de Vercel | 22,5 segundos                                                                                                                        |
+| GitHub Actions        | [Run 40023189791](https://github.com/SrEdgarR/tr8/actions/runs/40023189791), `SUCCESS`; 250 pruebas de aplicación y 167 de funciones |
+
+La comprobación HTTP de producción aprobó **32 verificaciones en seis solicitudes HTTPS**, sin solicitudes a la API de Google. La interfaz autenticada cargó el proyecto y tarea conservados, mostró **Conectar Google Calendar** y abrió su diálogo con foco inicial en **Continuar con Google**. Escape cerró el diálogo y devolvió el foco al botón de conexión. La vista a 390 píxeles no tuvo desbordamiento horizontal. El contenido de `/about` y `/privacy` se renderizó correctamente.
+
+La consulta de Vercel observó cero errores de runtime en una ventana de 30 minutos y cero drains configurados. Esta observación se limita a Vercel: el adaptador Google se ejecuta en Supabase Edge y no queda cubierto íntegramente por los registros de Vercel. Publicar la interfaz o habilitar el programador no equivale a una conexión autorizada ni a una entrega de eventos.
 
 ## Verificaciones técnicas previas realizadas
 
@@ -10,11 +38,11 @@ La base de prueba tiene las migraciones `20261023195952_google_calendar_stage5.s
 
 Pasaron 232 comprobaciones SQL de Google, incluidas 20 de esa recuperación, y 532 comprobaciones de regresión de las etapas anteriores. Los ensayos de restauración de la migración inicial y del ajuste conservaron el proyecto, tarea y metadatos privados respaldados dentro de transacciones revertidas. Una prueba con transacciones confirmadas comprobó la persistencia de reservas, la recuperación con un token nuevo y el rechazo de finalizaciones antiguas o duplicadas. Dos conexiones concurrentes disputaron la última unidad de presupuesto: una fue admitida y otra rechazada.
 
-Con el proveedor desactivado pasaron 183 comprobaciones de acceso por HTTP, en 125 solicitudes con cuatro identidades sintéticas. Estas pruebas no hicieron llamadas a Google. La comprobación local actual comprende 250 pruebas de aplicación y 167 de funciones, además de tipos, lint, formato y compilación. CI ejecuta ambos conjuntos por separado.
+Con el proveedor desactivado pasaron 183 comprobaciones de acceso por HTTP, en 125 solicitudes con cuatro identidades sintéticas. Estas pruebas no hicieron llamadas a Google. La comprobación local previa comprende 250 pruebas de aplicación y 167 de funciones, además de tipos, lint, formato y compilación. El workflow de CI incluye ambos conjuntos por separado y su ejecución remota satisfactoria está enlazada arriba.
 
 Contra las funciones desplegadas en prueba pasaron otras 373 comprobaciones en 63 solicitudes HTTP: inicio idempotente, retorno público 302 sin código en la URL de TR8, denegación, estado y navegador ajenos, otra sesión del mismo usuario, consumo único, caducidad antes del retorno o del consumo, y sesión cerrada. Se comprobó en Postgres que PKCE y resultado quedaban cifrados. No hubo canjes de códigos, credenciales de Google ni solicitudes al proveedor; esta evidencia acredita el transporte y los rechazos, no una sincronización.
 
-La revisión del navegador comprobó la tarjeta de configuración pendiente, las páginas públicas y el ajuste a 390 píxeles sin desbordamiento horizontal. Las comprobaciones anteriores no acreditan consentimiento ni entrega real de eventos. La publicación de producción está en curso; la integración Google de Supabase de prueba permanece desactivada y sin credenciales activas de Google. No se realizará allí una autorización OAuth ni una aceptación externa adicional.
+La revisión previa del navegador comprobó la tarjeta de configuración pendiente, las páginas públicas y el ajuste a 390 píxeles sin desbordamiento horizontal. Después se verificó la publicación de producción como se registra arriba. Ninguna de esas comprobaciones acredita consentimiento ni entrega real de eventos. La integración Google de Supabase de prueba permanece desactivada y sin credenciales activas de Google. No se realizará allí una autorización OAuth ni una aceptación externa adicional.
 
 ## Alcance acordado
 
@@ -71,23 +99,25 @@ La implementación añade tablas privadas para conexiones, intentos OAuth, corre
 
 El trabajador debe confirmar la reserva antes de la llamada externa, comprobar permisos y revisión vigentes, finalizar con una reserva válida y reconciliar resultados ambiguos. Los errores temporales respetan `Retry-After`; `invalid_grant` requiere reconexión. Una creación incierta de calendario no se reintenta automáticamente. No existe una transacción distribuida con Google ni una garantía de entrega exactamente una vez.
 
-La migración empieza con la configuración y los cron de Google desactivados. La configuración de producción se habilita después de desplegar los endpoints y preparar los secretos del servidor y el consentimiento. Los efectos externos se comprobarán directamente con la cuenta del propietario; no se condicionan a otra aceptación aislada. El despertar mediante SQL/HTTP solo debe ocurrir cuando hay trabajo elegible; la durabilidad corresponde a Postgres, no al mensaje de despertar ni a una pestaña abierta.
+La migración instala la configuración y los cron de Google desactivados. Después de desplegar los endpoints y preparar los secretos, producción se habilitó como se registra arriba; prueba continúa desactivada. Los efectos externos se comprobarán directamente con la cuenta del propietario y requieren su consentimiento; no se condicionan a otra aceptación aislada. El despertar mediante SQL/HTTP solo debe ocurrir cuando hay trabajo elegible; la durabilidad corresponde a Postgres, no al mensaje de despertar ni a una pestaña abierta.
 
 Los límites de Google son 500 solicitudes reservadas al día y 10.000 al mes, con lotes pequeños y hasta ocho intentos. Se mantienen junto con las cuotas reales gratuitas. Al alcanzar un límite, las tareas continúan utilizables y el trabajo queda pendiente; no se contrata ni activa un plan de pago. No se genera actividad artificial para evitar pausas del proyecto gratuito.
 
 ## Copia y ensayo de restauración
 
-La publicación directa conserva la copia privada previa y exige actualizarla antes de migrar producción para comparar los datos existentes antes y después. El formato `tr8-stage5-backup-v1` incluye proyectos, tareas, estado de la secuencia de tareas, las doce tablas privadas anteriores a 4A, las cuatro tablas de procesos de 4A y las identidades mínimas de Auth necesarias para sus referencias. Es una copia **previa a Google**: no incluye conexiones, tokens o secretos de Google.
+La publicación directa actualizó la copia privada previa y comparó los datos existentes antes y después de migrar producción, con el resultado de preservación registrado arriba. El formato `tr8-stage5-backup-v1` incluye proyectos, tareas, estado de la secuencia de tareas, las doce tablas privadas anteriores a 4A, las cuatro tablas de procesos de 4A y las identidades mínimas de Auth necesarias para sus referencias. Es una copia **previa a Google**: no incluye conexiones, tokens o secretos de Google.
 
 Los ensayos ya realizados se generaron con `scripts/stage5/build-restore-rehearsal.mjs`, que produce SQL para el entorno sintético designado y termina siempre con `ROLLBACK`. Exige que la copia y el SQL generado estén fuera del repositorio, que las altas externas estén apagadas y que las identidades respaldadas no existan en el destino. Rechaza campos o tablas adicionales en el formato de copia y valida los estados de trabajos, reservas y runtime antes de generar SQL. No se solicita ni programa otro ensayo aislado como condición de la publicación actual.
 
 El ensayo restaura las filas de negocio y metadatos, incluidos outbox, trabajos y recibos de 4A. El singleton `process_runtime` ya existente se bloquea y recibe los valores respaldados solamente dentro de la transacción del ensayo. No se intenta insertar otro singleton ni sustituir permanentemente los contadores del entorno de prueba. Se compara cada campo respaldado antes y después de la migración.
 
-La secuencia exportada se representa mediante una secuencia **temporal**. No se rebobina la secuencia real del entorno de prueba. Las identidades mínimas de Auth no incluyen contraseñas ni sesiones y no constituyen una restauración completa de Auth o un mecanismo PITR. Los ensayos existentes constan en el registro anterior; el cierre actual debe añadir la comparación de datos y el despliegue de producción, sin presentar las comprobaciones históricas como consentimiento real.
+La secuencia exportada se representa mediante una secuencia **temporal**. No se rebobina la secuencia real del entorno de prueba. Las identidades mínimas de Auth no incluyen contraseñas ni sesiones y no constituyen una restauración completa de Auth o un mecanismo PITR. Los ensayos existentes, la comparación de producción y el despliegue de la interfaz constan arriba; falta la autorización real, sin presentar las comprobaciones históricas como consentimiento.
 
 ## Configuración Google para la conexión directa
 
-La configuración actual utiliza **un único proyecto personal de Google Cloud, `tr8-sredgar`**, y su cliente web de producción, acotado al uso personal y sin ampliar la audiencia. Se omite la autorización OAuth en Supabase de prueba. No se afirma que ya existan proyectos Google independientes, una verificación pública, un despliegue final o una autorización duradera.
+La configuración actual utiliza **un único proyecto personal de Google Cloud, `tr8-sredgar`**, y su cliente web de producción para uso personal. Se omite la autorización OAuth en Supabase de prueba. La interfaz ya está publicada; no se afirma que existan proyectos Google independientes o una verificación pública de Google. La publicación OAuth de Google no habilita cuentas de TR8: sus altas siguen cerradas y cada operación exige una identidad habilitada.
+
+El primer intento real fue bloqueado por Google con el mensaje de aplicación en pruebas y acceso limitado a usuarios aprobados. No llegó un resultado OAuth al servidor ni se obtuvieron credenciales de Google. El propietario debe ajustar el estado de publicación en Google Auth Platform antes de reintentar el consentimiento. En modo Pruebas las autorizaciones de Calendar expiran a los siete días; el estado En producción y la verificación pública de la marca son aspectos distintos. Véanse las condiciones de [audiencia de Google](https://support.google.com/cloud/answer/15549945) y la [excepción para uso personal](https://support.google.com/cloud/answer/13464323).
 
 | Uso actual                      | Callback de producción                                                      |
 | ------------------------------- | --------------------------------------------------------------------------- |
@@ -99,15 +129,15 @@ La comprobación real se realizará directamente en producción: consentimiento 
 
 Como práctica para futuros ensayos, conviene usar un proyecto independiente de Google Cloud si se decide probar una integración aislada mientras producción está conectada. La revocación de Google puede afectar a la concesión de todos los clientes del mismo proyecto; un segundo cliente dentro del proyecto personal no representa aislamiento suficiente. Esta recomendación futura no condiciona ni retrasa la conexión directa autorizada ahora.
 
-## Publicación y conexión directa pendientes
+## Autorización Google y comprobaciones pendientes
 
-- Completar y revisar el cliente web de producción, pantalla de consentimiento, callback exacto y páginas informativas y de privacidad publicadas. No asumir que `tr8.studio` está comprado ni afirmar separación entre proyectos Google que aún no existe.
-- Revisar el estado de publicación, audiencia, alcance solicitado y condiciones de renovación de tokens. Crear un proyecto o cliente no acredita consentimiento terminado, verificación o autorización duradera. Mantener el alcance personal y no ampliar la audiencia.
-- Actualizar la copia privada, aplicar las migraciones de producción y comparar los datos conservados; mantener las migraciones ya aplicadas inmutables y las altas externas desactivadas. Las regresiones y ensayos anteriores permanecen documentados como verificaciones previas.
-- Dejar la integración Google de prueba desactivada y sin credenciales activas; no realizar allí otra aceptación OAuth.
+- Revisar durante la autorización el cliente web de producción, pantalla de consentimiento y callback exacto. Las páginas informativas y de privacidad ya están publicadas. No asumir que `tr8.studio` está comprado ni afirmar separación entre proyectos Google que aún no existe.
+- Completar el ajuste del estado de publicación de Google y revisar alcance y condiciones de renovación de tokens al reintentar. Crear un proyecto o cliente no acredita consentimiento terminado, verificación o autorización duradera. Mantener el uso personal y las altas de TR8 cerradas.
+- Conservar la copia y comparación ya realizadas, las migraciones aplicadas inmutables y las altas externas desactivadas. Las regresiones y ensayos anteriores permanecen documentados como verificaciones previas.
+- Mantener la integración Google de prueba desactivada y sin credenciales activas; no realizar allí otra aceptación OAuth.
 - Obtener el consentimiento directamente en producción y comprobar sesión, estado de conexión y efectos reales sobre las tareas existentes. Conservar la distinción entre pruebas simuladas, transporte HTTP ya verificado y entrega externa observada.
 - Registrar una creación o actualización de evento solo cuando exista evidencia real de una tarea elegible; no afirmar entrega, «Hecha», retirada o limpieza por el mero éxito de la conexión. No crear datos ficticios ni cambiar los datos del propietario únicamente para simular esos casos.
-- Revisar escritorio, móvil, teclado, foco, fallos, limpieza pendiente y cancelación tras cambio de cuenta. Las pruebas unitarias existentes de interfaz no acreditan por sí solas el intercambio OAuth ni la entrega real.
-- Confirmar SHA publicado y estado del despliegue; registrar evidencia final y límites. La conexión seguirá pendiente hasta que el propietario autorice Google.
+- Mantener las verificaciones de escritorio, móvil y foco ya registradas y comprobar los estados que se observen durante la conexión. Las pruebas de interfaz y el despliegue satisfactorio no acreditan por sí solos el intercambio OAuth ni la entrega real.
+- Añadir la evidencia de autorización y sincronización únicamente cuando ocurra. Vercel y CI ya están comprobados para el código publicado; Google seguirá pendiente hasta que el propietario lo autorice.
 
-La publicación está en curso y la conexión real permanece pendiente. Se avanzará directamente en producción según la decisión del propietario, con planes gratuitos, datos conservados y altas externas desactivadas.
+La implementación está publicada y verificada; la autorización real de Google permanece pendiente. Se continuará directamente en producción según la decisión del propietario, con planes gratuitos, datos conservados y altas externas desactivadas, sin afirmar una entrega externa todavía no observada.
