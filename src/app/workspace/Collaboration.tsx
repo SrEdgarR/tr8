@@ -18,6 +18,7 @@ const ACTION_NAMES: Record<string, string> = {
   'task.unassigned': 'Retiró el responsable de una tarea',
   'project.created': 'Creó un proyecto',
   'project.updated': 'Actualizó un proyecto',
+  'project.deleted': 'Eliminó un proyecto',
   'task.created': 'Creó una tarea',
   'task.updated': 'Actualizó una tarea',
   'task.scheduled': 'Cambió el bloque horario de una tarea',

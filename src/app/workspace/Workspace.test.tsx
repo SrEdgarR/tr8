@@ -71,6 +71,7 @@ function workspaceProps(overrides: Partial<WorkspaceProps> = {}): WorkspaceProps
     onCreateProject: vi.fn().mockResolvedValue(project),
     onUpdateProject: vi.fn().mockResolvedValue(project),
     onArchiveProject: vi.fn().mockResolvedValue(project),
+    onDeleteProject: vi.fn().mockResolvedValue(undefined),
     onCreateTask: vi.fn().mockResolvedValue(task),
     onUpdateTask: vi.fn().mockResolvedValue(task),
     onDeleteTask: vi.fn().mockResolvedValue(undefined),
@@ -264,6 +265,76 @@ describe('espacios y equipos', () => {
     expect(screen.getByRole('heading', { name: 'Mi cuenta', level: 1 })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Procesos en segundo plano' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Integración personal con Google' })).not.toBeInTheDocument();
+  });
+
+  it('ofrece eliminar desde el proyecto y su tarjeta, exige confirmación y vuelve al listado del espacio', async () => {
+    const user = userEvent.setup();
+    const otherProject = { ...project, id: 'project-b', name: 'Otro proyecto' };
+    const props = workspaceProps({ workspace: personal, workspaces: [personal], projects: [project, otherProject] });
+    render(
+      <MemoryRouter initialEntries={[`/projects/${project.id}?workspace=workspace-a`]}>
+        <Workspace {...props} />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Eliminar proyecto' }));
+    let dialog = screen.getByRole('dialog', { name: 'Eliminar proyecto' });
+    expect(within(dialog).getByText(/Hay 1 tarea visible/)).toBeInTheDocument();
+    expect(props.onDeleteProject).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(props.onDeleteProject).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Eliminar proyecto' }));
+    dialog = screen.getByRole('dialog', { name: 'Eliminar proyecto' });
+    await user.type(within(dialog).getByRole('textbox'), project.name);
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar proyecto definitivamente' }));
+    expect(props.onDeleteProject).toHaveBeenCalledExactlyOnceWith(project, project.name);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Proyectos', level: 1 })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: `Eliminar ${otherProject.name}` }));
+    expect(screen.getByRole('dialog', { name: 'Eliminar proyecto' })).toHaveTextContent(otherProject.name);
+    expect(props.onDeleteProject).toHaveBeenCalledOnce();
+  });
+
+  it('no convierte el permiso de archivar en permiso de eliminar y cierra la confirmación al perder acceso', async () => {
+    const user = userEvent.setup();
+    const props = workspaceProps({
+      workspace: personal,
+      workspaces: [personal],
+      capabilities: { [project.id]: { project_id: project.id, access_level: 'write', permissions: ['project.read', 'project.archive', 'task.read'] } },
+    });
+    const ui = (current: WorkspaceProps) => (
+      <MemoryRouter initialEntries={[`/projects/${project.id}?workspace=workspace-a`]}>
+        <Workspace {...current} />
+      </MemoryRouter>
+    );
+    const { rerender } = render(ui(props));
+    expect(screen.getByRole('button', { name: 'Archivar' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Eliminar proyecto' })).not.toBeInTheDocument();
+    const allowed = { ...props, capabilities: { [project.id]: { ...props.capabilities![project.id], permissions: ['project.read', 'project.delete'] } } };
+    rerender(ui(allowed));
+    await user.click(screen.getByRole('button', { name: 'Eliminar proyecto' }));
+    expect(screen.getByRole('dialog', { name: 'Eliminar proyecto' })).toBeInTheDocument();
+    rerender(ui(props));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(props.onDeleteProject).not.toHaveBeenCalled();
+  });
+
+  it('permite confirmar la eliminación de un proyecto archivado solo si conserva el permiso específico', async () => {
+    const user = userEvent.setup();
+    const archived = { ...project, archived_at: '2026-10-23T12:00:00Z' };
+    const props = workspaceProps({
+      projects: [archived],
+      capabilities: { [project.id]: { project_id: project.id, access_level: 'write', permissions: ['project.read', 'project.delete', 'task.read'] } },
+    });
+    render(
+      <MemoryRouter initialEntries={[`/projects/${project.id}`]}>
+        <Workspace {...props} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Proyecto archivado · solo lectura')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Eliminar proyecto' }));
+    expect(screen.getByRole('dialog', { name: 'Eliminar proyecto' })).toBeInTheDocument();
+    expect(props.onDeleteProject).not.toHaveBeenCalled();
   });
 
   it('abre el calendario general mediante su API y conserva lista y tablero por proyecto', async () => {

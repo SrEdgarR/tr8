@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
     createProject: vi.fn(),
     updateProject: vi.fn(),
     archiveProject: vi.fn(),
+    deleteProject: vi.fn(),
     createTask: vi.fn(),
     updateTask: vi.fn(),
     deleteTask: vi.fn(),
@@ -757,6 +758,53 @@ describe('sesiones y datos del espacio personal', () => {
     expect(workspace().workspace?.id).toBe('team-a');
     expect(mocks.repository.load).toHaveBeenCalledWith('team-a', expect.any(AbortSignal));
     expect(mocks.repository.resolveProject).toHaveBeenCalledOnce();
+  });
+
+  it('retira solo el proyecto confirmado y sus tareas, cancela lecturas anteriores y limpia su enlace antiguo', async () => {
+    const removedProject = project();
+    const keptProject = project('Proyecto conservado', 'project-b');
+    const keptTask = { ...task('Tarea conservada'), id: 'task-b', project_id: keptProject.id };
+    const initial = { projects: [removedProject, keptProject], tasks: [task(), keptTask] };
+    const after = { projects: [keptProject], tasks: [keptTask] };
+    const pendingRead = deferred<WorkspaceData>();
+    let readSignal: AbortSignal | undefined;
+    mocks.repository.load
+      .mockResolvedValueOnce(initial)
+      .mockImplementationOnce((_id: string, signal: AbortSignal) => {
+        readSignal = signal;
+        return pendingRead.promise;
+      })
+      .mockResolvedValue(after);
+    mocks.repository.projectCapabilities
+      .mockResolvedValueOnce([
+        { project_id: removedProject.id, access_level: 'write', permissions: ['project.read', 'project.delete', 'task.read'] },
+        { project_id: keptProject.id, access_level: 'write', permissions: ['project.read', 'task.read'] },
+      ])
+      .mockResolvedValue([{ project_id: keptProject.id, access_level: 'write', permissions: ['project.read', 'task.read'] }]);
+    mocks.repository.deleteProject.mockResolvedValue(undefined);
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    const locatorKey = ['project-location', 'owner-a', removedProject.id];
+    client.setQueryData(locatorKey, { workspace_id: 'personal-a' });
+    act(() => {
+      void client.invalidateQueries({ queryKey: ['workspace', 'owner-a', 'personal-a'] });
+    });
+    await waitFor(() => expect(mocks.repository.load).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      await workspace().onDeleteProject(removedProject, removedProject.name);
+    });
+    expect(mocks.repository.deleteProject).toHaveBeenCalledExactlyOnceWith(removedProject, removedProject.name);
+    expect(readSignal?.aborted).toBe(true);
+    expect(await screen.findByText('Proyecto conservado')).toBeInTheDocument();
+    expect(screen.getByText('Tarea conservada')).toBeInTheDocument();
+    expect(screen.queryByText('Proyecto privado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+    expect(client.getQueryData(locatorKey)).toBeUndefined();
+    await act(async () => pendingRead.resolve(initial));
+    expect(screen.queryByText('Proyecto privado')).not.toBeInTheDocument();
+    expect(workspace().projects).toEqual([keptProject]);
+    expect(workspace().tasks).toEqual([keptTask]);
+    expect(workspace().capabilities?.[removedProject.id]).toBeUndefined();
   });
 
   it('actualiza el registro ante un conflicto de versión y conserva el error de guardado', async () => {

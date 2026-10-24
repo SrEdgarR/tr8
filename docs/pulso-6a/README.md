@@ -65,6 +65,11 @@ Vercel Hobby y las altas externas desactivadas.
 
 ## Condiciones pendientes para 6B
 
+El [corte 6B.1](../pulso-6b1/README.md) implementa y verifica la autoridad y
+persistencia opaca con datos sintéticos en Supabase. Las siguientes condiciones
+siguen siendo la puerta para habilitar finanzas reales; ese ensayo no las cierra
+en conjunto.
+
 1. Implementar la autoridad real de Supabase y su fence común con suspensión,
    revocación, reset y purga; probar carreras en conexiones PostgreSQL reales.
    El chequeo actual `v5_require_session` no acredita ese fence por sí solo.

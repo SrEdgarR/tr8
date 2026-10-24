@@ -132,6 +132,21 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      tr8_server_finance: {
+        Args: {
+          p_action: string;
+          p_actor: string;
+          p_body_base64?: string;
+          p_expected_epoch?: number;
+          p_operation_id?: string;
+          p_password_at?: number;
+          p_session: string;
+          p_target_session?: string;
+          p_token_exp: number;
+          p_vault_id?: string;
+        };
+        Returns: Json;
+      };
       tr8_server_google: {
         Args: {
           p_action: string;
@@ -263,6 +278,14 @@ export type Database = {
       tr8_v2_create_team: {
         Args: { p_id: string; p_name: string };
         Returns: Json;
+      };
+      tr8_v2_delete_project: {
+        Args: {
+          p_confirmation_name: string;
+          p_expected_version: number;
+          p_project_id: string;
+        };
+        Returns: undefined;
       };
       tr8_v2_delete_role: {
         Args: { p_id: string; p_version: number; p_workspace_id: string };
@@ -506,6 +529,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      tr8_v6_get_google_tasks_status: { Args: never; Returns: Json };
     };
     Enums: {
       [_ in never]: never;

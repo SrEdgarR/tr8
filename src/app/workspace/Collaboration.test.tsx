@@ -138,6 +138,7 @@ function props(overrides: Partial<WorkspaceProps> = {}): WorkspaceProps {
     onCreateProject: vi.fn().mockResolvedValue(project),
     onUpdateProject: vi.fn().mockResolvedValue(project),
     onArchiveProject: vi.fn().mockResolvedValue(project),
+    onDeleteProject: vi.fn().mockResolvedValue(undefined),
     onCreateTask: vi.fn().mockResolvedValue(task),
     onUpdateTask: vi.fn().mockResolvedValue(task),
     onDeleteTask: vi.fn().mockResolvedValue(undefined),

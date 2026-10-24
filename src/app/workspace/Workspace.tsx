@@ -18,6 +18,7 @@ import {
   Search,
   ShieldCheck,
   Settings2,
+  Trash2,
   UserRound,
   Users,
   X,
@@ -28,6 +29,7 @@ import type { CalendarApi, CalendarItem, CollaborationApi, Project, Task, TaskSt
 import Calendar from './Calendar';
 import CalendarSettings from './CalendarZoneSettings';
 import ProjectForm from './ProjectForm';
+import ProjectDeleteDialog from './ProjectDeleteDialog';
 import TaskForm from './TaskForm';
 import TasksView from './TasksView';
 import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon, StatusDot } from './ui';
@@ -39,6 +41,7 @@ import './workspace.css';
 type ProjectActions = {
   onEdit: (project: Project) => void;
   onArchive: (project: Project) => void;
+  onDelete: (project: Project) => void;
   onAccess: (project: Project) => void;
   pending: boolean;
   can: (projectId: string, permission: string) => boolean;
@@ -51,7 +54,7 @@ type ProjectActions = {
   scopeSearch?: string;
 };
 
-function ProjectCard({ project, tasks, pending, can, scopeSearch = '', onEdit, onArchive }: ProjectActions & { project: Project; tasks: Task[] }) {
+function ProjectCard({ project, tasks, pending, can, scopeSearch = '', onEdit, onArchive, onDelete }: ProjectActions & { project: Project; tasks: Task[] }) {
   const complete = tasks.filter(task => task.status === 'done').length;
   const progress = tasks.length ? Math.round((complete / tasks.length) * 100) : 0;
   return (
@@ -96,6 +99,11 @@ function ProjectCard({ project, tasks, pending, can, scopeSearch = '', onEdit, o
         >
           {project.archived_at ? <RefreshCw size={13} aria-hidden="true" /> : <Archive size={13} aria-hidden="true" />}
         </button>
+        {can(project.id, 'project.delete') && (
+          <button className="ibtn ibtn-xs btn-danger-ghost" aria-label={`Eliminar ${project.name}`} disabled={pending} onClick={() => onDelete(project)}>
+            <Trash2 size={13} aria-hidden="true" />
+          </button>
+        )}
       </div>
     </article>
   );
@@ -348,6 +356,12 @@ function ProjectPage({
               Nueva tarea
             </button>
           )}
+          {actions.can(project.id, 'project.delete') && (
+            <button className="btn btn-danger-ghost" disabled={actions.pending} onClick={() => actions.onDelete(project)}>
+              <Trash2 size={14} aria-hidden="true" />
+              Eliminar proyecto
+            </button>
+          )}
           {actions.collaboration && actions.can(project.id, 'project.access.manage') && (
             <button className="btn btn-secondary" disabled={actions.pending} onClick={() => actions.onAccess(project)}>
               <Users size={14} aria-hidden="true" />
@@ -546,6 +560,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   const [projectEditor, setProjectEditor] = useState<{ project?: Project } | null>(null);
   const [newTask, setNewTask] = useState<{ projectId?: string; status?: TaskStatus } | null>(null);
   const [accessProject, setAccessProject] = useState<Project | null>(null);
+  const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
   const [creatingTeam, setCreatingTeam] = useState(false);
   useEffect(() => {
     if (props.accessUnavailable) {
@@ -553,6 +568,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
       setNewTask(null);
       setCreatingTeam(false);
       setAccessProject(null);
+      setDeleteProjectId(null);
     }
   }, [props.accessUnavailable]);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -571,6 +587,8 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   const taskId = searchParams.get('task');
   const selectedTask = props.tasks.find(task => task.id === taskId);
   const currentProject = props.projects.find(project => location.pathname === `/projects/${project.id}`);
+  const deleteProject = props.projects.find(project => project.id === deleteProjectId);
+  const deleteAllowed = Boolean(deleteProject && can(deleteProject.id, 'project.delete'));
   const editorAllowed = Boolean(
     projectEditor &&
     (projectEditor.project
@@ -583,8 +601,9 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   useEffect(() => {
     if (projectEditor && !editorAllowed) setProjectEditor(null);
     if (accessProject && !accessAllowed) setAccessProject(null);
+    if (deleteProjectId && !deleteAllowed) setDeleteProjectId(null);
     if (newTask && !creatableProjects.some(project => !newTask.projectId || project.id === newTask.projectId)) setNewTask(null);
-  }, [projectEditor, editorAllowed, accessProject, accessAllowed, newTask, creatableProjects]);
+  }, [projectEditor, editorAllowed, accessProject, accessAllowed, deleteProjectId, deleteAllowed, newTask, creatableProjects]);
   const pageName =
     currentProject?.name ??
     (location.pathname === '/projects'
@@ -657,6 +676,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
       if (can(project.id, 'project.edit')) setProjectEditor({ project });
     },
     onArchive: archiveProject,
+    onDelete: project => setDeleteProjectId(project.id),
     onAccess: setAccessProject,
   };
   const openNewProject = () => setProjectEditor({});
@@ -949,6 +969,24 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           {announcement}
         </span>
       </div>
+      {deleteProject && deleteAllowed && !props.accessUnavailable && (
+        <ProjectDeleteDialog
+          key={deleteProject.id}
+          project={deleteProject}
+          taskCount={props.tasks.filter(task => task.project_id === deleteProject.id).length}
+          pending={pending}
+          onDelete={props.onDeleteProject}
+          onClose={() => setDeleteProjectId(null)}
+          onDeleted={() => {
+            setDeleteProjectId(null);
+            setProjectEditor(null);
+            setAccessProject(null);
+            setNewTask(null);
+            setAnnouncement('Proyecto eliminado.');
+            navigate(`/projects?workspace=${deleteProject.workspace_id}`, { replace: true });
+          }}
+        />
+      )}
       {projectEditor && editorAllowed && !props.accessUnavailable && (
         <ProjectForm
           key={projectEditor.project?.id ?? 'new-project'}

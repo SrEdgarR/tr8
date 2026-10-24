@@ -255,6 +255,7 @@ export interface WorkspaceProps {
   onCreateProject: (input: ProjectInput, requestId: string) => Promise<Project>;
   onUpdateProject: (project: Project, input: ProjectInput) => Promise<Project>;
   onArchiveProject: (project: Project, archived: boolean) => Promise<Project>;
+  onDeleteProject: (project: Project, confirmationName: string) => Promise<void>;
   onCreateTask: (input: TaskInput, requestId: string) => Promise<Task>;
   onUpdateTask: (task: Task, patch: TaskPatch) => Promise<Task>;
   onDeleteTask: (task: Task) => Promise<void>;

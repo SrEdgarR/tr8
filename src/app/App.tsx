@@ -465,6 +465,7 @@ function ScopedWorkspace({
         void queryClient.invalidateQueries({ queryKey: ['calendar', session.user.id] });
         void queryClient.invalidateQueries({ queryKey: ['processes', session.user.id] });
         void queryClient.invalidateQueries({ queryKey: ['google-calendar', session.user.id] });
+        void queryClient.invalidateQueries({ queryKey: ['google-tasks', session.user.id] });
       }
       return row;
     } catch (cause) {
@@ -618,6 +619,30 @@ function ScopedWorkspace({
       onCreateProject={(input, id) => write(() => repository.createProject(selected.id, input, id), acceptProject)}
       onUpdateProject={(project, input) => write(() => repository.updateProject(project, input), acceptProject)}
       onArchiveProject={(project, archived) => write(() => repository.archiveProject(project, archived), acceptProject)}
+      onDeleteProject={async (project, confirmationName) => {
+        await write(
+          async () => {
+            await repository.deleteProject(project, confirmationName);
+            // An earlier read must not reinsert the deleted project or its tasks.
+            await queryClient.cancelQueries({ queryKey });
+          },
+          data => {
+            const capabilities = { ...data.capabilities };
+            delete capabilities[project.id];
+            return {
+              ...data,
+              projects: data.projects.filter(row => row.id !== project.id),
+              tasks: data.tasks.filter(row => row.project_id !== project.id),
+              capabilities,
+            };
+          },
+        );
+        if (active.current) {
+          const locatorKey = ['project-location', session.user.id, project.id];
+          await queryClient.cancelQueries({ queryKey: locatorKey, exact: true });
+          queryClient.removeQueries({ queryKey: locatorKey, exact: true });
+        }
+      }}
       onCreateTask={(input, id) => write(() => repository.createTask(selected.id, input, id), acceptTask)}
       onUpdateTask={(task, patch) => write(() => repository.updateTask(task, patch), acceptTask)}
       onDeleteTask={task =>

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
-import type { ProjectInput, Task, TaskInput } from '../types';
+import type { Project, ProjectInput, Task, TaskInput } from '../types';
 import { createRepository } from './repository';
 
 const projectInput: ProjectInput = { name: '  Mi proyecto  ', description: '  Descripción  ', color: '#22aabb', status: 'active' };
@@ -136,5 +136,22 @@ describe('repositorio de proyectos y tareas', () => {
     rpc.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'Forbidden' } }).mockResolvedValueOnce({ data: null, error: null });
     await expect(repository.deleteTask(current)).rejects.toMatchObject({ code: '42501' });
     await expect(repository.deleteTask(current)).resolves.toBeUndefined();
+  });
+
+  it('elimina un proyecto solo con nombre exacto y envía su versión para detectar cambios concurrentes', async () => {
+    const { rpc, repository } = rpcClient();
+    const current = { id: 'project-a', name: 'Mi proyecto', version: 7 } as Project;
+    await expect(repository.deleteProject(current, 'mi proyecto')).rejects.toThrow('nombre exacto');
+    await expect(repository.deleteProject(current, 'Mi proyecto ')).rejects.toThrow('nombre exacto');
+    expect(rpc).not.toHaveBeenCalled();
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'PT409', message: 'Conflict' } }).mockResolvedValueOnce({ data: null, error: null });
+    await expect(repository.deleteProject(current, current.name)).rejects.toMatchObject({ code: 'PT409' });
+    await expect(repository.deleteProject(current, current.name)).resolves.toBeUndefined();
+    expect(rpc).toHaveBeenCalledWith('tr8_v2_delete_project', {
+      p_project_id: 'project-a',
+      p_expected_version: 7,
+      p_confirmation_name: 'Mi proyecto',
+    });
+    expect(current.version).toBe(7);
   });
 });

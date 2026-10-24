@@ -7,3 +7,9 @@ verify_jwt = false
 
 [functions.tr8-google-worker]
 verify_jwt = false
+
+# The financial handler verifies signed user claims itself and remains closed
+# unless both the test-project environment gate and the DB synthetic allowlist
+# permit the request. No production financial mode is implemented in 6B.1.
+[functions.tr8-finance]
+verify_jwt = false

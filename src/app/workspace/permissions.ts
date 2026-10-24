@@ -12,6 +12,7 @@ export const PERMISSIONS = [
   ['project.read', 'Ver proyectos con acceso'],
   ['project.edit', 'Editar proyectos'],
   ['project.archive', 'Archivar y restaurar proyectos'],
+  ['project.delete', 'Eliminar proyectos definitivamente'],
   ['project.access.manage', 'Gestionar acceso a proyectos (Ver miembros permite elegir nuevos destinatarios)'],
   ['task.read', 'Ver tareas'],
   ['task.create', 'Crear tareas'],

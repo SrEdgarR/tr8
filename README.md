@@ -15,7 +15,7 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 - Espacio personal privado, varios equipos, selector de espacio y directorio mínimo de miembros.
 - Roles personalizados por equipo, varios roles por miembro y administración delegada dentro de sus permisos actuales.
 - Proyectos privados con acceso explícito de lectura o escritura y controles de interfaz por capacidad efectiva.
-- Proyectos: crear, editar, archivar y restaurar.
+- Proyectos: crear, editar, archivar, restaurar y eliminar con confirmación por nombre exacto y permiso propio. La eliminación incluye sus tareas y actividad; los demás proyectos quedan fuera de la operación.
 - Tareas: crear, editar, eliminar, completar y cambiar de estado; descripción, prioridad, fechas y un responsable opcional. Asignar y editar son permisos separados.
 - Lista y tablero sobre los mismos datos, con búsqueda y filtros. El tablero permite arrastrar tareas entre estados; el selector ofrece una alternativa con teclado.
 - Calendario general y por proyecto, mes y agenda, filtros, vencimientos de día completo y bloques horarios independientes. Zona IANA detectada al primer acceso, búsqueda por país o ciudad con hora en directo, edición posterior en Configuración y reprogramación con versión esperada. Transiciones y foco accesible con movimiento reducido.
@@ -33,7 +33,9 @@ Google está autorizado en producción. La [etapa 5](docs/stage-5/README.md) doc
 
 La integración utiliza el proyecto Google Cloud `tr8-sredgar`. El entorno Supabase de prueba mantiene Google desactivado, sin credenciales activas del cliente OAuth. En producción las integraciones comparten el presupuesto de solicitudes y tratan por separado los conflictos y los resultados remotos ambiguos; pedir una sincronización no significa que el proveedor ya la haya confirmado.
 
-La [compatibilidad Pulso 6A](docs/pulso-6a/README.md) añade el formato opaco, AAD y vectores sintéticos, además de un simulador de sesión, CAS, recibos y ciclo de vida. El [ADR de transporte](docs/pulso-6a/transport-adr.md) conserva la identidad de Supabase y define las condiciones para el backend real. El código experimental no está conectado a la aplicación ni a la base de datos; persistencia financiera, Argon2 WASM, importación y recuperación reales pertenecen a 6B.
+La [compatibilidad Pulso 6A](docs/pulso-6a/README.md) añade el formato opaco, AAD y vectores sintéticos, además de un simulador de sesión, CAS, recibos y ciclo de vida. La [etapa 6B.1](docs/pulso-6b1/README.md) implementa el backend opaco en PostgreSQL y una Edge Function para ensayos alojados con identidades sintéticas. El acceso financiero real permanece cerrado, sin interfaz ni datos financieros del propietario. Argon2 WASM, dominio, importación y recuperación del cliente pertenecen a las siguientes entregas; la [autoridad independiente de restauración](docs/pulso-6b1/restore-authority.md) sigue siendo una condición pendiente para datos reales.
+
+La [eliminación de proyectos](docs/project-deletion.md) conserva los permisos y datos ajenos al proyecto elegido. `project.delete` se concede por separado del archivado; escribir el nombre en el diálogo no elimina el proyecto hasta confirmar expresamente.
 
 La [especificación técnica y el plan por etapas](docs/stage-0/README.md) documentan
 la evolución acordada hacia espacios personales, equipos, roles, calendarios,

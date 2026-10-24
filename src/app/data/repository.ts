@@ -65,7 +65,7 @@ async function rpc<T>(client: SupabaseClient, name: string, parameters: Record<s
     if (!data.length) throw new DataError('La operación no devolvió el registro guardado. Actualiza los datos.');
     return data[0] as T;
   }
-  if (data === null && name !== 'tr8_v2_delete_task') throw new DataError('No se pudo confirmar el registro guardado.');
+  if (data === null && name !== 'tr8_v2_delete_task' && name !== 'tr8_v2_delete_project') throw new DataError('No se pudo confirmar el registro guardado.');
   return data as T;
 }
 
@@ -138,6 +138,14 @@ export function createRepository(client: SupabaseClient) {
         p_id: project.id,
         p_version: project.version,
         p_patch: { archived_at: archived ? new Date().toISOString() : null },
+      });
+    },
+    async deleteProject(project: Project, confirmationName: string): Promise<void> {
+      if (confirmationName !== project.name) throw new DataError('Escribe el nombre exacto del proyecto para confirmar su eliminación.');
+      await rpc(client, 'tr8_v2_delete_project', {
+        p_project_id: project.id,
+        p_expected_version: project.version,
+        p_confirmation_name: confirmationName,
       });
     },
     createTask(workspaceId: string, input: TaskInput, requestId: string): Promise<Task> {

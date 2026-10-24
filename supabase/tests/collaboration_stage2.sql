@@ -206,7 +206,7 @@ declare v_directory jsonb; v_roles jsonb;
 begin
   v_directory:=public.tr8_v2_list_members_page(pg_temp.s2_id('team'),null,100);
   v_roles:=public.tr8_v2_list_roles(pg_temp.s2_id('team'));
-  perform pg_temp.s2_assert(exists(select 1 from jsonb_array_elements(v_directory->'items') m where m->>'id'=pg_temp.s2_id('admin')::text and jsonb_array_length(m->'permissions')=18 and m?'roles'),'role.read explicitly permits viewing role assignments and target permissions');
+  perform pg_temp.s2_assert(exists(select 1 from jsonb_array_elements(v_directory->'items') m where m->>'id'=pg_temp.s2_id('admin')::text and jsonb_array_length(m->'permissions')=19 and m?'roles'),'role.read explicitly permits viewing role assignments and all current target permissions');
   perform pg_temp.s2_assert(exists(select 1 from jsonb_array_elements(v_roles->'items') r where r->>'id'=pg_temp.s2_id('admin-role')::text),'role.read permits consulting role catalogue without opening project content');
   perform pg_temp.s2_denied($sql$select public.tr8_v2_update_role(pg_temp.s2_id('team'),pg_temp.s2_id('admin-role'),1,'Downgraded admin',array['project.read','task.read'])$sql$,'cannot degrade a superior role to take control');
   perform pg_temp.s2_denied($sql$select public.tr8_v2_delete_role(pg_temp.s2_id('team'),pg_temp.s2_id('admin-role'),1)$sql$,'cannot delete superior assigned role');
