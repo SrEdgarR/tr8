@@ -234,6 +234,20 @@ begin
   perform tr8_private.v6_observe(v_connection,'list-two',jsonb_build_object('id','team-created','deleted',true));
   perform pg_temp.b_assert(exists(select 1 from public.tr8_workspace_tasks where id=v_task),'Google deletion cannot bypass missing team task.delete permission');
   perform pg_temp.b_assert((select state='retained' and conflict_reason='permission_changed' from tr8_private.google_tasks_links where id=v_link),'unauthorized team deletion retains domain row');
+
+  -- Execute the real scheduler branch with an eligible linked task. Calling
+  -- queue_due only persists queue work; it never calls wake_worker/net.http.
+  perform pg_temp.b_assert(exists(select 1 from tr8_private.google_tasks_links l where l.connection_id=v_connection
+    and l.remote_task_id='remote-created' and tr8_private.v7_task_eligible(v_connection,l.local_task_id,l.local_task_created_at)),
+    'scheduler regression fixture has an eligible bound outbound task');
+  update tr8_private.google_config set configured=true,scheduler_enabled=true where singleton;
+  update tr8_private.google_tasks_sync set next_pull_at=null where connection_id=v_connection;
+  perform tr8_private.v6_queue_due();
+  perform pg_temp.b_assert((select next_pull_at>clock_timestamp() from tr8_private.google_tasks_sync where connection_id=v_connection),
+    'enabled scheduler executes discovery and cleanup query without ambiguous record aliases');
+  perform pg_temp.b_assert((select state='synced' and not cleanup_requested from tr8_private.google_tasks_links
+    where connection_id=v_connection and remote_task_id='remote-created'),'scheduler preserves eligible bound task and its Google identity');
+  update tr8_private.google_config set scheduler_enabled=false where singleton;
 end;$$;
 
 do $$begin

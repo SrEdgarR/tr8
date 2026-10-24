@@ -80,13 +80,19 @@ estas pruebas técnicas; una prueba simulada no acredita un resultado en Google.
 
 La migración `20261023234903_google_tasks_outbound_stage6b.sql` se instaló primero
 en prueba y después en producción, con el envío de tareas nuevas desactivado.
-Ambas bases registran 12 migraciones. Su SHA-256 al instalar es
+Su SHA-256 al instalar es
 `66c8a150d8049bd30148dadea8263616f00bea2fd121efe05f89cad4ec3a61b8`.
 Se comprobó que los proyectos y tareas anteriores conservaran exactamente sus
 datos en ambas bases. Las funciones Google se publicaron después de la migración.
 
-Pasaron 337 pruebas de aplicación, 348 de Edge y 117 comprobaciones SQL nuevas,
+Pasaron 337 pruebas de aplicación, 348 de Edge y 120 comprobaciones SQL nuevas,
 además de las suites actuales de colaboración, calendario, procesos y Google.
 También pasaron los controles de tipos, lint, formato, comprobaciones estáticas y
 compilación. La suite histórica `personal_app.sql` corresponde al esquema anterior
 a espacios de trabajo y no se aplica al esquema actual.
+
+La aceptación real detectó una colisión entre una variable y un alias de tabla
+en el programador. Se corrigió mediante la migración adicional
+`20261024000148_google_tasks_outbound_scheduler_fix.sql`, conservando inmutable la
+migración anterior y añadiendo una prueba con el programador habilitado. Ambas
+bases registran ahora 13 migraciones; se conserva la cola de trabajos pendientes.
