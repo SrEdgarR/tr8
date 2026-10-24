@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { StrictMode, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceProps, Project, Task, CalendarPage } from './types';
@@ -71,6 +71,7 @@ vi.mock('./workspace/Workspace', () => ({
         {props.tasks.map(task => (
           <p key={task.id}>{task.title}</p>
         ))}
+        <TestNavigation />
         {mocks.showActivity && !props.loading && props.collaboration && <ActivityPanel api={props.collaboration} />}
         {mocks.showCalendar && !props.loading && props.calendar && (
           <Calendar
@@ -87,6 +88,17 @@ vi.mock('./workspace/Workspace', () => ({
     );
   },
 }));
+
+function TestNavigation() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button onClick={() => navigate('/projects/project-a?workspace=personal-a')}>Abrir proyecto A</button>
+      <button onClick={() => navigate('/projects/project-b?workspace=personal-a')}>Abrir proyecto B</button>
+      <button onClick={() => navigate('/?workspace=team-a')}>Abrir equipo</button>
+    </>
+  );
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -709,6 +721,42 @@ describe('sesiones y datos del espacio personal', () => {
     expect(mocks.repository.resolveProject).toHaveBeenCalledWith('project-a', expect.any(AbortSignal));
     expect(mocks.repository.load).toHaveBeenCalledWith('team-a', expect.any(AbortSignal));
     expect(mocks.repository.load).not.toHaveBeenCalledWith('personal-a', expect.anything());
+  });
+
+  it('mantiene montado y cargado el espacio al alternar proyectos desde enlaces internos', async () => {
+    mocks.repository.load.mockResolvedValue({ projects: [project(), project('Segundo proyecto', 'project-b')], tasks: [task()] });
+    // A locator request would otherwise replace the whole workspace with its
+    // startup screen. Internal links must not need that request at all.
+    mocks.repository.resolveProject.mockReturnValue(new Promise(() => {}));
+    const { client } = show();
+    await screen.findByText('Proyecto privado');
+    const originalShell = screen.getByRole('region', { name: 'Espacio personal' });
+    for (let index = 0; index < 3; index += 1) {
+      act(() => screen.getByRole('button', { name: 'Abrir proyecto A' }).click());
+      expect(screen.getByRole('region', { name: 'Espacio personal' })).toBe(originalShell);
+      act(() => screen.getByRole('button', { name: 'Abrir proyecto B' }).click());
+      expect(screen.getByRole('region', { name: 'Espacio personal' })).toBe(originalShell);
+      expect(workspace().loading).toBe(false);
+    }
+    expect(mocks.repository.resolveProject).not.toHaveBeenCalled();
+    expect(mocks.repository.load).toHaveBeenCalledOnce();
+    expect(client.getQueriesData<WorkspaceData>({ queryKey: ['workspace', 'owner-a', 'personal-a'] })[0]?.[1]?.projects).toHaveLength(2);
+  });
+
+  it('ignora un localizador anterior al abrir un espacio explícito', async () => {
+    mocks.repository.load.mockImplementation((workspaceId: string) =>
+      Promise.resolve({
+        projects: [{ ...project(workspaceId === 'team-a' ? 'Proyecto del equipo' : 'Proyecto privado'), workspace_id: workspaceId }],
+        tasks: [],
+      }),
+    );
+    show('/projects/project-a');
+    await screen.findByText('Proyecto privado');
+    act(() => screen.getByRole('button', { name: 'Abrir equipo' }).click());
+    expect(await screen.findByText('Proyecto del equipo')).toBeInTheDocument();
+    expect(workspace().workspace?.id).toBe('team-a');
+    expect(mocks.repository.load).toHaveBeenCalledWith('team-a', expect.any(AbortSignal));
+    expect(mocks.repository.resolveProject).toHaveBeenCalledOnce();
   });
 
   it('actualiza el registro ante un conflicto de versión y conserva el error de guardado', async () => {

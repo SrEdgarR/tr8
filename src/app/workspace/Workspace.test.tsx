@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import type { CalendarApi, Project, Task, WorkspaceProps } from '../types';
+import type { ActivityPage, CalendarApi, CollaborationApi, Project, Task, WorkspaceProps } from '../types';
 import ProjectForm from './ProjectForm';
 import TaskForm from './TaskForm';
 import TasksView from './TasksView';
@@ -83,6 +83,134 @@ function workspaceProps(overrides: Partial<WorkspaceProps> = {}): WorkspaceProps
 describe('espacios y equipos', () => {
   const personal = { id: 'workspace-a', kind: 'personal' as const, name: 'Personal', owner_id: 'personal-owner', version: 1, permissions: [] };
   const team = { id: 'team-a', kind: 'team' as const, name: 'Equipo editorial', owner_id: 'personal-owner', version: 1, permissions: [] };
+
+  it('navega desde Inicio y alterna proyectos sin navegación de documento ni acumular vistas o nombres', async () => {
+    const user = userEvent.setup();
+    const otherProject = { ...project, id: 'project-b', name: 'Sitio web', description: 'Proyecto independiente' };
+    const otherTask = { ...task, id: 'task-b', project_id: otherProject.id, task_number: 15, title: 'Publicar portada' };
+    const props = workspaceProps({ workspace: personal, workspaces: [personal], projects: [project, otherProject], tasks: [task, otherTask] });
+    const { container } = render(
+      <MemoryRouter initialEntries={['/?workspace=workspace-a']}>
+        <Workspace {...props} />
+      </MemoryRouter>,
+    );
+    const sidebar = screen.getByRole('complementary', { name: 'Navegación principal' });
+    const firstLink = within(sidebar).getByRole('link', { name: project.name });
+    // NavLink must consume a normal click instead of allowing a document request.
+    expect(fireEvent.click(firstLink)).toBe(false);
+    expect(screen.getByRole('heading', { name: project.name, level: 1 })).toBeInTheDocument();
+    let previousPage = container.querySelector('.pw-project-page');
+    for (let index = 0; index < 4; index += 1) {
+      for (const selected of [otherProject, project]) {
+        await user.click(within(sidebar).getByRole('link', { name: selected.name }));
+        const previous = selected.id === project.id ? otherProject : project;
+        expect(screen.getByRole('heading', { name: selected.name, level: 1 })).toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: previous.name, level: 1 })).not.toBeInTheDocument();
+        expect(container.querySelectorAll('.pw-project-page')).toHaveLength(1);
+        expect(container.querySelectorAll('.crumbs .cur')).toHaveLength(1);
+        expect(container.querySelector('.crumbs .cur')).toHaveTextContent(selected.name);
+        expect(container.querySelector('.crumbs .cur')).not.toHaveTextContent(previous.name);
+        expect(previousPage).not.toBeInTheDocument();
+        previousPage = container.querySelector('.pw-project-page');
+        expect(within(screen.getByRole('table', { name: 'Lista de tareas' })).getAllByRole('row')).toHaveLength(2);
+      }
+    }
+    expect(props.onCreateProject).not.toHaveBeenCalled();
+    expect(props.onCreateTask).not.toHaveBeenCalled();
+    expect(props.onUpdateTask).not.toHaveBeenCalled();
+  });
+
+  it('retira el tablero anterior al alternar proyectos y no mezcla una respuesta tardía de actividad ni datos refrescados', async () => {
+    const user = userEvent.setup();
+    const otherProject = { ...project, id: 'project-b', name: 'Sitio web' };
+    const otherTask = { ...task, id: 'task-b', project_id: otherProject.id, title: 'Publicar portada', task_number: 15 };
+    const delayedActivity = deferred<ActivityPage>();
+    const activityPage = (projectId: string): ActivityPage => ({
+      items: [
+        {
+          id: projectId === project.id ? 1 : 2,
+          project_id: projectId,
+          actor_id: 'actor',
+          actor_name: projectId === project.id ? 'Actividad de revista' : 'Actividad de sitio',
+          action: 'task.updated',
+          resource_id: null,
+          created_at: project.updated_at,
+        },
+      ],
+      next_before_id: null,
+    });
+    const collaboration: CollaborationApi = {
+      scopeKey: ['collaboration', 'owner', 'workspace-a'],
+      roles: vi.fn(),
+      createRole: vi.fn(),
+      updateRole: vi.fn(),
+      deleteRole: vi.fn(),
+      setMemberRoles: vi.fn(),
+      removeMember: vi.fn(),
+      projectAccess: vi.fn(),
+      setProjectAccess: vi.fn(),
+      removeProjectAccess: vi.fn(),
+      assignableMembers: vi.fn(),
+      assignTask: vi.fn(),
+      activity: vi.fn(projectId => (projectId === project.id ? delayedActivity.promise : Promise.resolve(activityPage(otherProject.id)))),
+    };
+    let props = workspaceProps({
+      workspace: personal,
+      workspaces: [personal],
+      projects: [project, otherProject],
+      tasks: [task, otherTask],
+      collaboration,
+    });
+    const ui = () => (
+      <MemoryRouter initialEntries={[`/projects/${project.id}?workspace=workspace-a`]}>
+        <Workspace {...props} />
+      </MemoryRouter>
+    );
+    const { container, rerender } = render(ui());
+    const sidebar = screen.getByRole('complementary', { name: 'Navegación principal' });
+    await user.click(within(sidebar).getByRole('link', { name: otherProject.name }));
+    await user.click(screen.getByRole('button', { name: 'Tablero' }));
+    expect(container.querySelectorAll('.kcard')).toHaveLength(1);
+    await act(async () => delayedActivity.resolve(activityPage(project.id)));
+    expect(screen.queryByText('Actividad de revista')).not.toBeInTheDocument();
+    expect(screen.getByText('Actividad de sitio')).toBeInTheDocument();
+
+    props = {
+      ...props,
+      tasks: [
+        { ...task, title: 'Edición actualizada' },
+        { ...otherTask, title: 'Portada actualizada' },
+      ],
+      refreshing: true,
+    };
+    rerender(ui());
+    expect(screen.getByRole('button', { name: 'Portada actualizada' })).toBeInTheDocument();
+    for (let index = 0; index < 3; index += 1) {
+      for (const [selected, expectedTitle, previousTitle] of [
+        [project, 'Edición actualizada', 'Portada actualizada'],
+        [otherProject, 'Portada actualizada', 'Edición actualizada'],
+      ] as const) {
+        const previousPage = container.querySelector('.pw-project-page');
+        await user.click(within(sidebar).getByRole('link', { name: selected.name }));
+        expect(previousPage).not.toBeInTheDocument();
+        expect(container.querySelectorAll('.pw-project-page')).toHaveLength(1);
+        expect(container.querySelectorAll('.pw-tasks-area')).toHaveLength(1);
+        expect(container.querySelectorAll('.pw-activity')).toHaveLength(1);
+        expect(container.querySelectorAll('.pw-board')).toHaveLength(0);
+        expect(screen.getByRole('table', { name: 'Lista de tareas' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: expectedTitle })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: previousTitle })).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Tablero' }));
+        expect(container.querySelectorAll('.pw-board')).toHaveLength(1);
+        expect(container.querySelectorAll('.kcard')).toHaveLength(1);
+        expect(screen.queryByRole('table', { name: 'Lista de tareas' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: expectedTitle })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: previousTitle })).not.toBeInTheDocument();
+      }
+    }
+    expect(props.onUpdateTask).not.toHaveBeenCalled();
+    expect(collaboration.assignTask).not.toHaveBeenCalled();
+  });
 
   it('abre las categorías de Configuración desde la navegación y conserva Mi cuenta por separado', async () => {
     const user = userEvent.setup();

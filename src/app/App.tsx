@@ -166,10 +166,14 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
     retry: false,
   });
   const projectId = /^\/projects\/([^/]+)$/.exec(location.pathname)?.[1];
+  const requestedWorkspaceId = new URLSearchParams(location.search).get('workspace');
+  // Internal links already identify their workspace; context and capabilities
+  // still validate access below. Only legacy links need a separate locator.
+  const needsProjectLocation = Boolean(projectId && !requestedWorkspaceId);
   const project = useQuery({
     queryKey: ['project-location', session.user.id, projectId],
     queryFn: ({ signal }) => repository.resolveProject(projectId!, signal),
-    enabled: Boolean(projectId && context.data && !inviteToken),
+    enabled: Boolean(needsProjectLocation && context.data && !inviteToken),
     staleTime: 15000,
     retry: false,
   });
@@ -231,7 +235,7 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
         )}
       </main>
     );
-  if (context.isPending || (projectId && project.isPending && !context.error)) return <LoadingScreen />;
+  if (context.isPending || (needsProjectLocation && project.isPending && !context.error)) return <LoadingScreen />;
   if (context.error || !context.data)
     return (
       <main className="app-status">
@@ -251,7 +255,7 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
         </button>
       </main>
     );
-  if (project.error)
+  if (needsProjectLocation && project.error)
     return (
       <main className="app-status">
         <CircleAlert aria-hidden="true" />
@@ -265,7 +269,7 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
         </button>
       </main>
     );
-  const requested = project.data?.workspace_id ?? new URLSearchParams(location.search).get('workspace') ?? context.data.personal_workspace_id;
+  const requested = requestedWorkspaceId ?? (needsProjectLocation ? project.data?.workspace_id : undefined) ?? context.data.personal_workspace_id;
   const selected = context.data.workspaces.find(workspace => workspace.id === requested);
   if (!selected)
     return (

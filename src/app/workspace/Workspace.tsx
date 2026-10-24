@@ -846,7 +846,15 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
               <Route
                 path="/projects/:id"
                 element={
-                  <ProjectPage projects={props.projects} tasks={props.tasks} onNewTask={createTask} onOpen={openTask} onMove={moveTask} {...projectActions} />
+                  <ProjectPage
+                    key={`${props.workspace?.id ?? ''}:${currentProject?.id ?? location.pathname}`}
+                    projects={props.projects}
+                    tasks={props.tasks}
+                    onNewTask={createTask}
+                    onOpen={openTask}
+                    onMove={moveTask}
+                    {...projectActions}
+                  />
                 }
               />
               <Route
