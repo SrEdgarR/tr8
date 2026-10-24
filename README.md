@@ -33,7 +33,7 @@ Google está autorizado en producción. La [etapa 5](docs/stage-5/README.md) doc
 
 La integración utiliza el proyecto Google Cloud `tr8-sredgar`. El entorno Supabase de prueba mantiene Google desactivado, sin credenciales activas del cliente OAuth. En producción las integraciones comparten el presupuesto de solicitudes y tratan por separado los conflictos y los resultados remotos ambiguos; pedir una sincronización no significa que el proveedor ya la haya confirmado.
 
-La [compatibilidad Pulso 6A](docs/pulso-6a/README.md) añade el formato opaco, AAD y vectores sintéticos, además de un simulador de sesión, CAS, recibos y ciclo de vida. La [etapa 6B.1](docs/pulso-6b1/README.md) implementa el backend opaco en PostgreSQL y una Edge Function para ensayos alojados con identidades sintéticas. El acceso financiero real permanece cerrado, sin interfaz ni datos financieros del propietario. Argon2 WASM, dominio, importación y recuperación del cliente pertenecen a las siguientes entregas; la [autoridad independiente de restauración](docs/pulso-6b1/restore-authority.md) sigue siendo una condición pendiente para datos reales.
+La [compatibilidad Pulso 6A](docs/pulso-6a/README.md) añade el formato opaco, AAD y vectores sintéticos, además de un simulador de sesión, CAS, recibos y ciclo de vida. La [etapa 6B.1](docs/pulso-6b1/README.md) implementa el backend opaco en PostgreSQL y una Edge Function para ensayos alojados con identidades sintéticas. La [etapa 6B.2](docs/pulso-6b2/README.md) incorpora Argon2id WASM, cifrado en un Worker, contraseña privada, custodia, recuperación y renovación de claves, con pruebas de navegador separadas. El acceso financiero real permanece cerrado, sin interfaz ni datos financieros del propietario. El dominio, importación y pantalla financiera pertenecen a las siguientes entregas; la [autoridad independiente de restauración](docs/pulso-6b1/restore-authority.md) sigue siendo una condición pendiente para datos reales.
 
 La [eliminación de proyectos](docs/project-deletion.md) conserva los permisos y datos ajenos al proyecto elegido. `project.delete` se concede por separado del archivado; escribir el nombre en el diálogo no elimina el proyecto hasta confirmar expresamente.
 
@@ -117,6 +117,9 @@ src/app/
   auth/                 formularios y recuperación de contraseña
   workspace/            inicio, proyectos, tareas, lista y tablero
   finance/compatibility/ contrato Pulso y simulador sintético, sin ruta de aplicación
+  finance/crypto/        cifrado y medios privados compatibles con Pulso v1
+  finance/worker/        claves y snapshot dentro de un Worker dedicado
+  finance/session/       custodia, confirmación, bloqueo y ciclo de vida
   data/                 cliente, configuración, repositorio y tipos de Supabase
   types.ts              modelo de dominio
   constants.ts          estados, prioridades y presentación de fechas

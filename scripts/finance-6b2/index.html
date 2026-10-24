@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>TR8 · Ensayo de bóveda 6B.2</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font:
+          15px system-ui,
+          sans-serif;
+        background: #131313;
+        color: #ececec;
+      }
+      body {
+        max-width: 900px;
+        margin: 64px auto;
+        padding: 0 24px;
+      }
+      h1 {
+        font-size: 28px;
+        font-weight: 600;
+      }
+      p {
+        color: #aaa;
+        line-height: 1.6;
+      }
+      button {
+        background: #ececec;
+        color: #181818;
+        padding: 10px 18px;
+        border: 0;
+        border-radius: 8px;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+      li {
+        padding: 9px 0;
+        border-bottom: 1px solid #303030;
+        line-height: 1.5;
+      }
+      [data-pass='true'] {
+        color: #91d7ad;
+      }
+      [data-pass='false'] {
+        color: #ffb4ad;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        padding: 20px;
+        background: #202020;
+        border: 1px solid #333;
+        border-radius: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>TR8 · Ensayo de bóveda 6B.2</h1>
+    <p>Datos ficticios. Esta página de desarrollo no habilita finanzas ni forma parte del despliegue de TR8.</p>
+    <button id="run" type="button">Ejecutar pruebas de bóveda</button>
+    <p id="status" role="status">Listo para verificar el Worker y el cifrado real.</p>
+    <ol id="results"></ol>
+    <pre id="report" aria-label="Informe de pruebas">Sin ejecutar</pre>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
