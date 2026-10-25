@@ -3,11 +3,21 @@ export interface VaultSessionIdentity {
   sessionId: string;
   epoch: string;
   valid: boolean;
+  headRevision?: string;
+  headOperationId?: string | null;
 }
 export type VaultLockReason = 'logout' | 'identity-change' | 'navigation' | 'pagehide' | 'expired' | 'clock' | 'invalid-session' | 'worker-error' | 'abort';
 
 export function sameVaultIdentity(left: VaultSessionIdentity, right: VaultSessionIdentity): boolean {
-  return left.ownerId === right.ownerId && left.sessionId === right.sessionId && left.epoch === right.epoch && left.valid === true && right.valid === true;
+  return (
+    left.ownerId === right.ownerId &&
+    left.sessionId === right.sessionId &&
+    left.epoch === right.epoch &&
+    left.headRevision === right.headRevision &&
+    left.headOperationId === right.headOperationId &&
+    left.valid === true &&
+    right.valid === true
+  );
 }
 
 /** Memory-only lifecycle; every disclosure checks the clock, not only timers. */
@@ -55,6 +65,20 @@ export class VaultSessionLifecycle {
   }
   currentGeneration(): number {
     return this.generation;
+  }
+  adoptCommittedHead(generation: number, previous: VaultSessionIdentity, next: VaultSessionIdentity): boolean {
+    if (
+      !this.accepts(generation) ||
+      !this.identity ||
+      !sameVaultIdentity(this.identity, previous) ||
+      previous.ownerId !== next.ownerId ||
+      previous.sessionId !== next.sessionId ||
+      previous.epoch !== next.epoch ||
+      !next.valid
+    )
+      return false;
+    this.identity = { ...next };
+    return true;
   }
   accepts(generation: number): boolean {
     return this.check() && this.engaged && generation === this.generation;

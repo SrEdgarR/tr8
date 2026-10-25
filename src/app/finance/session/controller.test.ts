@@ -69,6 +69,40 @@ async function harness() {
 }
 
 describe('Worker-only vault controller and custody', () => {
+  it('does not decrypt a head read before another device changed credentials', async () => {
+    const h = await harness();
+    const envelope = testEnvelope();
+    h.setIdentity({ ...testIdentity, headRevision: String(BigInt(envelope.revision) + 1n), headOperationId: 'AgICAgICAgICAgICAgICAg' });
+    await expect(h.controller.unlock(envelope, { kind: 'password', value: testPassword })).rejects.toThrow();
+    expect(h.controller.state().canDisplay).toBe(false);
+  });
+  it('adopts only its own acknowledged live head and rejects a later external version', async () => {
+    const h = await harness();
+    h.setIdentity({ ...testIdentity, headRevision: '0', headOperationId: null });
+    const draft = await h.pending();
+    h.save.mockImplementationOnce(async body => {
+      const put = parseOpaquePut(body);
+      h.setIdentity({ ...testIdentity, headRevision: put.envelope.revision, headOperationId: put.operationId });
+      return { operationId: put.operationId, revision: put.envelope.revision };
+    });
+    await h.controller.commit();
+    expect(h.controller.state().canDisplay).toBe(true);
+    h.setIdentity({ ...testIdentity, headRevision: String(BigInt(draft.envelope.revision) + 1n), headOperationId: 'AQEBAQEBAQEBAQEBAQEBAQ' });
+    await expect(h.controller.read()).rejects.toThrow();
+    expect(h.controller.state().canDisplay).toBe(false);
+  });
+  it('refuses to adopt another device head even after a successful save acknowledgment', async () => {
+    const h = await harness();
+    h.setIdentity({ ...testIdentity, headRevision: '0', headOperationId: null });
+    await h.pending();
+    h.save.mockImplementationOnce(async body => {
+      const put = parseOpaquePut(body);
+      h.setIdentity({ ...testIdentity, headRevision: put.envelope.revision, headOperationId: 'AgICAgICAgICAgICAgICAg' });
+      return { operationId: put.operationId, revision: put.envelope.revision };
+    });
+    await expect(h.controller.commit()).rejects.toThrow();
+    expect(h.controller.state().canDisplay).toBe(false);
+  });
   it('only exposes recovery until full custody, and activates only after a matching ACK', async () => {
     const h = await harness();
     expect(await h.create()).toEqual({ recoveryCode: testRecovery });

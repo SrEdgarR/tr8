@@ -381,6 +381,11 @@ export class VaultSessionController {
       'replace',
       async ticket => {
         const generation = await this.begin(ticket);
+        if (
+          this.identity?.headRevision !== undefined &&
+          (checked.revision !== this.identity.headRevision || checked.operationId !== this.identity.headOperationId)
+        )
+          throw vaultError('INVALID_STATE');
         const result = await this.run(generation, 'unlock', { envelope: checked, credential: { ...credential } }, signal);
         return this.consume(generation, () => {
           const record = requireClosedRecord(result, ['mode']);
@@ -537,7 +542,22 @@ export class VaultSessionController {
       const draft = this.prepared;
       this.clear();
       try {
-        const identity = await this.verify(generation);
+        let identity: VaultSessionIdentity;
+        if (this.phase === 'unconfirmed' && this.identity?.headRevision !== undefined) {
+          const fresh = await this.options.verifyIdentity();
+          this.assertCurrent(generation);
+          const prior = this.identity;
+          if (
+            fresh.valid !== true ||
+            fresh.ownerId !== prior.ownerId ||
+            fresh.sessionId !== prior.sessionId ||
+            fresh.epoch !== prior.epoch ||
+            (!sameVaultIdentity(prior, fresh) &&
+              (fresh.headRevision !== draft.snapshot.envelope.revision || fresh.headOperationId !== draft.snapshot.envelope.operationId))
+          )
+            throw vaultError('INVALID_STATE');
+          identity = { ...prior };
+        } else identity = await this.verify(generation);
         this.assertCurrent(generation);
         if (this.operationTicket !== ticket || this.prepared !== draft) throw vaultError('INVALID_STATE');
         let receipt: OpaqueReceipt;
@@ -554,11 +574,22 @@ export class VaultSessionController {
           }
           throw vaultError('INVALID_STATE');
         }
-        await this.verify(generation);
-        this.assertCurrent(generation);
         const record = requireClosedRecord(receipt, ['operationId', 'revision']);
         if (record.operationId !== draft.snapshot.envelope.operationId || record.revision !== draft.snapshot.envelope.revision)
           throw vaultError('INVALID_STATE');
+        if (identity.headRevision !== undefined) {
+          const fresh = await this.options.verifyIdentity();
+          this.assertCurrent(generation);
+          if (
+            fresh.headRevision !== record.revision ||
+            fresh.headOperationId !== record.operationId ||
+            !this.lifecycle.adoptCommittedHead(generation, identity, fresh)
+          )
+            throw vaultError('INVALID_STATE');
+          this.identity = { ...fresh };
+        }
+        await this.verify(generation);
+        this.assertCurrent(generation);
         await this.run(generation, 'ack', { operationId: record.operationId, revision: record.revision });
         this.assertCurrent(generation);
         if (this.operationTicket !== ticket || this.prepared !== draft || !this.lifecycle.activate(generation)) throw vaultError('INVALID_STATE');

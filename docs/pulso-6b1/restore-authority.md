@@ -1,5 +1,12 @@
 # ADR F02 · Restauración financiera y autoridad independiente
 
+**Actualización productiva 2026-10-25:** la [entrega personal](../finance-release/README.md)
+resuelve la puerta para el modelo de confianza allí acotado: head en Cloudflare,
+testigo privado actual en Vercel Blob y comprobación de la proyección SQL.
+La recuperación ante pérdida de continuidad conserva el cierre y requiere al
+operador. Los apartados siguientes registran la decisión histórica del corte
+sintético; no sustituyen el protocolo ni los límites de la entrega productiva.
+
 Estado: decisión de cierre seguro aceptada para el corte sintético 6B.1.
 **La autoridad externa de restauración continúa sin resolver.** No se habilitan
 finanzas con datos reales hasta cerrar esta puerta dentro de 6B.

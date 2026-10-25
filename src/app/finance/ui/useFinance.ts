@@ -28,6 +28,10 @@ function message(error: unknown): string {
       return 'La bóveda aún no está habilitada en este entorno.';
     case 'REAUTHENTICATION_REQUIRED':
       return 'Vuelve a confirmar tu contraseña de TR8 y abre de nuevo la bóveda.';
+    case 'AUTHORITY_DIVERGED':
+      return 'No se pudo verificar la versión actual. La bóveda seguirá bloqueada hasta comprobarla.';
+    case 'RESTORE_QUARANTINED':
+      return 'Hay una operación pendiente de verificación. Reintenta el mismo guardado; si persiste, conserva tu respaldo y solicita una revisión.';
     case 'FINANCE_CONFLICT':
     case 'STALE_REVISION':
       return 'La bóveda cambió en otro dispositivo. Bloquéala y vuelve a abrir la versión actual.';
@@ -283,10 +287,19 @@ export function useFinance(api: FinanceApi) {
       }),
     reauthenticate: (password: string) => {
       lock();
-      const token = operation.current;
-      return api.reauthenticate(password).catch(error => {
-        if (mounted.current && token === operation.current) setView(v => ({ ...v, error: message(error) }));
-      });
+      return api
+        .reauthenticate(password)
+        .then(async () => {
+          const token = ++operation.current;
+          const value = await api.head();
+          if (mounted.current && token === operation.current) {
+            head.current = value;
+            setView(v => ({ ...v, stage: value.envelope ? 'locked' : 'empty', error: '' }));
+          }
+        })
+        .catch(error => {
+          if (mounted.current) setView(v => ({ ...v, error: message(error) }));
+        });
     },
   };
 }

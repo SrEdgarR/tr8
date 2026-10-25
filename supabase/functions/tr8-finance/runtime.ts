@@ -33,7 +33,7 @@ export function createFinanceRuntime(
   get: (name: string) => string | undefined,
   fetcher: typeof fetch = fetch,
   clock = Date.now,
-  rpc: 'tr8_server_finance' | 'tr8_server_finance_coordinated' | 'tr8_server_vault_control' = 'tr8_server_finance',
+  rpc: 'tr8_server_finance' | 'tr8_server_finance_coordinated' | 'tr8_server_vault_control' | 'tr8_live_finance' = 'tr8_server_finance',
 ): FinanceRuntime {
   const project = origin(get('SUPABASE_URL'));
   const app = origin(get('TR8_FINANCE_ALLOWED_ORIGIN'));
@@ -42,11 +42,20 @@ export function createFinanceRuntime(
   const serverKey = key(get, 'SUPABASE_SECRET_KEYS', 'SUPABASE_SERVICE_ROLE_KEY');
   // This delivery cannot be activated on the production project by environment
   // changes. Removing this isolated-project fence requires a separate release.
-  const enabled =
+  const syntheticEnabled =
     get('TR8_FINANCE_TESTING_ENABLED') === 'true' &&
     projectRef === 'kajcbwlnqcwcpbtqyieo' &&
     project === 'https://kajcbwlnqcwcpbtqyieo.supabase.co' &&
     Boolean(app && publicKey && serverKey);
+  const liveEnabled =
+    rpc === 'tr8_live_finance' &&
+    get('TR8_LIVE_ENABLED') === 'true' &&
+    Boolean(app && publicKey && serverKey) &&
+    ((get('TR8_LIVE_MODE') === 'personal' && project === 'https://ggbjezprlsnhidlbjivl.supabase.co' && app === 'https://tr8.vercel.app') ||
+      (get('TR8_LIVE_MODE') === 'staging' &&
+        project === 'https://kajcbwlnqcwcpbtqyieo.supabase.co' &&
+        ['http://127.0.0.1:5174', 'https://tr8-git-main-mr-xpras-projects.vercel.app'].includes(app)));
+  const enabled = rpc === 'tr8_live_finance' ? liveEnabled : syntheticEnabled;
   async function platform(path: string, headers: Record<string, string>, body?: unknown): Promise<Response> {
     try {
       return await fetcher(`${project}${path}`, {
@@ -98,7 +107,21 @@ export function createFinanceRuntime(
               )
           : [];
         const passwordAt = passwords.length ? Math.max(...passwords.map(proof => proof.timestamp as number)) : null;
-        return { id, session: uuid(claims.session_id), expiresAt: claims.exp, passwordAt };
+        const recoveries = Array.isArray(claims.amr)
+          ? claims.amr
+              .map(object)
+              .filter(
+                p =>
+                  ['otp', 'recovery'].includes(String(p.method)) && typeof p.timestamp === 'number' && Number.isSafeInteger(p.timestamp) && p.timestamp <= now,
+              )
+          : [];
+        return {
+          id,
+          session: uuid(claims.session_id),
+          expiresAt: claims.exp,
+          passwordAt,
+          ...(rpc === 'tr8_live_finance' ? { recoveryAt: recoveries.length ? Math.max(...recoveries.map(p => p.timestamp as number)) : null } : {}),
+        };
       } catch {
         throw new FinanceError('AUTH_REQUIRED', 401);
       }
@@ -107,7 +130,15 @@ export function createFinanceRuntime(
       const result = await platform(
         `/rest/v1/rpc/${rpc}`,
         { apikey: serverKey, 'Content-Type': 'application/json' },
-        { ...args, p_action: action, p_actor: actor.id, p_session: actor.session, p_token_exp: actor.expiresAt, p_password_at: actor.passwordAt },
+        {
+          ...args,
+          p_action: action,
+          p_actor: actor.id,
+          p_session: actor.session,
+          p_token_exp: actor.expiresAt,
+          p_password_at: actor.passwordAt,
+          ...(rpc === 'tr8_live_finance' ? { p_recovery_at: actor.recoveryAt ?? null } : {}),
+        },
       );
       const value = JSON.parse(decodeUtf8(await readFinanceBytes(result, 2_200_000))) as unknown;
       if (!result.ok) {

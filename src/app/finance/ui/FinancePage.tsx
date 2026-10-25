@@ -104,21 +104,30 @@ export default function FinancePage({ api }: { api: FinanceApi }) {
           <span className="tf-seal">
             <ShieldCheck size={28} aria-hidden="true" />
           </span>
-          <span className="tf-tag">En preparación</span>
+          <span className="tf-tag">{api.enabled ? 'Bóveda bloqueada' : 'En preparación'}</span>
           <h2>Un espacio solo para tus finanzas</h2>
-          <p>La interfaz financiera está preparada. El acceso a tu bóveda real sigue cerrado hasta completar la protección de restauración acordada.</p>
+          <p>
+            {api.enabled
+              ? 'Confirma tu sesión para acceder. Si el servicio no puede verificar la versión actual, mantendrá la bóveda bloqueada.'
+              : 'La interfaz financiera está preparada. El acceso a tu bóveda real sigue cerrado hasta completar la protección de restauración acordada.'}
+          </p>
           <p className="muted">Tus proyectos y tareas siguen disponibles. No necesitas cambiar de plan.</p>
           {api.enabled && (
-            <button className="btn btn-secondary" onClick={() => void finance.refresh()}>
-              Volver a comprobar
-            </button>
+            <>
+              <Reauthenticate finance={finance} />
+              <button className="btn btn-secondary" onClick={() => void finance.refresh()}>
+                Volver a comprobar
+              </button>
+            </>
           )}
         </div>
       ) : (
         <>
-          <p className="tf-test-note">
-            <ShieldCheck size={14} aria-hidden="true" /> Entorno de prueba · Solo identidades y datos ficticios
-          </p>
+          {api.syntheticOnly && (
+            <p className="tf-test-note">
+              <ShieldCheck size={14} aria-hidden="true" /> Entorno de prueba · Solo identidades y datos ficticios
+            </p>
+          )}
           {busy && (
             <div role="status" className="tf-progress">
               Protegiendo y verificando la operación…
@@ -142,7 +151,51 @@ export default function FinancePage({ api }: { api: FinanceApi }) {
           </div>
         </>
       )}
+      {api.resetVault && (
+        <ResetVault api={api} onLock={finance.lock} disabled={busy || view.stage === 'checking' || view.stage === 'custody' || view.stage === 'pending'} />
+      )}
     </section>
+  );
+}
+function ResetVault({ api, onLock, disabled }: { api: FinanceApi; onLock: () => void; disabled: boolean }) {
+  const [password, setPassword] = useState(''),
+    [confirmation, setConfirmation] = useState(''),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  return (
+    <details className="tf-card">
+      <summary>Reiniciar mi bóveda</summary>
+      <p>
+        Elimina definitivamente tus datos financieros y retira esta bóveda. Tus proyectos y tareas se conservan. Descarga antes un respaldo si todavía puedes
+        abrirla.
+      </p>
+      <PrivateForm
+        busy={busy || disabled}
+        label="Eliminar bóveda y cerrar sesión"
+        onSubmit={() => {
+          if (confirmation !== 'ELIMINAR BÓVEDA' || !api.resetVault) return;
+          onLock();
+          setBusy(true);
+          setError('');
+          void api
+            .resetVault(password, confirmation)
+            .catch(() => {
+              setError('No se pudo confirmar el reinicio. Comprueba tu contraseña de TR8 y la conexión antes de volver a intentarlo.');
+            })
+            .finally(() => {
+              setBusy(false);
+              setPassword('');
+              setConfirmation('');
+            });
+        }}
+      >
+        <Secret label="Contraseña de TR8 para reiniciar la bóveda" value={password} onChange={setPassword} />
+        <Field label="Escribe ELIMINAR BÓVEDA">
+          <input required value={confirmation} onChange={e => setConfirmation(e.target.value)} pattern="ELIMINAR BÓVEDA" autoComplete="off" />
+        </Field>
+      </PrivateForm>
+      {error && <ErrorNotice>{error}</ErrorNotice>}
+    </details>
   );
 }
 
@@ -880,6 +933,11 @@ function Security({ finance: f, readOnly }: { finance: Finance; readOnly: boolea
       </div>
       {!readOnly && (
         <>
+          <details className="tf-card">
+            <summary>Confirmar sesión de TR8</summary>
+            <p className="muted">Confirma tu cuenta antes de cambiar los medios privados de acceso. Después tendrás que abrir de nuevo la bóveda.</p>
+            <Reauthenticate finance={f} />
+          </details>
           <details className="tf-card">
             <summary>Cambiar contraseña privada</summary>
             <PrivateForm busy={f.busy} label="Cambiar contraseña" onSubmit={() => void f.rotatePassword(old, next, confirm)}>

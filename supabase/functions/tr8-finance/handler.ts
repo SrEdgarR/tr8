@@ -22,6 +22,7 @@ export interface FinanceActor {
   session: string;
   expiresAt: number;
   passwordAt: number | null;
+  recoveryAt?: number | null;
 }
 export interface FinanceRuntime {
   origin: string;

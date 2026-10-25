@@ -15,7 +15,7 @@ export const CONTROL_CASES = ['heads', 'revoke', 'logout', 'disable', 'delete', 
 export type ControlCase = (typeof CONTROL_CASES)[number];
 export interface ControlAuthority {
   configured: boolean;
-  caseId: ControlCase;
+  caseId: string;
   view(): Promise<{ state: ControlState; pending: ControlIntent | null }>;
   operation(id: string): Promise<ControlIntent | null>;
   prepare(command: ControlCommand): Promise<ControlIntent>;
@@ -46,11 +46,22 @@ export function createControlAuthority(get: (key: string) => string | undefined,
   const secret = get('TR8_VAULT_CONTROL_SECRET') ?? '',
     caseId = get('TR8_VAULT_CONTROL_CASE') as ControlCase;
   const configured = get('TR8_VAULT_CONTROL_AUTHORITY') === CONTROL_AUTHORITY && CONTROL_CASES.includes(caseId) && /^[a-f0-9]{64}$/.test(secret);
+
+  return createPinnedControlAuthority(
+    { configured, caseId, secret, ownerId: CONTROL_OWNER, authorityId: CONTROL_AUTHORITY, origin: 'https://tr8-vault-control-test.sredgarpadilla.workers.dev' },
+    fetcher,
+  );
+}
+export function createPinnedControlAuthority(
+  config: { configured: boolean; caseId: string; secret: string; ownerId: string; authorityId: string; origin: string },
+  fetcher: typeof fetch = fetch,
+): ControlAuthority {
+  const { configured, caseId, secret, ownerId, authorityId, origin } = config;
   async function call(path: string, payload: Record<string, unknown>, fields: string[]) {
     if (!configured) throw unavailable();
     const nonce = encodeBase64Url(crypto.getRandomValues(new Uint8Array(16)));
     try {
-      const r = await fetcher(`https://tr8-vault-control-test.sredgarpadilla.workers.dev/v1/cases/${caseId}/${path}`, {
+      const r = await fetcher(`${origin}/v1/cases/${caseId}/${path}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ nonce, ...payload }),
@@ -69,7 +80,7 @@ export function createControlAuthority(get: (key: string) => string | undefined,
         if (e.code === 'CONFLICT') throw new FinanceError('FINANCE_CONFLICT', 409);
         throw unavailable();
       }
-      if (data.authorityId !== CONTROL_AUTHORITY) throw unavailable();
+      if (data.authorityId !== authorityId) throw unavailable();
       return data;
     } catch (error) {
       if (error instanceof FinanceError && [403, 409, 503].includes(error.status)) throw error;
@@ -80,19 +91,19 @@ export function createControlAuthority(get: (key: string) => string | undefined,
     configured,
     caseId,
     view: async () => {
-      const r = await call('state', { ownerId: CONTROL_OWNER }, ['state', 'pending']);
+      const r = await call('state', { ownerId: ownerId }, ['state', 'pending']);
       const state = controlState(r.state);
-      if (state.ownerId !== CONTROL_OWNER) throw unavailable();
+      if (state.ownerId !== ownerId) throw unavailable();
       const pending = r.pending === null ? null : await controlIntent(r.pending);
-      if (pending && (pending.command.ownerId !== CONTROL_OWNER || pending.command.expectedSequence !== state.sequence || pending.status !== 'pending'))
+      if (pending && (pending.command.ownerId !== ownerId || pending.command.expectedSequence !== state.sequence || pending.status !== 'pending'))
         throw unavailable();
       return { state, pending };
     },
     operation: async id => {
-      const r = await call('operation', { ownerId: CONTROL_OWNER, operationId: id }, ['intent']);
+      const r = await call('operation', { ownerId: ownerId, operationId: id }, ['intent']);
       if (r.intent === null) return null;
       const intent = await controlIntent(r.intent);
-      if (intent.command.operationId !== id || intent.command.ownerId !== CONTROL_OWNER) throw unavailable();
+      if (intent.command.operationId !== id || intent.command.ownerId !== ownerId) throw unavailable();
       return intent;
     },
     prepare: async command => {
@@ -102,7 +113,7 @@ export function createControlAuthority(get: (key: string) => string | undefined,
       return intent;
     },
     commit: async intent => {
-      const r = await call('commit', { ownerId: CONTROL_OWNER, operationId: intent.command.operationId, digest: intent.digest }, ['state']);
+      const r = await call('commit', { ownerId: ownerId, operationId: intent.command.operationId, digest: intent.digest }, ['state']);
       const result = controlState(r.state);
       if (stable(result) !== stable(intent.next)) throw unavailable();
       return result;

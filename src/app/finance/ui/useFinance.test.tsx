@@ -159,6 +159,23 @@ describe('Financial React disclosure leases', () => {
 });
 
 describe('Financial forms and domain commands', () => {
+  it('requires the exact reset phrase and clears the account password after the request', async () => {
+    const a = api();
+    const reset = vi.fn(async () => {});
+    a.value.resetVault = reset;
+    render(<FinancePage api={a.value} />);
+    await screen.findByRole('button', { name: 'Crear bóveda' });
+    fireEvent.change(screen.getByLabelText('Contraseña de TR8 para reiniciar la bóveda'), { target: { value: 'fixture-account-password' } });
+    const confirmation = screen.getByLabelText('Escribe ELIMINAR BÓVEDA');
+    fireEvent.change(confirmation, { target: { value: 'otra cosa' } });
+    const button = screen.getByRole('button', { name: 'Eliminar bóveda y cerrar sesión', hidden: true });
+    fireEvent.submit(button.closest('form')!);
+    expect(reset).not.toHaveBeenCalled();
+    fireEvent.change(confirmation, { target: { value: 'ELIMINAR BÓVEDA' } });
+    fireEvent.submit(button.closest('form')!);
+    await waitFor(() => expect(reset).toHaveBeenCalledWith('fixture-account-password', 'ELIMINAR BÓVEDA'));
+    await waitFor(() => expect(screen.getByLabelText('Contraseña de TR8 para reiniciar la bóveda')).toHaveValue(''));
+  });
   it('creates an account, rejects ambiguous money and confirms a plan exactly once', async () => {
     const a = api();
     render(<FinancePage api={a.value} />);

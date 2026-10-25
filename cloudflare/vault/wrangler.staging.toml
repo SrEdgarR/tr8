@@ -1,0 +1,19 @@
+name = "tr8-vault-staging"
+main = "worker.ts"
+account_id = "7c0ddf7725904b4726506e9b50e5c316"
+compatibility_date = "2026-10-25"
+workers_dev = true
+preview_urls = false
+[observability]
+enabled = false
+[vars]
+MODE = "staging"
+OWNER_ID = "37848d70-989a-4f69-b124-0c959d8b49a6"
+BOOTSTRAP_ENABLED = "false"
+AUTHORITY_ID = "c6d34957-82b7-40d7-a378-7aa71a5841f2"
+[[durable_objects.bindings]]
+name = "JOURNAL"
+class_name = "Tr8PersonalVault"
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Tr8PersonalVault"]

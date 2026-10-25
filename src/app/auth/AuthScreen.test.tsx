@@ -33,6 +33,19 @@ afterEach(() => {
 });
 
 describe('autenticación personal', () => {
+  it('usa el cierre financiero coordinado antes de completar una recuperación', async () => {
+    const config = setup(true);
+    const update = vi.fn(async () => {});
+    render(<AuthScreen client={config.client} ownerEmail={ownerEmail} recovery onRecoveryComplete={config.onRecoveryComplete} onUpdatePassword={update} />);
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText('Nueva contraseña'), 'contraseña-de-fixture');
+    await user.type(screen.getByLabelText('Repite la contraseña'), 'contraseña-de-fixture');
+    await user.click(screen.getByRole('button', { name: 'Guardar nueva contraseña' }));
+    await waitFor(() => expect(config.onRecoveryComplete).toHaveBeenCalledOnce());
+    expect(update).toHaveBeenCalledWith('contraseña-de-fixture');
+    expect(config.auth.updateUser).not.toHaveBeenCalled();
+    expect(update.mock.invocationCallOrder[0]).toBeLessThan(config.auth.signOut.mock.invocationCallOrder[0]);
+  });
   it('permite entrar con otra cuenta habilitada y no ofrece altas externas', async () => {
     const config = setup();
     const user = show(config);

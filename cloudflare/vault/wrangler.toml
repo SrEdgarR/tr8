@@ -1,0 +1,19 @@
+name = "tr8-vault"
+main = "worker.ts"
+account_id = "7c0ddf7725904b4726506e9b50e5c316"
+compatibility_date = "2026-10-25"
+workers_dev = true
+preview_urls = false
+[observability]
+enabled = false
+[vars]
+MODE = "personal"
+OWNER_ID = "74368b81-39f8-4bc3-bbbf-f541b64df4cf"
+BOOTSTRAP_ENABLED = "false"
+AUTHORITY_ID = "f441d794-a20e-43be-a286-b7d29efcfe7c"
+[[durable_objects.bindings]]
+name = "JOURNAL"
+class_name = "Tr8PersonalVault"
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Tr8PersonalVault"]

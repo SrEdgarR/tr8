@@ -1,5 +1,9 @@
 # Pulso 6B.5A · Protocolo de restauración y banco local
 
+Este documento conserva el estado histórico de los ensayos. La
+[entrega productiva personal](../finance-release/README.md) añade el testigo
+independiente y la integración real que quedaban pendientes aquí.
+
 Estado: cortes A (banco local), [B (servicio sintético alojado)](hosted-test.md) y
 [C (coordinación con PostgreSQL y restauración lógica alojada)](postgres-rehearsal.md).
 [D (versiones, identidad, reanudación y recuperación)](control-hardening.md) implementa

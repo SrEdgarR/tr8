@@ -20,14 +20,19 @@ import {
 } from '../../../server/finance-authority/vault-control.ts';
 import { CONTROL_AUTHORITY, CONTROL_OWNER, type ControlAuthority } from './control-client.ts';
 import { FinanceError, type FinanceActor, type FinanceRuntime } from './handler.ts';
-export function controlCoordinator(raw: FinanceRuntime, authority: ControlAuthority, clock = Date.now) {
+export function controlCoordinator(
+  raw: FinanceRuntime,
+  authority: ControlAuthority,
+  clock = Date.now,
+  pins = { ownerId: CONTROL_OWNER, authorityId: CONTROL_AUTHORITY },
+) {
   const live = (actor: FinanceActor) => {
-    if (actor.id !== CONTROL_OWNER) throw new FinanceError('FINANCE_ACCESS_DENIED', 403);
+    if (actor.id !== pins.ownerId) throw new FinanceError('FINANCE_ACCESS_DENIED', 403);
     if (actor.expiresAt <= clock() / 1000) throw new FinanceError('AUTH_REQUIRED', 401);
   };
   const call = async (action: string, actor: FinanceActor, args: Record<string, unknown> = {}) => {
     live(actor);
-    const result = await raw.call(action, actor, { ...args, p_authority_id: CONTROL_AUTHORITY, p_case_id: authority.caseId });
+    const result = await raw.call(action, actor, { ...args, p_authority_id: pins.authorityId, p_case_id: authority.caseId });
     live(actor);
     return result;
   };
@@ -96,6 +101,9 @@ export function controlCoordinator(raw: FinanceRuntime, authority: ControlAuthor
       p_expected_revision: put?.expectedRevision ?? null,
       p_resume: true,
     });
+    // Preparation can have stopped after the first independent authority.
+    // Reestablish every durable witness before applying the SQL projection.
+    await authority.prepare(op.command);
     return finish(actor, op, view.state, put, true);
   }
   return {

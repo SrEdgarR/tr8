@@ -21,6 +21,17 @@ function Privacy() {
         </p>
       </section>
       <section>
+        <h2>Finanzas personales cifradas</h2>
+        <p>
+          Los datos financieros se cifran en tu dispositivo con una contraseña privada distinta de la cuenta. Supabase conserva el contenido cifrado; Cloudflare
+          y un almacén privado de Vercel conservan versiones y revocaciones para comprobar el acceso, sin importes ni movimientos.
+        </p>
+        <p>
+          La contraseña privada y el código de recuperación permanecen en tu dispositivo. Guarda esos medios y tus respaldos cifrados en un lugar privado.
+          Reiniciar la bóveda elimina su contenido en TR8 y retira su contexto; conserva registros de seguridad y no elimina copias que hayas descargado.
+        </p>
+      </section>
+      <section>
         <h2>Google Calendar es opcional</h2>
         <p>
           La conexión requiere tu consentimiento desde Configuración. TR8 copia a un calendario independiente llamado TR8 las tareas personales y las asignadas
@@ -87,8 +98,8 @@ function About() {
       <section>
         <h2>Tu trabajo, en un solo lugar</h2>
         <p>
-          TR8 es una aplicación privada para organizar proyectos, tareas y planificación personal. Combina un espacio propio con equipos separados y acceso
-          configurable a los proyectos.
+          TR8 es una aplicación privada para organizar proyectos, tareas, planificación y finanzas personales. Combina un espacio propio con equipos separados y
+          acceso configurable a los proyectos.
         </p>
       </section>
       <div className="tr8-public-features">

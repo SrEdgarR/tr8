@@ -16,7 +16,7 @@ import { callbackRequestedRecovery, configuration, supabase } from './data/clien
 import { createRepository, type WorkspaceData } from './data/repository';
 import { dataError, DataError } from './data/errors';
 import type { CalendarApi, CollaborationApi, Project, Task, WorkspaceProps, WorkspaceSummary } from './types';
-import { createFinanceApi } from './finance/ui/api';
+import { createFinanceApi, changeFinanceAccountPassword } from './finance/ui/api';
 
 const FinancePage = lazy(() => import('./finance/ui/FinancePage'));
 
@@ -123,7 +123,16 @@ function ConnectedApp({ client }: { client: SupabaseClient }) {
         </button>
       </main>
     );
-  if (recovery || !session) return <AuthScreen client={client} ownerEmail="" recovery={recovery} onRecoveryComplete={completeRecovery} />;
+  if (recovery || !session)
+    return (
+      <AuthScreen
+        client={client}
+        ownerEmail=""
+        recovery={recovery}
+        onRecoveryComplete={completeRecovery}
+        onUpdatePassword={password => changeFinanceAccountPassword(client, configuration!.url, configuration!.publishableKey, password)}
+      />
+    );
   return <WorkspaceContext key={session.user.id} client={client} session={session} />;
 }
 
@@ -330,7 +339,10 @@ function ScopedWorkspace({
   google: GoogleCalendarApi;
   googleTasks: GoogleTasksApi;
 }) {
-  const financeApi = useMemo(() => createFinanceApi(client, session.user.id, configuration!.url, configuration!.publishableKey), [client, session.user.id]);
+  const financeApi = useMemo(
+    () => createFinanceApi(client, session.user.id, configuration!.url, configuration!.publishableKey, 'live'),
+    [client, session.user.id],
+  );
   const queryClient = useQueryClient();
   const repository = useMemo(() => createRepository(client), [client]);
   const scopeRevision = [...selected.permissions].sort().join('|');
@@ -663,6 +675,7 @@ function ScopedWorkspace({
         )
       }
       onSignOut={async () => {
+        await financeApi.closeSession?.();
         await queryClient.cancelQueries({ queryKey });
         const { error } = await client.auth.signOut({ scope: 'local' });
         if (error) throw dataError(error);

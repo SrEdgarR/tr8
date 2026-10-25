@@ -10,13 +10,14 @@ export interface AuthScreenProps {
   ownerEmail: string;
   recovery: boolean;
   onRecoveryComplete: () => void;
+  onUpdatePassword?: (password: string) => Promise<void>;
 }
 
 type Mode = 'login' | 'forgot' | 'sent';
 type RecoveryStatus = 'checking' | 'ready' | 'invalid' | 'updated';
 type FieldErrors = { password?: string; confirmation?: string };
 
-export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryComplete }: AuthScreenProps) {
+export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryComplete, onUpdatePassword }: AuthScreenProps) {
   const [email, setEmail] = useState(ownerEmail.trim().toLowerCase());
   const configured = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const [mode, setMode] = useState<Mode>('login');
@@ -124,9 +125,12 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
     setPending(true);
     try {
       if (recovery) {
-        const { data, error: updateError } = await client.auth.updateUser({ password });
-        if (updateError) throw updateError;
-        if (!data.user) throw new Error('No se pudo confirmar el cambio de contraseña. Solicita un nuevo enlace.');
+        if (onUpdatePassword) await onUpdatePassword(password);
+        else {
+          const { data, error: updateError } = await client.auth.updateUser({ password });
+          if (updateError) throw updateError;
+          if (!data.user) throw new Error('No se pudo confirmar el cambio de contraseña. Solicita un nuevo enlace.');
+        }
         setPassword('');
         setConfirmation('');
         setRecoveryStatus('updated');

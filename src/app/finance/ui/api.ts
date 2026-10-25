@@ -25,11 +25,34 @@ export interface FinanceApi {
   save: (body: string, identity: VaultSessionIdentity) => Promise<OpaqueReceipt>;
   reauthenticate: (password: string) => Promise<void>;
   subscribe: (invalidate: () => void) => () => void;
+  closeSession?: () => Promise<void>;
+  resetVault?: (accountPassword: string, confirmation: string) => Promise<void>;
 }
 export class FinanceApiError extends Error {
   constructor(readonly code: string) {
     super(code);
   }
+}
+export async function changeFinanceAccountPassword(client: SupabaseClient, origin: string, publicKey: string, password: string): Promise<void> {
+  const { data, error } = await client.auth.getSession();
+  if (error || !data.session) throw new FinanceApiError('AUTH_REQUIRED');
+  if (!createFinanceApi(client, data.session.user.id, origin, publicKey, 'live').enabled) {
+    const verified = await client.auth.getUser(data.session.access_token);
+    if (verified.error || verified.data.user?.id !== data.session.user.id) throw new FinanceApiError('AUTH_REQUIRED');
+    const update = await client.auth.updateUser({ password });
+    if (update.error) throw update.error;
+    if (!update.data.user) throw new FinanceApiError('AUTH_REQUIRED');
+    return;
+  }
+  const response = await fetch(`${origin}/functions/v1/tr8-vault/account-password`, {
+    method: 'POST',
+    headers: { apikey: publicKey, Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+    cache: 'no-store',
+    redirect: 'error',
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) throw new Error('No se pudo confirmar el cambio. Solicita un nuevo enlace de recuperación e inténtalo otra vez.');
 }
 const TEST_ORIGIN = 'https://kajcbwlnqcwcpbtqyieo.supabase.co';
 const statuses = {
@@ -51,9 +74,23 @@ function claims(token: string): Record<string, unknown> {
   return JSON.parse(decodeUtf8(decodeBase64Url(token.split('.')[1])));
 }
 
-/** Production is deliberately unavailable. A browser flag cannot open a real vault. */
-export function createFinanceApi(client: SupabaseClient, ownerId: string, origin: string, publicKey: string): FinanceApi {
-  const enabled = origin === TEST_ORIGIN;
+/** Synthetic transport stays closed by default. Live admission also requires
+ * the separately provisioned server, two current authorities and live Auth. */
+export function createFinanceApi(
+  client: SupabaseClient,
+  ownerId: string,
+  origin: string,
+  publicKey: string,
+  mode: 'synthetic' | 'live' = 'synthetic',
+): FinanceApi {
+  const live = mode === 'live';
+  const enabled = live
+    ? (origin === 'https://ggbjezprlsnhidlbjivl.supabase.co' && ownerId === '74368b81-39f8-4bc3-bbbf-f541b64df4cf') ||
+      (origin === TEST_ORIGIN && ownerId === '37848d70-989a-4f69-b124-0c959d8b49a6')
+    : origin === TEST_ORIGIN;
+  let observedHead: { epoch: string; operationId: unknown } | null = null;
+  const ownOperations = new Set<string>();
+  let observedVaultId: string | null | undefined;
   async function actor() {
     if (!enabled) throw new FinanceApiError('FINANCE_DISABLED');
     const { data, error } = await client.auth.getSession();
@@ -75,14 +112,14 @@ export function createFinanceApi(client: SupabaseClient, ownerId: string, origin
       throw new FinanceApiError('AUTH_REQUIRED');
     return { token: session.access_token, sessionId: c.session_id, user: verified.data.user };
   }
-  async function request(method: 'GET' | 'PUT', body?: string, identity?: VaultSessionIdentity): Promise<unknown> {
+  async function request(method: 'GET' | 'PUT' | 'POST', body?: string, identity?: VaultSessionIdentity, path = ''): Promise<unknown> {
     const a = await actor().catch(error => {
       if (method === 'PUT' && error instanceof FinanceApiError && error.code === 'AUTH_REQUIRED') throw new DefinitiveOpaqueSaveError('AUTH_REQUIRED');
       throw error;
     });
     if (identity && (identity.ownerId !== ownerId || identity.sessionId !== a.sessionId || !identity.valid))
       throw new DefinitiveOpaqueSaveError('AUTH_REQUIRED');
-    const response = await fetch(`${origin}/functions/v1/tr8-finance`, {
+    const response = await fetch(`${origin}/functions/v1/${live ? 'tr8-vault' : 'tr8-finance'}${path || (method === 'POST' ? '/logout' : '')}`, {
       method,
       cache: 'no-store',
       redirect: 'error',
@@ -90,7 +127,7 @@ export function createFinanceApi(client: SupabaseClient, ownerId: string, origin
       headers: {
         apikey: publicKey,
         Authorization: `Bearer ${a.token}`,
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json', 'x-tr8-finance-epoch': identity!.epoch }),
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json', ...(!live && identity ? { 'x-tr8-finance-epoch': identity.epoch } : {}) }),
       },
       ...(body === undefined ? {} : { body }),
     });
@@ -120,29 +157,129 @@ export function createFinanceApi(client: SupabaseClient, ownerId: string, origin
       if (method === 'PUT' && isDefinitiveOpaqueSaveCode(code) && response.status === statuses[code]) throw new DefinitiveOpaqueSaveError(code);
       throw new FinanceApiError(
         typeof code === 'string' &&
-          ['FINANCE_DISABLED', 'REAUTHENTICATION_REQUIRED', 'AUTH_REQUIRED', 'FINANCE_ACCESS_DENIED', 'FINANCE_CONFLICT'].includes(code)
+          [
+            'FINANCE_DISABLED',
+            'REAUTHENTICATION_REQUIRED',
+            'AUTH_REQUIRED',
+            'FINANCE_ACCESS_DENIED',
+            'FINANCE_CONFLICT',
+            'AUTHORITY_DIVERGED',
+            'RESTORE_QUARANTINED',
+            'WITNESS_UNAVAILABLE',
+          ].includes(code)
           ? code
           : 'DEPENDENCY_UNAVAILABLE',
       );
     }
     return value;
   }
+  async function readHead() {
+    const value = await request('GET');
+    if (!live) return { head: validateHead(value, ownerId), state: null };
+    const r = requireClosedRecord(value, ['state', 'envelope']);
+    const fields = requireClosedRecord(r.state, [
+      'ownerId',
+      'sequence',
+      'head',
+      'status',
+      'sessionEpoch',
+      'sessionCutoffMs',
+      'sessions',
+      'revokedSessions',
+      'retiredVaults',
+    ]);
+    const rawHead =
+      fields.head === null
+        ? null
+        : requireClosedRecord(fields.head, ['vaultId', 'revision', 'keyEpoch', 'credentialEpoch', 'operationId', 'digest', 'requestDigest']);
+    const state = {
+      ownerId: fields.ownerId,
+      status: fields.status,
+      sessionEpoch: validateEpoch(fields.sessionEpoch),
+      head: rawHead === null ? null : { revision: validateEpoch(rawHead.revision), operationId: rawHead.operationId },
+    };
+    if (state.ownerId !== ownerId || state.status !== 'active') throw new FinanceApiError('AUTH_REQUIRED');
+    const envelope = r.envelope === null ? null : validateEnvelope(r.envelope);
+    if (envelope && (envelope.ownerId !== ownerId || envelope.operationId !== state.head?.operationId || envelope.revision !== state.head.revision))
+      throw new FinanceApiError('INVALID_RESPONSE');
+    if ((envelope === null) !== (state.head === null)) throw new FinanceApiError('INVALID_RESPONSE');
+    observedHead = { epoch: state.sessionEpoch, operationId: state.head?.operationId ?? null };
+    observedVaultId = envelope?.vaultId ?? null;
+    return { head: { envelope, epoch: state.sessionEpoch }, state };
+  }
+  let reading: ReturnType<typeof readHead> | null = null;
+  function currentHead() {
+    if (!reading) {
+      reading = readHead().finally(() => {
+        reading = null;
+      });
+    }
+    return reading;
+  }
   return {
     ownerId,
     enabled,
-    syntheticOnly: true,
-    head: async () => validateHead(await request('GET'), ownerId),
+    syntheticOnly: !live,
+    head: async () => (await currentHead()).head,
     identity: async () => {
       const a = await actor();
-      const head = validateHead(await request('GET'), ownerId);
+      const metadata = live ? requireClosedRecord(await request('GET', undefined, undefined, '/session'), ['state']) : null;
+      const s = metadata
+        ? requireClosedRecord(metadata.state, [
+            'ownerId',
+            'sequence',
+            'head',
+            'status',
+            'sessionEpoch',
+            'sessionCutoffMs',
+            'sessions',
+            'revokedSessions',
+            'retiredVaults',
+          ])
+        : null;
+      const sh =
+        s?.head === null
+          ? null
+          : s
+            ? requireClosedRecord(s.head, ['vaultId', 'revision', 'keyEpoch', 'credentialEpoch', 'operationId', 'digest', 'requestDigest'])
+            : null;
+      if (s && (s.ownerId !== ownerId || s.status !== 'active')) throw new FinanceApiError('AUTH_REQUIRED');
+      const { head, state } = live
+        ? {
+            head: { epoch: validateEpoch(s!.sessionEpoch) },
+            state: { head: sh ? { revision: validateEpoch(sh.revision), operationId: sh.operationId } : null },
+          }
+        : await currentHead();
       const again = await actor();
       if (a.sessionId !== again.sessionId) throw new FinanceApiError('AUTH_REQUIRED');
-      return { ownerId, sessionId: a.sessionId, epoch: head.epoch, valid: true };
+      return {
+        ownerId,
+        sessionId: a.sessionId,
+        epoch: head.epoch,
+        valid: true,
+        ...(live
+          ? { headRevision: state?.head?.revision ?? '0', headOperationId: typeof state?.head?.operationId === 'string' ? state.head.operationId : null }
+          : {}),
+      };
     },
     save: async (body, identity) => {
-      const r = requireClosedRecord(await request('PUT', body, identity), ['operationId', 'revision']);
+      if (live) {
+        const put = requireClosedRecord(parseStrictJson(body), ['envelope', 'expectedRevision', 'operationId']);
+        if (typeof put.operationId !== 'string') throw new FinanceApiError('INVALID_RESPONSE');
+        ownOperations.add(put.operationId);
+        if (ownOperations.size > 8) ownOperations.delete(ownOperations.values().next().value!);
+      }
+      const r = requireClosedRecord(await request('PUT', body, identity), live ? ['operationId', 'sequence'] : ['operationId', 'revision']);
       if (typeof r.operationId !== 'string') throw new FinanceApiError('INVALID_RESPONSE');
       decodeBase64Url(r.operationId, 16);
+      if (live) {
+        validateEpoch(r.sequence);
+        const sent = requireClosedRecord(parseStrictJson(body), ['envelope', 'expectedRevision', 'operationId']);
+        const envelope = validateEnvelope(sent.envelope);
+        if (r.operationId !== envelope.operationId) throw new FinanceApiError('INVALID_RESPONSE');
+        observedVaultId = envelope.vaultId;
+        return { operationId: r.operationId, revision: envelope.revision };
+      }
       return { operationId: r.operationId, revision: validateEpoch(r.revision) };
     },
     reauthenticate: async password => {
@@ -151,6 +288,26 @@ export function createFinanceApi(client: SupabaseClient, ownerId: string, origin
       const result = await client.auth.signInWithPassword({ email: a.user.email, password });
       if (result.error || result.data.user?.id !== ownerId) throw new FinanceApiError('AUTH_REQUIRED');
     },
+    ...(live && enabled
+      ? {
+          closeSession: async () => {
+            await request('POST', '{}');
+          },
+          resetVault: async (accountPassword: string, confirmation: string) => {
+            if (confirmation !== 'ELIMINAR BÓVEDA') throw new FinanceApiError('INVALID_INPUT');
+            const vaultId = observedVaultId;
+            if (vaultId === undefined) throw new FinanceApiError('DEPENDENCY_UNAVAILABLE');
+            const a = await actor();
+            if (!a.user.email) throw new FinanceApiError('AUTH_REQUIRED');
+            const login = await client.auth.signInWithPassword({ email: a.user.email, password: accountPassword });
+            if (login.error || login.data.user?.id !== ownerId) throw new FinanceApiError('AUTH_REQUIRED');
+            const result = requireClosedRecord(await request('POST', JSON.stringify({ confirmation, vaultId }), undefined, '/reset'), ['reset']);
+            if (result.reset !== true) throw new FinanceApiError('INVALID_RESPONSE');
+            const exit = await client.auth.signOut({ scope: 'local' });
+            if (exit.error) throw exit.error;
+          },
+        }
+      : {}),
     subscribe: invalidate => {
       let previous: string | null = null;
       const {
@@ -168,7 +325,28 @@ export function createFinanceApi(client: SupabaseClient, ownerId: string, origin
         if (!next || (previous !== null && next !== previous)) invalidate();
         previous = next;
       });
-      return () => subscription.unsubscribe();
+      const channel = live
+        ? client
+            .channel('private-finance-head-' + ownerId)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'tr8_finance_heads', filter: 'owner_id=eq.' + ownerId }, payload => {
+              const row = payload.new as Record<string, unknown>;
+              if (row.owner_id !== ownerId) return;
+              if (
+                row.status !== 'active' ||
+                (row.revoked_session_id && (!previous || row.revoked_session_id === previous)) ||
+                (observedHead && row.session_epoch !== observedHead.epoch) ||
+                (!ownOperations.has(String(row.operation_id)) && observedHead && row.operation_id !== observedHead.operationId)
+              )
+                invalidate();
+            })
+            .subscribe(status => {
+              if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) invalidate();
+            })
+        : null;
+      return () => {
+        subscription.unsubscribe();
+        if (channel) void client.removeChannel(channel);
+      };
     },
   };
 }
