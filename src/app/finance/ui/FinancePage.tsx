@@ -87,8 +87,8 @@ export default function FinancePage({ api }: { api: FinanceApi }) {
           <span className="tf-eyebrow">
             <Wallet size={14} aria-hidden="true" /> ESPACIO PERSONAL
           </span>
-          <h1>Finanzas</h1>
-          <p className="muted">Tus cuentas, tus planes y una visión clara de tu dinero.</p>
+          <h1>Bóveda privada</h1>
+          <p className="muted">Un espacio financiero independiente con contraseña privada y cifrado en tu dispositivo.</p>
         </div>
         {api.enabled && (
           <button className="btn btn-secondary" onClick={finance.lock}>
@@ -147,7 +147,15 @@ export default function FinancePage({ api }: { api: FinanceApi }) {
                 <p className="muted">Si bloqueas ahora, se descarta el reintento local. Al volver a abrir se leerá la versión del servidor.</p>
               </div>
             )}
-            {view.stage === 'open' && view.snapshot && <Dashboard finance={finance} snapshot={view.snapshot} />}
+            {view.stage === 'open' && view.snapshot && (
+              <FinancialDashboard
+                finance={finance}
+                snapshot={view.snapshot}
+                readOnly={finance.controller.current?.state().mode === 'recovery-readonly'}
+                security={<Security finance={finance} readOnly={finance.controller.current?.state().mode === 'recovery-readonly'} />}
+                recovery={<Recovery finance={finance} />}
+              />
+            )}
           </div>
         </>
       )}
@@ -356,10 +364,22 @@ function BackupPreview({ finance: f }: { finance: Finance }) {
   );
 }
 
-function Dashboard({ finance: f, snapshot }: { finance: Finance; snapshot: FinancialSnapshot }) {
+type DashboardFinance = Pick<Finance, 'busy' | 'save'>;
+export function FinancialDashboard({
+  finance: f,
+  snapshot,
+  readOnly = false,
+  security,
+  recovery,
+}: {
+  finance: DashboardFinance;
+  snapshot: FinancialSnapshot;
+  readOnly?: boolean;
+  security: ReactNode;
+  recovery?: ReactNode;
+}) {
   const [tab, setTab] = useState('Resumen');
   const [editor, setEditor] = useState<'account' | 'movement' | null>(null);
-  const readOnly = f.controller.current?.state().mode === 'recovery-readonly';
   return (
     <>
       <nav className="tf-tabs" aria-label="Secciones de finanzas">
@@ -373,7 +393,7 @@ function Dashboard({ finance: f, snapshot }: { finance: Finance; snapshot: Finan
         <div className="tf-card">
           <h2>Acceso de recuperación · Solo lectura</h2>
           <p>Para volver a guardar, establece una contraseña nueva y confirma un código de recuperación nuevo.</p>
-          <Recovery finance={f} />
+          {recovery}
         </div>
       )}
       {tab !== 'Seguridad' && (
@@ -394,8 +414,10 @@ function Dashboard({ finance: f, snapshot }: { finance: Finance; snapshot: Finan
       {(tab === 'Resumen' || tab === 'Cuentas') && <Overview snapshot={snapshot} accountsOnly={tab === 'Cuentas'} />}
       {tab === 'Movimientos' && <History snapshot={snapshot} />}
       {tab === 'Planes' && <Plans snapshot={snapshot} finance={f} readOnly={readOnly} />}
-      {tab === 'Seguridad' && <Security finance={f} readOnly={readOnly} />}
-      {editor && <RecordForm kind={editor} snapshot={snapshot} busy={f.busy} onClose={() => setEditor(null)} onSave={s => void f.save(s)} />}
+      {tab === 'Seguridad' && security}
+      {editor && (
+        <RecordForm kind={editor} snapshot={snapshot} busy={f.busy} onClose={() => setEditor(null)} onSave={s => void f.save(s).then(() => setEditor(null))} />
+      )}
     </>
   );
 }
@@ -849,7 +871,7 @@ function RecordForm({
   );
 }
 
-function Plans({ snapshot, finance: f, readOnly }: { snapshot: FinancialSnapshot; finance: Finance; readOnly: boolean }) {
+function Plans({ snapshot, finance: f, readOnly }: { snapshot: FinancialSnapshot; finance: DashboardFinance; readOnly: boolean }) {
   const [action, setAction] = useState<{ id: string; type: 'confirm' | 'cancel' | 'postpone' } | null>(null);
   const [date, setDate] = useState(localToday());
   const [error, setError] = useState('');
@@ -892,7 +914,7 @@ function Plans({ snapshot, finance: f, readOnly }: { snapshot: FinancialSnapshot
             label="Confirmar acción"
             onSubmit={() => {
               try {
-                void f.save(resolvePlan(snapshot, { type: action.type, planId: action.id, date }));
+                void f.save(resolvePlan(snapshot, { type: action.type, planId: action.id, date })).then(() => setAction(null));
               } catch (error) {
                 setError(error instanceof Error ? error.message : 'No se pudo resolver el plan.');
               }

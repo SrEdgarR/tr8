@@ -1,5 +1,32 @@
 # Finanzas personales · entrega productiva
 
+## Preferencia actual: acceso con la cuenta
+
+Por decisión del propietario, Finanzas se abre directamente con su sesión de
+TR8, sin contraseña privada adicional. El documento normal se guarda en
+`tr8_private.account_finances`, sin cifrado privado del lado del cliente. No hay
+acceso directo a esa tabla: el RPC deriva el propietario de `auth.uid()`, verifica
+la sesión viva, limita el documento y serializa las escrituras por propietario.
+La versión esperada y el ID de operación evitan sobrescrituras y duplicados al
+reintentar. El cliente valida el dominio financiero completo antes de guardar y
+después de leer. Los datos se mantienen fuera de React Query y del almacenamiento
+local del navegador.
+
+La bóveda descrita abajo es opcional y conserva sus datos y protocolo anteriores.
+Es un espacio independiente: abrirla no convierte ni mueve el documento normal.
+La interfaz y privacidad lo explican explícitamente. Los respaldos JSON normales
+no están cifrados con contraseña privada; su restauración requiere vista previa
+y escribir `REEMPLAZAR`. Los respaldos cifrados se gestionan desde la bóveda.
+
+El esquema añadido no modifica proyectos, tareas, cuentas Auth, envelopes,
+recibos ni autoridades de las bóvedas existentes. Se mantiene el plan gratuito.
+
+La actualización pasó 662 pruebas de aplicación y 503 de Edge. Se comprobó en
+TEST la carrera CAS (un solo ganador), reintento exacto, rechazo de un ID de
+operación con contenido distinto, aislamiento entre cuentas y denegación a anon.
+En el navegador se guardó una cuenta ficticia de 123,45 BOB y se conservó su saldo
+tras recargar, sin crear una bóveda ni introducir una contraseña privada.
+
 2026-10-25. Continuación de 6B.1–6B.5D para la cuenta personal del propietario.
 Las entregas sintéticas anteriores conservan sus cercas; el servicio productivo
 es `tr8-vault`, con configuración y generación independientes. Los equipos y sus

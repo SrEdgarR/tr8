@@ -21,14 +21,19 @@ function Privacy() {
         </p>
       </section>
       <section>
-        <h2>Finanzas personales cifradas</h2>
+        <h2>Protección de tus finanzas</h2>
         <p>
-          Los datos financieros se cifran en tu dispositivo con una contraseña privada distinta de la cuenta. Supabase conserva el contenido cifrado; Cloudflare
-          y un almacén privado de Vercel conservan versiones y revocaciones para comprobar el acceso, sin importes ni movimientos.
+          Finanzas se abre con tu sesión de TR8, sin contraseña privada adicional. En este espacio Supabase guarda los datos financieros con acceso restringido
+          a tu cuenta; no utiliza el cifrado privado de la bóveda.
         </p>
         <p>
-          La contraseña privada y el código de recuperación permanecen en tu dispositivo. Guarda esos medios y tus respaldos cifrados en un lugar privado.
-          Reiniciar la bóveda elimina su contenido en TR8 y retira su contexto; conserva registros de seguridad y no elimina copias que hayas descargado.
+          Puedes utilizar una bóveda cifrada opcional para datos independientes. Allí los datos se cifran en tu dispositivo con una contraseña privada y un
+          código de recuperación; Supabase conserva el contenido cifrado, y Cloudflare y un almacén privado de Vercel conservan versiones y revocaciones sin
+          importes ni movimientos. Abrir la bóveda no mueve ni cifra automáticamente los datos del espacio normal.
+        </p>
+        <p>
+          Los respaldos JSON del espacio normal contienen datos sin contraseña privada; los respaldos de la bóveda conservan el cifrado. Guarda cada archivo y
+          sus medios de acceso en un lugar privado. Reiniciar la bóveda no elimina el espacio normal ni copias descargadas.
         </p>
       </section>
       <section>
