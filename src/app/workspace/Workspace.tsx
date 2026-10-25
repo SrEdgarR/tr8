@@ -340,6 +340,12 @@ function ProjectPage({
             <h1>{project.name}</h1>
             <p className="pw-project-description">{project.description || 'Organiza las tareas de este proyecto.'}</p>
           </div>
+          {!project.archived_at && (
+            <button className="btn btn-primary" disabled={actions.pending || !actions.can(project.id, 'task.create')} onClick={() => onNewTask(project)}>
+              <Plus size={14} aria-hidden="true" />
+              Nueva tarea
+            </button>
+          )}
           <button className="btn btn-secondary" onClick={() => setSettingsProject(project.id)}>
             <Settings2 size={14} aria-hidden="true" />
             Configuración del proyecto
@@ -384,19 +390,6 @@ function ProjectPage({
               <Archive size={14} aria-hidden="true" />
               {project.archived_at ? 'Restaurar' : 'Archivar'}
             </button>
-            {!project.archived_at && (
-              <button
-                className="btn btn-primary"
-                disabled={actions.pending || !actions.can(project.id, 'task.create')}
-                onClick={() => {
-                  setSettingsProject(null);
-                  onNewTask(project);
-                }}
-              >
-                <Plus size={14} aria-hidden="true" />
-                Nueva tarea
-              </button>
-            )}
             {actions.can(project.id, 'project.delete') && (
               <button
                 className="btn btn-danger-ghost"
