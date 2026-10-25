@@ -313,6 +313,7 @@ function ProjectPage({
   onMove: (task: Task, status: TaskStatus) => Promise<void>;
 }) {
   const { id } = useParams();
+  const [settingsProject, setSettingsProject] = useState<string | null>(null);
   const project = projects.find(item => item.id === id);
   if (!project)
     return (
@@ -339,36 +340,10 @@ function ProjectPage({
             <h1>{project.name}</h1>
             <p className="pw-project-description">{project.description || 'Organiza las tareas de este proyecto.'}</p>
           </div>
-          <button className="btn btn-secondary" disabled={actions.pending || !actions.can(project.id, 'project.edit')} onClick={() => actions.onEdit(project)}>
-            <Pencil size={13} aria-hidden="true" />
-            Editar
+          <button className="btn btn-secondary" onClick={() => setSettingsProject(project.id)}>
+            <Settings2 size={14} aria-hidden="true" />
+            Configuración del proyecto
           </button>
-          <button
-            className="btn btn-ghost"
-            disabled={actions.pending || !actions.can(project.id, 'project.archive')}
-            onClick={() => actions.onArchive(project)}
-          >
-            <Archive size={14} aria-hidden="true" />
-            {project.archived_at ? 'Restaurar' : 'Archivar'}
-          </button>
-          {!project.archived_at && (
-            <button className="btn btn-primary" disabled={actions.pending || !actions.can(project.id, 'task.create')} onClick={() => onNewTask(project)}>
-              <Plus size={14} aria-hidden="true" />
-              Nueva tarea
-            </button>
-          )}
-          {actions.can(project.id, 'project.delete') && (
-            <button className="btn btn-danger-ghost" disabled={actions.pending} onClick={() => actions.onDelete(project)}>
-              <Trash2 size={14} aria-hidden="true" />
-              Eliminar proyecto
-            </button>
-          )}
-          {actions.collaboration && actions.can(project.id, 'project.access.manage') && (
-            <button className="btn btn-secondary" disabled={actions.pending} onClick={() => actions.onAccess(project)}>
-              <Users size={14} aria-hidden="true" />
-              Acceso
-            </button>
-          )}
         </div>
         <div className="row pw-project-meta">
           <span className="pstatus">{PROJECT_STATUSES.find(item => item.id === project.status)?.name}</span>
@@ -383,6 +358,74 @@ function ProjectPage({
           )}
         </div>
       </div>
+      {settingsProject === project.id && (
+        <Dialog title="Configuración del proyecto" onClose={() => setSettingsProject(null)} busy={actions.pending}>
+          <p className="muted">{project.name}</p>
+          <div className="pw-project-settings-actions">
+            <button
+              className="btn btn-secondary"
+              disabled={actions.pending || !actions.can(project.id, 'project.edit')}
+              onClick={() => {
+                setSettingsProject(null);
+                actions.onEdit(project);
+              }}
+            >
+              <Pencil size={13} aria-hidden="true" />
+              Editar
+            </button>
+            <button
+              className="btn btn-ghost"
+              disabled={actions.pending || !actions.can(project.id, 'project.archive')}
+              onClick={() => {
+                setSettingsProject(null);
+                actions.onArchive(project);
+              }}
+            >
+              <Archive size={14} aria-hidden="true" />
+              {project.archived_at ? 'Restaurar' : 'Archivar'}
+            </button>
+            {!project.archived_at && (
+              <button
+                className="btn btn-primary"
+                disabled={actions.pending || !actions.can(project.id, 'task.create')}
+                onClick={() => {
+                  setSettingsProject(null);
+                  onNewTask(project);
+                }}
+              >
+                <Plus size={14} aria-hidden="true" />
+                Nueva tarea
+              </button>
+            )}
+            {actions.can(project.id, 'project.delete') && (
+              <button
+                className="btn btn-danger-ghost"
+                disabled={actions.pending}
+                onClick={() => {
+                  setSettingsProject(null);
+                  actions.onDelete(project);
+                }}
+              >
+                <Trash2 size={14} aria-hidden="true" />
+                Eliminar proyecto
+              </button>
+            )}
+            {actions.collaboration && actions.can(project.id, 'project.access.manage') && (
+              <button
+                className="btn btn-secondary"
+                disabled={actions.pending}
+                onClick={() => {
+                  setSettingsProject(null);
+                  actions.onAccess(project);
+                }}
+              >
+                <Users size={14} aria-hidden="true" />
+                Acceso
+              </button>
+            )}
+          </div>
+        </Dialog>
+      )}
       <TasksView
         key={project.id}
         tasks={projectTasks}
@@ -408,7 +451,9 @@ function ProjectPage({
           ) : undefined
         }
       />
-      {actions.collaboration && actions.can(project.id, 'audit.read') && <ActivityPanel key={project.id} api={actions.collaboration} projectId={project.id} />}
+      {actions.collaboration && actions.can(project.id, 'audit.read') && (
+        <ActivityPanel key={`activity:${project.id}`} api={actions.collaboration} projectId={project.id} />
+      )}
     </div>
   );
 }

@@ -1890,3 +1890,12 @@
     margin: 16px;
   }
 }
+
+.pw-project-settings-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.pw-project-settings-actions .btn {
+  justify-content: flex-start;
+}

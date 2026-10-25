@@ -676,7 +676,7 @@ function RecordForm({
   const [type, setType] = useState('cash');
   const [operation, setOperation] = useState<FinancialOperation['kind']>('expense');
   const [account, setAccount] = useState(s.accounts[0]?.id ?? '');
-  const [currency, setCurrency] = useState(s.currencyDefinitions[0].code);
+  const [currency, setCurrency] = useState(s.currencyDefinitions.find(c => c.code === 'DOP')?.code ?? s.currencyDefinitions[0].code);
   const [planned, setPlanned] = useState(false);
   const selected = s.accounts.find(a => a.id === account);
   const digits = s.currencyDefinitions.find(c => c.code === (kind === 'account' ? currency : selected?.currency))?.minorUnitDigits ?? 2;

@@ -237,12 +237,14 @@ describe('colaboración y permisos en la interfaz', () => {
     expect(screen.getByText('Miembro')).toBeInTheDocument();
   });
 
-  it('aplica capacidades por proyecto y permite lectura sin editar, archivar ni crear tareas', () => {
+  it('aplica capacidades por proyecto y permite lectura sin editar, archivar ni crear tareas', async () => {
+    const user = userEvent.setup();
     const settings = props({
       currentUserId: 'reader-a',
       capabilities: { [project.id]: { project_id: project.id, access_level: 'read', permissions: ['project.read', 'task.read'] } },
     });
     show(<Workspace {...settings} />, `/projects/${project.id}`);
+    await user.click(screen.getByRole('button', { name: 'Configuración del proyecto' }));
     expect(screen.getByRole('button', { name: 'Editar' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Archivar' })).toBeDisabled();
     expect(screen.getAllByRole('button', { name: 'Nueva tarea' }).every(button => button.hasAttribute('disabled'))).toBe(true);
@@ -255,6 +257,7 @@ describe('colaboración y permisos en la interfaz', () => {
     const user = userEvent.setup();
     const initial = props();
     const view = show(<Workspace {...initial} />, `/projects/${project.id}`);
+    await user.click(screen.getByRole('button', { name: 'Configuración del proyecto' }));
     await user.click(screen.getByRole('button', { name: 'Editar' }));
     await user.type(screen.getByLabelText('Nombre del proyecto'), ' borrador');
     view.rerender(
@@ -264,6 +267,7 @@ describe('colaboración y permisos en la interfaz', () => {
     expect(screen.getByRole('heading', { name: project.name })).toBeInTheDocument();
     expect(initial.onUpdateProject).not.toHaveBeenCalled();
     view.rerender(<Workspace {...initial} />);
+    await user.click(screen.getByRole('button', { name: 'Configuración del proyecto' }));
     await user.click(screen.getByRole('button', { name: 'Editar' }));
     expect(screen.getByLabelText('Nombre del proyecto')).toHaveValue(project.name);
   });
@@ -272,6 +276,7 @@ describe('colaboración y permisos en la interfaz', () => {
     const user = userEvent.setup();
     const initial = props();
     const view = show(<Workspace {...initial} />, `/projects/${project.id}`);
+    await user.click(screen.getByRole('button', { name: 'Configuración del proyecto' }));
     await user.click(screen.getByRole('button', { name: 'Acceso' }));
     expect(await screen.findByRole('dialog')).toHaveAccessibleName(`Acceso a ${project.name}`);
     await waitFor(() => expect(initial.collaboration!.projectAccess).toHaveBeenCalledWith(project.id));

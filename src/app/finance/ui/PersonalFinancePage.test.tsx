@@ -40,6 +40,7 @@ describe('account finances by default', () => {
     vi.mocked(h.account.save).mockRejectedValueOnce(Error('network'));
     await screen.findByRole('heading', { name: 'Panorama financiero' });
     fireEvent.click(screen.getByRole('button', { name: 'Nueva cuenta' }));
+    expect(screen.getByLabelText('Moneda de la cuenta')).toHaveValue('DOP');
     fireEvent.change(screen.getByLabelText('Nombre de la cuenta'), { target: { value: 'Cuenta ficticia' } });
     fireEvent.change(screen.getByLabelText('Saldo inicial'), { target: { value: '100,00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));

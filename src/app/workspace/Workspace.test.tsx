@@ -296,6 +296,9 @@ describe('espacios y equipos', () => {
         <Workspace {...props} />
       </MemoryRouter>,
     );
+    expect(screen.queryByRole('button', { name: 'Eliminar proyecto' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Configuración del proyecto' }));
     await user.click(screen.getByRole('button', { name: 'Eliminar proyecto' }));
     let dialog = screen.getByRole('dialog', { name: 'Eliminar proyecto' });
     expect(within(dialog).getByText(/Hay 1 tarea visible/)).toBeInTheDocument();
@@ -303,6 +306,7 @@ describe('espacios y equipos', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(props.onDeleteProject).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Configuración del proyecto' }));
     await user.click(screen.getByRole('button', { name: 'Eliminar proyecto' }));
     dialog = screen.getByRole('dialog', { name: 'Eliminar proyecto' });
     await user.type(within(dialog).getByRole('textbox'), project.name);
@@ -328,10 +332,13 @@ describe('espacios y equipos', () => {
       </MemoryRouter>
     );
     const { rerender } = render(ui(props));
+    await user.click(screen.getByRole('button', { name: 'Configuración del proyecto' }));
     expect(screen.getByRole('button', { name: 'Archivar' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Eliminar proyecto' })).not.toBeInTheDocument();
     const allowed = { ...props, capabilities: { [project.id]: { ...props.capabilities![project.id], permissions: ['project.read', 'project.delete'] } } };
+    await user.click(screen.getByRole('button', { name: 'Cerrar ventana' }));
     rerender(ui(allowed));
+    await user.click(screen.getByRole('button', { name: 'Configuración del proyecto' }));
     await user.click(screen.getByRole('button', { name: 'Eliminar proyecto' }));
     expect(screen.getByRole('dialog', { name: 'Eliminar proyecto' })).toBeInTheDocument();
     rerender(ui(props));
@@ -352,6 +359,7 @@ describe('espacios y equipos', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText('Proyecto archivado · solo lectura')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Configuración del proyecto' }));
     await user.click(screen.getByRole('button', { name: 'Eliminar proyecto' }));
     expect(screen.getByRole('dialog', { name: 'Eliminar proyecto' })).toBeInTheDocument();
     expect(props.onDeleteProject).not.toHaveBeenCalled();
