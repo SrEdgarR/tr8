@@ -678,7 +678,9 @@ function RecordForm({
   const [account, setAccount] = useState(s.accounts[0]?.id ?? '');
   const [currency, setCurrency] = useState(s.currencyDefinitions.find(c => c.code === 'DOP')?.code ?? s.currencyDefinitions[0].code);
   const [planned, setPlanned] = useState(false);
-  const selected = s.accounts.find(a => a.id === account);
+  const paired = operation === 'transfer' || operation === 'card-payment';
+  const sourceAccounts = s.accounts.filter(a => !paired || a.type !== 'credit');
+  const selected = sourceAccounts.find(a => a.id === account) ?? sourceAccounts[0];
   const digits = s.currencyDefinitions.find(c => c.code === (kind === 'account' ? currency : selected?.currency))?.minorUnitDigits ?? 2;
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -701,12 +703,12 @@ function RecordForm({
       } else {
         const base = { id: id(), date: text('date'), amountMinor: amount, description: text('description'), note: text('note') };
         if (operation === 'refund') {
-          next = addRefund(snapshot, { ...base, originalExpenseId: text('expense'), destinationAccountId: account });
+          next = addRefund(snapshot, { ...base, originalExpenseId: text('expense'), destinationAccountId: selected?.id ?? '' });
         } else {
           const input =
             operation === 'income' || operation === 'expense'
-              ? { ...base, kind: operation, accountId: account, category: text('category') }
-              : { ...base, kind: operation, fromAccountId: account, toAccountId: text('to') };
+              ? { ...base, kind: operation, accountId: selected?.id ?? '', category: text('category') }
+              : { ...base, kind: operation, fromAccountId: selected?.id ?? '', toAccountId: text('to') };
           next = planned
             ? addPlan(snapshot, {
                 id: id(),
@@ -768,9 +770,10 @@ function RecordForm({
                 <Field label="Descripción">
                   <input name="description" maxLength={500} required data-initial-focus />
                 </Field>
-                <Field label={operation === 'refund' ? 'Cuenta de destino' : 'Cuenta de origen'}>
-                  <select required value={account} onChange={e => setAccount(e.target.value)}>
-                    {s.accounts.map(a => (
+                <Field label={operation === 'refund' || operation === 'income' ? 'Cuenta de destino' : 'Cuenta de origen'}>
+                  <select required value={selected?.id ?? ''} onChange={e => setAccount(e.target.value)}>
+                    {!sourceAccounts.length && <option value="">No hay cuentas de origen compatibles</option>}
+                    {sourceAccounts.map(a => (
                       <option key={a.id} value={a.id}>
                         {a.name} · {a.currency}
                       </option>
@@ -779,11 +782,14 @@ function RecordForm({
                 </Field>
                 {(operation === 'transfer' || operation === 'card-payment') && (
                   <Field label="Cuenta de destino">
-                    <select name="to" required>
+                    <select key={selected?.id} name="to" required>
                       <option value="">Selecciona una cuenta</option>
                       {s.accounts
                         .filter(
-                          a => a.id !== account && a.currency === selected?.currency && (operation === 'transfer' ? a.type !== 'credit' : a.type === 'credit'),
+                          a =>
+                            a.id !== selected?.id &&
+                            a.currency === selected?.currency &&
+                            (operation === 'transfer' ? a.type !== 'credit' : a.type === 'credit'),
                         )
                         .map(a => (
                           <option key={a.id} value={a.id}>
