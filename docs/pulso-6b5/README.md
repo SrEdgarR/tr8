@@ -1,9 +1,10 @@
 # Pulso 6B.5A · Protocolo de restauración y banco local
 
-Estado: primer corte técnico de la siguiente fase. **La fase 6B.5 no está
+Estado: cortes A (banco local) y [B (servicio sintético alojado)](hosted-test.md). **La fase 6B.5 no está
 completada y las finanzas reales siguen cerradas.** El ADR F02 continúa vigente.
-No se ha creado un recurso externo ni conectado este código a la aplicación,
-Supabase o una ruta HTTP. No se modifica ninguna migración aplicada.
+El corte B crea un recurso externo de pruebas, separado de la aplicación y de
+Supabase. No se modifica ninguna migración aplicada ni se conecta el acceso real
+al servicio sintético.
 
 ## Entrega local
 
@@ -72,14 +73,16 @@ Estos ensayos no acreditan PostgreSQL restaurado, pérdida de energía, reinicio
 de Cloudflare, durabilidad alojada ni una política de recuperación de su propia
 autoridad. El protocolo es una base revisable para esas pruebas.
 
-## Opción externa recomendada, pendiente de cuenta
+## Proveedor verificado para pruebas
 
 La candidata es **Cloudflare Durable Objects con SQLite en Workers Free**,
 separada del dominio de restauración de Supabase. La documentación vigente
 ofrece ese backend en Free, 100.000 solicitudes diarias y errores al superar
 las cuotas; esto permite evaluar un servicio personal sin contratar Paid.
-Todavía no se ha verificado la elegibilidad ni el consumo en la cuenta del
-propietario. [Precios y límites oficiales](https://developers.cloudflare.com/durable-objects/platform/pricing/).
+Se verificó en el panel la cuenta Edgar Padilla y su plan Workers Gratuito, sin
+cambiar su suscripción. El corte B comprueba el namespace SQLite real de pruebas.
+Esto no garantiza un coste futuro ilimitado ni resuelve la integración con
+PostgreSQL. [Precios y límites oficiales](https://developers.cloudflare.com/durable-objects/platform/pricing/).
 
 La adaptación debe usar las transacciones del runtime de Durable Objects. Sus
 consultas SQL no ejecutan `BEGIN`/`COMMIT`; por tanto, este banco Node **no se
@@ -92,10 +95,10 @@ se selecciona su lectura distribuida como comprobación inmediata de revocación
 Esto es una decisión de diseño, no una afirmación de que ningún protocolo pueda
 construirse usando sus otras APIs. [Límites oficiales](https://vercel.com/docs/global-config/global-config-limits).
 
-No se crea una cuenta, activa facturación ni incorpora un proveedor sin disponer
-de la cuenta correcta. La elección sigue pendiente de la respuesta del usuario.
-Si se elige otro proveedor, se conservan los escenarios del banco; habrá que
-volver a evaluar consistencia, separación, durabilidad y cuotas.
+El usuario confirmó su cuenta, inició sesión y autorizó Wrangler con permisos
+limitados. Se conserva esa cuenta y el plan gratuito; no se crean cuentas ni
+se activa facturación. Si se cambia de proveedor, habrá que volver a evaluar
+consistencia, separación, durabilidad y cuotas.
 
 ## Trabajo necesario para cerrar 6B.5
 

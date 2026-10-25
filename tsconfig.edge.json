@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["supabase/functions", "server/finance-authority", "vitest.edge.config.ts"]
+  "include": ["supabase/functions", "server/finance-authority", "cloudflare/finance-authority-test", "vitest.edge.config.ts"]
 }

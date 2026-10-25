@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .vercel/
+.wrangler/
+.dev.vars*
 .DS_Store
 __MACOSX/
 *.log
