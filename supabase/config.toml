@@ -17,3 +17,7 @@ verify_jwt = false
 # Separate synthetic restore endpoint; verifies the bearer inside the handler.
 [functions.tr8-finance-restore-test]
 verify_jwt = false
+
+# Dedicated synthetic head/identity coordinator verifies signed user claims.
+[functions.tr8-vault-control-test]
+verify_jwt = false

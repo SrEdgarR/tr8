@@ -2,6 +2,8 @@
 
 Estado: cortes A (banco local), [B (servicio sintético alojado)](hosted-test.md) y
 [C (coordinación con PostgreSQL y restauración lógica alojada)](postgres-rehearsal.md).
+[D (versiones, identidad, reanudación y recuperación)](control-hardening.md) implementa
+y verifica los cuatro controles siguientes en el entorno sintético.
 **La fase 6B.5 no está
 completada y las finanzas reales siguen cerradas.** El ADR F02 continúa vigente.
 El corte B crea un recurso externo de pruebas, separado de la aplicación y de

@@ -32,14 +32,14 @@ function response(value: unknown, status = 200) {
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' },
   });
 }
-async function authenticated(request: Request, env: Environment): Promise<boolean> {
+export async function authenticated(request: Request, env: Environment): Promise<boolean> {
   const token = request.headers.get('Authorization')?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
   if (env.MODE !== 'synthetic-only' || !env.ACCESS_TOKEN || !/^[a-f0-9]{64}$/.test(env.ACCESS_TOKEN) || !token) return false;
   const key = await crypto.subtle.importKey('raw', encode(env.ACCESS_TOKEN), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
   const expected = await crypto.subtle.sign('HMAC', key, encode(env.ACCESS_TOKEN));
   return crypto.subtle.verify('HMAC', key, expected, encode(token));
 }
-async function body(request: Request): Promise<unknown> {
+export async function body(request: Request): Promise<unknown> {
   if (request.headers.get('Content-Type') !== 'application/json' || request.headers.has('Content-Encoding') || !request.body) fail('INVALID_INPUT');
   const reader = request.body.getReader();
   const bytes = new Uint8Array(4096);

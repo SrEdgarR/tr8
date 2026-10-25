@@ -8,6 +8,7 @@ export default defineConfig({
       'supabase/functions/tr8-finance/**/*.test.ts',
       'server/finance-authority/**/*.test.ts',
       'cloudflare/finance-authority-test/**/*.test.ts',
+      'cloudflare/vault-control-test/**/*.test.ts',
     ],
     restoreMocks: true,
   },

@@ -4,6 +4,13 @@ Estado: decisión de cierre seguro aceptada para el corte sintético 6B.1.
 **La autoridad externa de restauración continúa sin resolver.** No se habilitan
 finanzas con datos reales hasta cerrar esta puerta dentro de 6B.
 
+Actualización 2026-10-25: los cortes [6B.5B](../pulso-6b5/hosted-test.md),
+[C](../pulso-6b5/postgres-rehearsal.md) y [D](../pulso-6b5/control-hardening.md)
+ya prueban un proveedor externo y controles de head, identidad y recuperación.
+Los apartados originales describen la decisión de cierre de 6B.1; la continuidad
+de la propia autoridad y la integración productiva siguen pendientes. No se
+interpreta la firma de un checkpoint manual como garantía de actualidad.
+
 ## Problema
 
 Las transacciones activas pueden impedir que PUT, revocación y reset compitan de

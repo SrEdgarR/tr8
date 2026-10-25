@@ -33,7 +33,7 @@ export function createFinanceRuntime(
   get: (name: string) => string | undefined,
   fetcher: typeof fetch = fetch,
   clock = Date.now,
-  rpc: 'tr8_server_finance' | 'tr8_server_finance_coordinated' = 'tr8_server_finance',
+  rpc: 'tr8_server_finance' | 'tr8_server_finance_coordinated' | 'tr8_server_vault_control' = 'tr8_server_finance',
 ): FinanceRuntime {
   const project = origin(get('SUPABASE_URL'));
   const app = origin(get('TR8_FINANCE_ALLOWED_ORIGIN'));
