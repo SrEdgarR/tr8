@@ -1,4 +1,4 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/app/finance", "scripts/finance-6b2/**/*.ts", "scripts/finance-6b3/**/*.ts"]
+  "include": ["src/app/finance", "scripts/finance-6b2/**/*.ts", "scripts/finance-6b3/**/*.ts", "scripts/finance-6b4/**/*.ts", "scripts/finance-6b4/**/*.tsx"]
 }

@@ -17,12 +17,13 @@ const edgePath = '/functions/v1/tr8-finance';
 const repository = fileURLToPath(new URL('../../', import.meta.url));
 const args = process.argv.slice(2);
 if (
-  args.filter(arg => arg.startsWith('--')).some(arg => arg !== '--finance-6b3') ||
+  args.filter(arg => arg.startsWith('--')).some(arg => !['--finance-6b3', '--finance-6b4'].includes(arg)) ||
+  args.filter(arg => arg.startsWith('--')).length > 1 ||
   args.filter(arg => !arg.startsWith('--')).length > 1 ||
   new Set(args).size !== args.length
 )
   throw new Error('Unknown synthetic harness option');
-const profile = args.includes('--finance-6b3') ? 'finance-6b3' : 'finance-6b2';
+const profile = args.includes('--finance-6b4') ? 'finance-6b4' : args.includes('--finance-6b3') ? 'finance-6b3' : 'finance-6b2';
 const fixturePath = args.find(arg => !arg.startsWith('--'));
 const root = resolve(repository, `test-results/${profile}-browser`);
 await stat(resolve(root, `scripts/${profile}/index.html`));
@@ -159,7 +160,7 @@ const server = createServer(async (request, response) => {
       'Referrer-Policy': 'no-referrer',
       'Content-Security-Policy': worker
         ? "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'none'; worker-src 'none'"
-        : "default-src 'none'; script-src 'self'; worker-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        : "default-src 'none'; script-src 'self'; worker-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     });
     response.end(content);
   } catch {

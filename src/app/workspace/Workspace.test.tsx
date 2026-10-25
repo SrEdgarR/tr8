@@ -83,6 +83,26 @@ function workspaceProps(overrides: Partial<WorkspaceProps> = {}): WorkspaceProps
 
 describe('espacios y equipos', () => {
   const personal = { id: 'workspace-a', kind: 'personal' as const, name: 'Personal', owner_id: 'personal-owner', version: 1, permissions: [] };
+  it('mounts finance only inside the personal workspace and preserves the project list', () => {
+    render(
+      <MemoryRouter initialEntries={['/finance']}>
+        <Workspace {...workspaceProps({ workspace: personal })} finance={<h1>Bóveda personal de prueba</h1>} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('heading', { name: 'Bóveda personal de prueba' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Finanzas' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: project.name })).toBeInTheDocument();
+  });
+  it('never mounts a personal vault on a team finance URL', () => {
+    render(
+      <MemoryRouter initialEntries={['/finance']}>
+        <Workspace {...workspaceProps({ workspace: { ...personal, kind: 'team' } })} finance={<h1>Bóveda personal de prueba</h1>} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('heading', { name: 'Bóveda personal de prueba' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Finanzas' })).not.toBeInTheDocument();
+    expect(screen.getByText('Selecciona tu espacio personal para consultar Finanzas.')).toBeInTheDocument();
+  });
   const team = { id: 'team-a', kind: 'team' as const, name: 'Equipo editorial', owner_id: 'personal-owner', version: 1, permissions: [] };
 
   it('navega desde Inicio y alterna proyectos sin navegación de documento ni acumular vistas o nombres', async () => {

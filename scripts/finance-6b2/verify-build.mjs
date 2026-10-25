@@ -5,15 +5,16 @@
  * Reads local sources/build only. It does not run the browser, KDF or any API.
  */
 import { createHash } from 'node:crypto';
-import { readFile, readdir, realpath } from 'node:fs/promises';
+import { readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 const repository = fileURLToPath(new URL('../../', import.meta.url));
-const financial = process.argv.length === 3 && process.argv[2] === '--finance-6b3';
-const profile = financial ? 'finance-6b3' : 'finance-6b2';
+const ui = process.argv.length === 3 && process.argv[2] === '--finance-6b4';
+const financial = ui || (process.argv.length === 3 && process.argv[2] === '--finance-6b3');
+const profile = ui ? 'finance-6b4' : financial ? 'finance-6b3' : 'finance-6b2';
 const output = resolve(repository, `test-results/${profile}-browser`);
 const PACKAGES = [
   {
@@ -106,6 +107,7 @@ async function main() {
   check(manifestEntry?.isEntry === true && typeof manifestEntry.file === 'string', 'Isolated browser harness manifest entry is missing.');
   const assets = new Map();
   for (const name of await readdir(resolve(outputReal, 'assets'))) {
+    if (ui && /^[A-Za-z0-9._-]+\.css$/.test(name)) continue;
     check(/^[A-Za-z0-9._-]+\.js$/.test(name), 'Unexpected or external asset filename.');
     const file = resolve(outputReal, 'assets', name);
     const canonical = await realpath(file);
@@ -142,7 +144,13 @@ async function main() {
   const entry = assets.get(manifestEntry.file);
   check(Boolean(entry), 'Harness main JS chunk is missing.');
   const html = await readFile(resolve(outputReal, `scripts/${profile}/index.html`), 'utf8');
-  for (const match of html.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)\s*=\s*(['"])([^'"]+)\1/g)) localReference(`scripts/${profile}/index.html`, match[2]);
+  for (const match of html.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)\s*=\s*(['"])([^'"]+)\1/g)) {
+    if (ui && /^\/assets\/[A-Za-z0-9._-]+\.css$/.test(match[2])) {
+      check((await stat(resolve(outputReal, `.${match[2]}`))).isFile(), 'UI stylesheet is missing.');
+      continue;
+    }
+    localReference(`scripts/${profile}/index.html`, match[2]);
+  }
   check(
     html.includes(`src="/${entry.file}"`) && !/<script[^>]+src\s*=\s*['"](?:https?:|\/\/)/i.test(html),
     'Harness HTML does not select only its local main entry.',
@@ -154,11 +162,14 @@ async function main() {
     return found[0];
   };
   const worker = pick(/^assets\/vault\.worker-[A-Za-z0-9_-]+\.js$/, 'Vault Worker');
-  const probe = pick(/^assets\/probe\.worker-[A-Za-z0-9_-]+\.js$/, 'Capability probe Worker');
+  const probe = ui ? undefined : pick(/^assets\/probe\.worker-[A-Za-z0-9_-]+\.js$/, 'Capability probe Worker');
   const sodium = pick(/^assets\/libsodium-wrappers-[A-Za-z0-9_-]+\.js$/, 'Bundled Sodium ESM chunk');
   const financialWorker = financial ? pick(/^assets\/financial\.worker-[A-Za-z0-9_-]+\.js$/, 'Financial domain Worker') : undefined;
   if (financialWorker) check(entry.source.includes(`/${financialWorker.file}`), 'Financial controller does not reference its domain Worker.');
-  check(entry.source.includes(`/${worker.file}`) && entry.source.includes(`/${probe.file}`), 'Main entry does not reference both local module Workers.');
+  check(
+    entry.source.includes(`/${worker.file}`) && (!probe || entry.source.includes(`/${probe.file}`)),
+    'Main entry does not reference its local module Workers.',
+  );
   check(/new Worker\(new URL\(/.test(entry.source), 'Main entry is missing its module Worker constructors.');
   check(sodium.bytes >= 450_000 && sodium.bytes <= 650_000, 'Bundled Sodium ESM chunk is outside its expected approximately 535 kB size range.');
   check(
@@ -182,7 +193,7 @@ async function main() {
     'Password KDF became reachable from the harness main thread.',
   );
   check(reachable(worker.file).has(sodium.file), 'Vault Worker cannot load its local Sodium ESM chunk.');
-  check(reachable(probe.file).has(sodium.file), 'Probe Worker cannot load the local KDF chunk.');
+  if (probe) check(reachable(probe.file).has(sodium.file), 'Probe Worker cannot load the local KDF chunk.');
   if (financialWorker) check(reachable(financialWorker.file).has(sodium.file), 'Financial Worker cannot load the local KDF chunk.');
 
   const describe = asset => ({ file: asset.file, bytes: asset.bytes, sha256: asset.sha256 });
@@ -195,7 +206,7 @@ async function main() {
         packages,
         main: describe(entry),
         vaultWorker: describe(worker),
-        probeWorker: describe(probe),
+        ...(probe ? { probeWorker: describe(probe) } : {}),
         ...(financialWorker ? { financialWorker: describe(financialWorker) } : {}),
         sodiumBundle: describe(sodium),
         mainKdfReachable: false,

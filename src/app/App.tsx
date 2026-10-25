@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -16,6 +16,9 @@ import { callbackRequestedRecovery, configuration, supabase } from './data/clien
 import { createRepository, type WorkspaceData } from './data/repository';
 import { dataError, DataError } from './data/errors';
 import type { CalendarApi, CollaborationApi, Project, Task, WorkspaceProps, WorkspaceSummary } from './types';
+import { createFinanceApi } from './finance/ui/api';
+
+const FinancePage = lazy(() => import('./finance/ui/FinancePage'));
 
 function LoadingScreen() {
   return (
@@ -327,6 +330,7 @@ function ScopedWorkspace({
   google: GoogleCalendarApi;
   googleTasks: GoogleTasksApi;
 }) {
+  const financeApi = useMemo(() => createFinanceApi(client, session.user.id, configuration!.url, configuration!.publishableKey), [client, session.user.id]);
   const queryClient = useQueryClient();
   const repository = useMemo(() => createRepository(client), [client]);
   const scopeRevision = [...selected.permissions].sort().join('|');
@@ -587,6 +591,13 @@ function ScopedWorkspace({
       capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
       collaboration={collaboration}
       calendar={calendar}
+      finance={
+        selected.kind === 'personal' ? (
+          <Suspense fallback={<div role="status">Abriendo Finanzas…</div>}>
+            <FinancePage key={`${session.user.id}:${selected.id}`} api={financeApi} />
+          </Suspense>
+        ) : undefined
+      }
       integrations={<GoogleCalendarPanel key={google.scopeKey.join(':')} api={google} tasksApi={googleTasks} collapsible />}
       processes={
         <ProcessesPanel

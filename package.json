@@ -16,6 +16,8 @@
     "serve:finance:test": "node scripts/finance-6b2/serve.mjs",
     "build:finance:domain:test": "vite build --config scripts/finance-6b3/vite.config.ts && node scripts/finance-6b2/verify-build.mjs --finance-6b3",
     "serve:finance:domain:test": "node scripts/finance-6b2/serve.mjs --finance-6b3",
+    "build:finance:ui:test": "vite build --config scripts/finance-6b4/vite.config.ts && node scripts/finance-6b2/verify-build.mjs --finance-6b4",
+    "serve:finance:ui:test": "node scripts/finance-6b2/serve.mjs --finance-6b4",
     "test": "vitest run",
     "test:edge": "vitest run --config vitest.edge.config.ts",
     "test:database:static": "node supabase/tests/rename_static.mjs",

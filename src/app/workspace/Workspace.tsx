@@ -21,6 +21,7 @@ import {
   Trash2,
   UserRound,
   Users,
+  Wallet,
   X,
 } from 'lucide-react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -552,7 +553,7 @@ function AccountPage({ email, pending, onSignOut, onPasswordReset }: Pick<Worksp
   );
 }
 
-export default function Workspace(props: WorkspaceProps & { processes?: ReactNode; integrations?: ReactNode }) {
+export default function Workspace(props: WorkspaceProps & { processes?: ReactNode; integrations?: ReactNode; finance?: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -606,19 +607,21 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   }, [projectEditor, editorAllowed, accessProject, accessAllowed, deleteProjectId, deleteAllowed, newTask, creatableProjects]);
   const pageName =
     currentProject?.name ??
-    (location.pathname === '/projects'
-      ? 'Proyectos'
-      : location.pathname === '/tasks'
-        ? 'Mis tareas'
-        : location.pathname === '/settings'
-          ? 'Configuración'
-          : location.pathname === '/account'
-            ? 'Mi cuenta'
-            : location.pathname === '/team'
-              ? 'Equipo'
-              : location.pathname === '/calendar'
-                ? 'Calendario'
-                : 'Inicio');
+    (location.pathname === '/finance'
+      ? 'Finanzas'
+      : location.pathname === '/projects'
+        ? 'Proyectos'
+        : location.pathname === '/tasks'
+          ? 'Mis tareas'
+          : location.pathname === '/settings'
+            ? 'Configuración'
+            : location.pathname === '/account'
+              ? 'Mi cuenta'
+              : location.pathname === '/team'
+                ? 'Equipo'
+                : location.pathname === '/calendar'
+                  ? 'Calendario'
+                  : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -745,6 +748,12 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                 <NavLink to={`/calendar${scopeSearch}`} className={navClass}>
                   <CalendarDays className="i" size={16} aria-hidden="true" />
                   <span>Calendario</span>
+                </NavLink>
+              )}
+              {props.workspace?.kind === 'personal' && props.finance && (
+                <NavLink to={`/finance${scopeSearch}`} className={navClass}>
+                  <Wallet className="i" size={16} aria-hidden="true" />
+                  <span>Finanzas</span>
                 </NavLink>
               )}
               {props.workspace?.kind === 'team' && (
@@ -937,6 +946,16 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                     <div className="page">
                       <EmptyState title="Calendario no disponible">Actualiza la aplicación para consultar las fechas de tus proyectos.</EmptyState>
                     </div>
+                  )
+                }
+              />
+              <Route
+                path="/finance"
+                element={
+                  props.workspace?.kind === 'personal' && props.finance ? (
+                    props.finance
+                  ) : (
+                    <EmptyState title="Finanzas personales">Selecciona tu espacio personal para consultar Finanzas.</EmptyState>
                   )
                 }
               />

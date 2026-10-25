@@ -122,6 +122,7 @@ src/app/
   finance/session/       custodia, confirmación, bloqueo y ciclo de vida
   finance/domain/        dinero entero, cuentas, movimientos, planes y proyección
   finance/import/        respaldos cifrados, preview, importación y restauración
+  finance/ui/            cuentas, movimientos, planes y seguridad; ruta personal
   data/                 cliente, configuración, repositorio y tipos de Supabase
   types.ts              modelo de dominio
   constants.ts          estados, prioridades y presentación de fechas
@@ -135,3 +136,9 @@ docs/database.md        acceso, funciones y verificación
 El código JavaScript del prototipo permanece en las demás carpetas de `src/` como referencia de la migración. `index.html` carga únicamente `src/app/main.tsx`; el antiguo router, los listeners y los datos de demostración no se ejecutan.
 
 La integración continua ejecuta TypeScript, pruebas, ESLint, formato y compilación. Las pruebas SQL requieren una conexión de administración a una base de pruebas: crean usuarios ficticios dentro de una transacción y revierten sus cambios. No usan contraseñas reales.
+
+La [etapa financiera 6B.4](docs/pulso-6b4/README.md) añade `/finance` al espacio
+personal. Producción muestra el estado de preparación: la admisión de finanzas
+reales sigue cerrada por el ADR de restauración. La interfaz completa se prueba
+con identidades ficticias en una entrada separada; nunca carga saldos de ejemplo
+como si fueran del propietario ni guarda el contenido financiero en React Query.
