@@ -29,6 +29,7 @@ function open(path: string, authorityId: string) {
   }
   const sql: JournalSql = {
     get: (query, ...args) => db.prepare(query).get(...args) as Row | undefined,
+    all: (query, ...args) => db.prepare(query).all(...args) as Row[],
     run: (query, ...args) => {
       db.prepare(query).run(...args);
     },

@@ -25,7 +25,7 @@ interface Environment {
   JOURNAL: { idFromName(name: string): unknown; get(id: unknown): { fetch(request: Request): Promise<Response> } };
 }
 const encode = (value: string) => new TextEncoder().encode(value);
-const paths = ['/v1/bootstrap', '/v1/check', '/v1/prepare', '/v1/commit'];
+const paths = ['/v1/bootstrap', '/v1/check', '/v1/prepare', '/v1/commit', '/v1/state'];
 function response(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), {
     status,
@@ -98,6 +98,7 @@ export class Tr8SyntheticAuthority {
       const raw = await body(request);
       const sql: JournalSql = {
         get: (query, ...args) => this.state.storage.sql.exec(query, ...args).toArray()[0],
+        all: (query, ...args) => this.state.storage.sql.exec(query, ...args).toArray(),
         run: (query, ...args) => {
           this.state.storage.sql.exec(query, ...args);
         },
@@ -122,6 +123,12 @@ export class Tr8SyntheticAuthority {
         return response({ nonce, authorityId: this.env.AUTHORITY_ID, syntheticOnly: true });
       }
       const journal = new SyntheticLifecycleJournal(sql, this.env.AUTHORITY_ID);
+      if (path === '/v1/state') {
+        const data = input(raw, ['ownerId']);
+        nonce = data.nonce as string;
+        requireOwner(data.ownerId);
+        return response({ nonce, authorityId: this.env.AUTHORITY_ID, state: journal.snapshot(SYNTHETIC_OWNER) });
+      }
       if (path === '/v1/prepare') {
         const data = input(raw, ['command']);
         nonce = data.nonce as string;

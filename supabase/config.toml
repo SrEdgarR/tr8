@@ -13,3 +13,7 @@ verify_jwt = false
 # permit the request. No production financial mode is implemented in 6B.1.
 [functions.tr8-finance]
 verify_jwt = false
+
+# Separate synthetic restore endpoint; verifies the bearer inside the handler.
+[functions.tr8-finance-restore-test]
+verify_jwt = false

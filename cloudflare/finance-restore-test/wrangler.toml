@@ -1,0 +1,21 @@
+name = "tr8-authority-restore-test"
+main = "worker.ts"
+account_id = "7c0ddf7725904b4726506e9b50e5c316"
+compatibility_date = "2026-10-25"
+workers_dev = true
+preview_urls = false
+
+[observability]
+enabled = false
+
+[vars]
+MODE = "synthetic-only"
+AUTHORITY_ID = "9583b66a-a5f8-43e4-aaf6-6409f7502669"
+
+[[durable_objects.bindings]]
+name = "JOURNAL"
+class_name = "Tr8RestoreAuthority"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Tr8RestoreAuthority"]

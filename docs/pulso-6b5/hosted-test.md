@@ -98,7 +98,11 @@ El script fija la URL de prueba, rechaza fixtures dentro de Git y usa desafíos
 nuevos. La fase prepare no sobrescribe un informe existente; no se debe repetir
 contra un namespace retirado esperando que lo reinicie.
 
-## Próximo corte: integración con PostgreSQL
+## Continuación: integración con PostgreSQL
+
+El [corte C](postgres-rehearsal.md) ya implementa y ensaya la coordinación en
+un nuevo namespace sintético. Las limitaciones siguientes describen este corte
+B; el ADR F02 sigue abierto después del ensayo C por los límites allí detallados.
 
 El servicio de pruebas no verifica una confirmación de Postgres: la suministra
 el ensayo. Faltan el coordinador real, fencing y revisión de cada vía de baja,

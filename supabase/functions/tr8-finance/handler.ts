@@ -26,6 +26,7 @@ export interface FinanceActor {
 export interface FinanceRuntime {
   origin: string;
   enabled: boolean;
+  syntheticRestore?: boolean;
   authenticate(request: Request): Promise<FinanceActor>;
   call(action: string, actor: FinanceActor, args: Record<string, unknown>): Promise<unknown>;
 }
@@ -112,6 +113,13 @@ export function createFinanceHandler(runtime: FinanceRuntime) {
         });
       }
       const actor = await runtime.authenticate(request);
+      if (runtime.syntheticRestore && request.method === 'POST' && path === '/tr8-finance/reconcile') {
+        if (request.headers.get('content-encoding') || request.headers.get('content-type')?.split(';')[0]?.trim() !== 'application/json')
+          throw new FinanceError('INVALID_INPUT');
+        const command = requireClosedRecord(parseStrictJson(decodeUtf8(await readFinanceBytes(request, 4096)), { maxBytes: 4096 }), ['release']);
+        if (typeof command.release !== 'boolean') throw new FinanceError('INVALID_INPUT');
+        return response(await runtime.call('reconcile', actor, { p_release: command.release }), 200, allowedOrigin);
+      }
       if (request.method === 'GET' && path === '/tr8-finance') return response(await runtime.call('read', actor, {}), 200, allowedOrigin);
       const receipt = /^\/tr8-finance\/receipt\/([A-Za-z0-9_-]{22})\/([A-Za-z0-9_-]{22})$/.exec(path);
       if (request.method === 'GET' && receipt) {
@@ -129,7 +137,7 @@ export function createFinanceHandler(runtime: FinanceRuntime) {
       }
       if (!(
         (request.method === 'PUT' && path === '/tr8-finance') ||
-        (request.method === 'POST' && ['/tr8-finance/reset', '/tr8-finance/revoke'].includes(path))
+        (request.method === 'POST' && ['/tr8-finance/reset', '/tr8-finance/revoke', ...(runtime.syntheticRestore ? ['/tr8-finance/purge'] : [])].includes(path))
       ))
         throw new FinanceError('METHOD_NOT_ALLOWED', 405);
       if (request.headers.get('content-encoding') || request.headers.get('content-type')?.split(';')[0]?.trim() !== 'application/json')
@@ -145,7 +153,8 @@ export function createFinanceHandler(runtime: FinanceRuntime) {
           allowedOrigin,
         );
       }
-      const reset = path.endsWith('/reset');
+      const purge = runtime.syntheticRestore === true && path.endsWith('/purge');
+      const reset = path.endsWith('/reset') || purge;
       const command = requireClosedRecord(
         parseStrictJson(body, { maxBytes: 4096 }),
         reset ? ['operationId', 'expectedEpoch', 'expectedVaultId'] : ['operationId', 'expectedEpoch', 'sessionId'],
@@ -162,7 +171,7 @@ export function createFinanceHandler(runtime: FinanceRuntime) {
         if (typeof command.sessionId !== 'string' || !/^[0-9a-f-]{36}$/i.test(command.sessionId)) throw new FinanceError('INVALID_INPUT');
         args.p_target_session = command.sessionId;
       }
-      return response(await runtime.call(reset ? 'reset' : 'revoke', actor, args), 200, allowedOrigin);
+      return response(await runtime.call(purge ? 'purge' : reset ? 'reset' : 'revoke', actor, args), 200, allowedOrigin);
     } catch (cause) {
       const error =
         cause instanceof FinanceError

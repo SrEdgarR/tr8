@@ -29,7 +29,12 @@ function key(get: (name: string) => string | undefined, collection: string, fall
   return get(fallback) ?? '';
 }
 
-export function createFinanceRuntime(get: (name: string) => string | undefined, fetcher: typeof fetch = fetch, clock = Date.now): FinanceRuntime {
+export function createFinanceRuntime(
+  get: (name: string) => string | undefined,
+  fetcher: typeof fetch = fetch,
+  clock = Date.now,
+  rpc: 'tr8_server_finance' | 'tr8_server_finance_coordinated' = 'tr8_server_finance',
+): FinanceRuntime {
   const project = origin(get('SUPABASE_URL'));
   const app = origin(get('TR8_FINANCE_ALLOWED_ORIGIN'));
   const projectRef = get('TR8_FINANCE_TEST_PROJECT_REF') ?? '';
@@ -100,7 +105,7 @@ export function createFinanceRuntime(get: (name: string) => string | undefined, 
     },
     async call(action, actor, args) {
       const result = await platform(
-        '/rest/v1/rpc/tr8_server_finance',
+        `/rest/v1/rpc/${rpc}`,
         { apikey: serverKey, 'Content-Type': 'application/json' },
         { ...args, p_action: action, p_actor: actor.id, p_session: actor.session, p_token_exp: actor.expiresAt, p_password_at: actor.passwordAt },
       );

@@ -57,6 +57,7 @@ export const JOURNAL_SCHEMA = `CREATE TABLE authority(singleton INTEGER PRIMARY 
       CREATE UNIQUE INDEX one_pending_per_owner ON operations(owner_id) WHERE status='pending';`;
 export interface JournalSql {
   get(sql: string, ...args: string[]): Row | undefined;
+  all(sql: string, ...args: string[]): Row[];
   run(sql: string, ...args: string[]): void;
   transaction<T>(work: () => T): T;
 }
@@ -82,6 +83,29 @@ export class SyntheticLifecycleJournal {
     const owner = this.row('SELECT * FROM owners WHERE owner_id=?', id);
     if (!owner || owner.purged !== 0) fail('DENIED');
     return owner;
+  }
+  /** Complete bounded evidence; overflow closes access instead of truncating history. */
+  snapshot(ownerId: string) {
+    return this.transaction(() => {
+      const owner = this.row('SELECT * FROM owners WHERE owner_id=?', ownerId);
+      if (!owner) fail('DENIED');
+      const operations = this.sql.all('SELECT * FROM operations WHERE owner_id=? ORDER BY CAST(next_epoch AS INTEGER) LIMIT 65', ownerId);
+      const retired = this.sql.all('SELECT vault_id FROM vaults WHERE owner_id=? AND retired=1 ORDER BY vault_id LIMIT 65', ownerId);
+      const revoked = this.sql.all('SELECT session_id FROM revoked WHERE owner_id=? ORDER BY session_id LIMIT 65', ownerId);
+      if ([operations, retired, revoked].some(rows => rows.length > 64)) fail('UNAVAILABLE');
+      return {
+        ownerId,
+        epoch: String(owner.epoch),
+        purged: owner.purged === 1,
+        retiredVaults: retired.map(r => String(r.vault_id)),
+        revokedSessions: revoked.map(r => String(r.session_id)),
+        operations: operations.map(op => ({
+          command: JSON.parse(String(op.command)) as LifecycleCommand,
+          status: String(op.status),
+          receipt: { operationId: String(op.operation_id), epoch: String(op.next_epoch), digest: String(op.digest) },
+        })),
+      };
+    });
   }
   /** Caller supplies a server-verified principal in a future adapter, never a browser owner field. */
   prepare(input: LifecycleCommand, digest: string): LifecycleReceipt {
