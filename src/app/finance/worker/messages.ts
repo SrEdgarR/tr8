@@ -6,7 +6,23 @@ export interface WorkerIdentity {
   epoch: string;
 }
 export type VaultWorkerMethod =
-  'probe' | 'create' | 'unlock' | 'custody' | 'confirm-custody' | 'read' | 'write' | 'recover' | 'rotate-password' | 'rotate-recovery' | 'rekey' | 'ack';
+  | 'probe'
+  | 'create'
+  | 'unlock'
+  | 'custody'
+  | 'confirm-custody'
+  | 'read'
+  | 'write'
+  | 'recover'
+  | 'rotate-password'
+  | 'rotate-recovery'
+  | 'rekey'
+  | 'ack'
+  | 'import-preview'
+  | 'import-accept'
+  | 'restore-preview'
+  | 'restore-accept'
+  | 'backup-export';
 export interface VaultWorkerRequest {
   id: number;
   generation: number;
@@ -38,9 +54,25 @@ export function parseWorkerRequest(value: unknown): VaultWorkerRequest {
     Number(record.id) < 1 ||
     !Number.isSafeInteger(record.generation) ||
     Number(record.generation) < 1 ||
-    !['probe', 'create', 'unlock', 'custody', 'confirm-custody', 'read', 'write', 'recover', 'rotate-password', 'rotate-recovery', 'rekey', 'ack'].includes(
-      record.method as string,
-    )
+    ![
+      'probe',
+      'create',
+      'unlock',
+      'custody',
+      'confirm-custody',
+      'read',
+      'write',
+      'recover',
+      'rotate-password',
+      'rotate-recovery',
+      'rekey',
+      'ack',
+      'import-preview',
+      'import-accept',
+      'restore-preview',
+      'restore-accept',
+      'backup-export',
+    ].includes(record.method as string)
   )
     throw new Error('INVALID_MESSAGE');
   boundedWorkerValue(record.value);

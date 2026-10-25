@@ -3,7 +3,7 @@
  * Optional hosted bridge: existing TEST example.test fixture credentials remain
  * server-side in memory; only opaque envelopes reach Supabase. No production URL,
  * service key, new Auth user, email or financial domain data is permitted.
- * node scripts/finance-6b2/serve.mjs [private-fixtures.json]
+ * node scripts/finance-6b2/serve.mjs [private-fixtures.json] [--finance-6b3]
  */
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
@@ -15,14 +15,23 @@ const origin = 'http://127.0.0.1:5188';
 const testBase = 'https://kajcbwlnqcwcpbtqyieo.supabase.co';
 const edgePath = '/functions/v1/tr8-finance';
 const repository = fileURLToPath(new URL('../../', import.meta.url));
-const root = resolve(repository, 'test-results/finance-6b2-browser');
-await stat(resolve(root, 'scripts/finance-6b2/index.html'));
+const args = process.argv.slice(2);
+if (
+  args.filter(arg => arg.startsWith('--')).some(arg => arg !== '--finance-6b3') ||
+  args.filter(arg => !arg.startsWith('--')).length > 1 ||
+  new Set(args).size !== args.length
+)
+  throw new Error('Unknown synthetic harness option');
+const profile = args.includes('--finance-6b3') ? 'finance-6b3' : 'finance-6b2';
+const fixturePath = args.find(arg => !arg.startsWith('--'));
+const root = resolve(repository, `test-results/${profile}-browser`);
+await stat(resolve(root, `scripts/${profile}/index.html`));
 let fixture;
 let auth;
 let requests = 0;
 const saves = [];
-if (process.argv[2]) {
-  const configPath = resolve(process.argv[2]);
+if (fixturePath) {
+  const configPath = resolve(fixturePath);
   const location = relative(repository, configPath);
   if (!location || (!isAbsolute(location) && location !== '..' && !location.startsWith(`..${sep}`))) throw new Error('Fixture must stay outside Git');
   const parsed = JSON.parse(await readFile(configPath, 'utf8'));
@@ -138,11 +147,11 @@ const server = createServer(async (request, response) => {
       return json(response, { error: 'DENIED' }, 403);
     }
     if (request.method !== 'GET') return json(response, { error: 'DENIED' }, 405);
-    const path = resolve(root, '.' + decodeURIComponent(target.pathname === '/' ? '/scripts/finance-6b2/index.html' : target.pathname));
+    const path = resolve(root, '.' + decodeURIComponent(target.pathname === '/' ? `/scripts/${profile}/index.html` : target.pathname));
     const location = relative(root, path);
     if (!location || isAbsolute(location) || location.startsWith('..')) return json(response, { error: 'DENIED' }, 403);
     const content = await readFile(path);
-    const worker = /(?:vault|probe)\.worker-[^/]+\.js$/.test(path);
+    const worker = /(?:vault|probe|financial)\.worker-[^/]+\.js$/.test(path);
     response.writeHead(200, {
       'Content-Type': mime[extname(path)] ?? 'application/octet-stream',
       'Cache-Control': 'no-store',

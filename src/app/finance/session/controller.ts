@@ -4,6 +4,7 @@ import {
   serializeOpaquePut,
   validateEnvelope,
   validateEpoch,
+  decodeBase64Url,
   vaultError,
   VaultError,
   type OpaqueReceipt,
@@ -12,6 +13,8 @@ import {
 } from '../compatibility/protocol';
 import { validatePlaintext, type VaultPlaintext } from '../crypto/plaintext';
 import type { PrivateCredential } from '../crypto/credentials';
+import { parseEncryptedBackup, serializeEncryptedBackup } from '../import/format';
+import { validateImportPreview, type ImportPreview } from '../import/preview';
 import { requireVaultBrowserCapabilities } from '../worker/capabilities';
 import { boundedWorkerValue, matchingWorkerIdentity, workerIdentity, type VaultWorkerMethod, type WorkerIdentity } from '../worker/messages';
 import { sameVaultIdentity, VaultSessionLifecycle, type VaultLockReason, type VaultSessionIdentity } from './lifecycle';
@@ -22,6 +25,10 @@ export interface PreparedVaultSnapshot {
   envelope: VaultEnvelope;
   expectedRevision: string;
 }
+export interface VaultBackupPreview {
+  previewId: string;
+  summary: ImportPreview;
+}
 export interface VaultControllerOptions {
   ownerId: string;
   /** Injected trusted server boundary; this callback is not authentication itself. */
@@ -31,6 +38,8 @@ export interface VaultControllerOptions {
    * backend denial; all other failures preserve an inactive exact-byte retry.
    */
   saveOpaque: (exactBody: string, identity: VaultSessionIdentity) => Promise<OpaqueReceipt>;
+  /** Trusted backend read, not a caller-supplied empty-destination flag. Required for import. */
+  readOpaque?: (identity: VaultSessionIdentity) => Promise<{ envelope: VaultEnvelope | null; epoch: string }>;
   onClear: () => void;
   makeWorker?: () => Worker;
   now?: () => number;
@@ -135,7 +144,8 @@ export class VaultSessionController {
   private channel?: WorkerChannel;
   private identity?: VaultSessionIdentity;
   private prepared?: { snapshot: PreparedVaultSnapshot; body: string };
-  private phase: 'locked' | 'custody' | 'pending' | 'unconfirmed' | 'open' = 'locked';
+  private phase: 'locked' | 'custody' | 'pending' | 'unconfirmed' | 'open' | 'import-preview' | 'restore-preview' = 'locked';
+  private backupPreview?: { id: string; kind: 'import' | 'restore' };
   private mode?: 'password' | 'recovery-readonly';
   private operationTicket?: { generation: number };
 
@@ -147,6 +157,7 @@ export class VaultSessionController {
       this.prepared = undefined;
       this.phase = 'locked';
       this.mode = undefined;
+      this.backupPreview = undefined;
       this.operationTicket = undefined;
       this.clear();
     });
@@ -270,8 +281,33 @@ export class VaultSessionController {
     this.clear();
     return { envelope: validateEnvelope(envelope), expectedRevision };
   }
+  private preview(value: unknown, kind: 'import' | 'restore'): VaultBackupPreview {
+    const record = requireClosedRecord(value, ['previewId', 'summary']);
+    if (typeof record.previewId !== 'string') throw vaultError('INVALID_FORMAT');
+    decodeBase64Url(record.previewId, 16);
+    const summary = validateImportPreview(record.summary);
+    this.backupPreview = { id: record.previewId, kind };
+    this.phase = kind === 'import' ? 'import-preview' : 'restore-preview';
+    this.mode = undefined;
+    this.clear();
+    return { previewId: record.previewId, summary };
+  }
+  private async requireEmptyDestination(generation: number): Promise<void> {
+    const channel = this.channel;
+    if (!this.options.readOpaque) throw vaultError('INVALID_STATE');
+    const identity = await this.verify(generation);
+    this.assertCurrent(generation, channel);
+    const head = await this.options.readOpaque({ ...identity });
+    this.assertCurrent(generation, channel);
+    await this.verify(generation);
+    this.assertCurrent(generation, channel);
+    const record = requireClosedRecord(head, ['envelope', 'epoch']);
+    if (record.envelope !== null || validateEpoch(record.epoch) !== identity.epoch) throw vaultError('INVALID_STATE');
+    // This read cannot reserve emptiness. expectedRevision=0 and the server's
+    // current Auth/session/recent-login checks remain authoritative at commit.
+  }
   private async operation<T>(
-    admission: 'replace' | 'custody' | 'open' | 'password' | 'recovery' | 'pending',
+    admission: 'replace' | 'custody' | 'open' | 'password' | 'recovery' | 'pending' | 'import-preview' | 'restore-preview',
     action: (ticket: { generation: number }) => Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> {
@@ -283,7 +319,9 @@ export class VaultSessionController {
           ? ['pending', 'unconfirmed'].includes(this.phase)
           : admission === 'custody'
             ? this.phase === 'custody'
-            : this.phase === 'open' && (admission === 'open' || this.mode === (admission === 'password' ? 'password' : 'recovery-readonly'));
+            : admission === 'import-preview' || admission === 'restore-preview'
+              ? this.phase === admission
+              : this.phase === 'open' && (admission === 'open' || this.mode === (admission === 'password' ? 'password' : 'recovery-readonly'));
       if (!allowed) throw vaultError('INVALID_STATE');
     }
     const ticket = { generation: this.lifecycle.currentGeneration() };
@@ -375,6 +413,78 @@ export class VaultSessionController {
       async ({ generation }) => {
         const result = await this.run(generation, 'write', validatePlaintext(plaintext), signal);
         return this.consume(generation, () => this.prepare(result));
+      },
+      signal,
+    );
+  }
+  async beginImportPreview(backup: string, credential: PrivateCredential, signal?: AbortSignal): Promise<VaultBackupPreview> {
+    return this.operation(
+      'replace',
+      async ticket => {
+        // Bound and canonicalize only the opaque file on main. Pretty backups up
+        // to 2 MiB stay valid without inflating the Worker message limit.
+        const canonical = serializeEncryptedBackup(parseEncryptedBackup(backup).envelope);
+        const generation = await this.begin(ticket);
+        await this.requireEmptyDestination(generation);
+        this.assertCurrent(generation);
+        const result = await this.run(generation, 'import-preview', { backup: canonical, credential: { ...credential } }, signal);
+        return this.consume(generation, () => this.preview(result, 'import'));
+      },
+      signal,
+    );
+  }
+  async acceptImport(previewId: string, password: string, signal?: AbortSignal): Promise<{ recoveryCode: string }> {
+    return this.operation(
+      'import-preview',
+      async ({ generation }) => {
+        if (this.backupPreview?.kind !== 'import' || this.backupPreview.id !== previewId) throw vaultError('INVALID_STATE');
+        await this.requireEmptyDestination(generation);
+        this.assertCurrent(generation);
+        const result = await this.run(generation, 'import-accept', { previewId, password }, signal);
+        return this.consume(generation, () => {
+          this.backupPreview = undefined;
+          return this.custody(result);
+        });
+      },
+      signal,
+    );
+  }
+  async beginRestorePreview(backup: string, credential: PrivateCredential, signal?: AbortSignal): Promise<VaultBackupPreview> {
+    return this.operation(
+      'password',
+      async ({ generation }) => {
+        const canonical = serializeEncryptedBackup(parseEncryptedBackup(backup).envelope);
+        const result = await this.run(generation, 'restore-preview', { backup: canonical, credential: { ...credential } }, signal);
+        return this.consume(generation, () => this.preview(result, 'restore'));
+      },
+      signal,
+    );
+  }
+  async acceptRestore(previewId: string, signal?: AbortSignal): Promise<PreparedVaultSnapshot> {
+    return this.operation(
+      'restore-preview',
+      async ({ generation }) => {
+        if (this.backupPreview?.kind !== 'restore' || this.backupPreview.id !== previewId) throw vaultError('INVALID_STATE');
+        const result = await this.run(generation, 'restore-accept', { previewId }, signal);
+        return this.consume(generation, () => {
+          this.backupPreview = undefined;
+          return this.prepare(result);
+        });
+      },
+      signal,
+    );
+  }
+  async exportBackup(signal?: AbortSignal): Promise<string> {
+    return this.operation(
+      'open',
+      async ({ generation }) => {
+        const result = await this.run(generation, 'backup-export', null, signal);
+        return this.consume(generation, () => {
+          if (typeof result !== 'string') throw vaultError('INVALID_FORMAT');
+          const backup = parseEncryptedBackup(result);
+          if (backup.envelope.ownerId !== this.options.ownerId) throw vaultError('AUTH_FAILED');
+          return serializeEncryptedBackup(backup.envelope);
+        });
       },
       signal,
     );

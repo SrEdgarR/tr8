@@ -9,9 +9,12 @@ import { readFile, readdir, realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const repository = fileURLToPath(new URL('../../', import.meta.url));
-const output = resolve(repository, 'test-results/finance-6b2-browser');
+const financial = process.argv.length === 3 && process.argv[2] === '--finance-6b3';
+const profile = financial ? 'finance-6b3' : 'finance-6b2';
+const output = resolve(repository, `test-results/${profile}-browser`);
 const PACKAGES = [
   {
     name: 'libsodium-sumo',
@@ -45,19 +48,27 @@ function within(root, target) {
 }
 function moduleReferences(source) {
   const refs = new Set();
-  // Vite emits literal local ESM chunk references. Computed imports fail closed
-  // rather than being treated as evidence that a remote import is impossible.
-  for (const match of source.matchAll(/\bimport\s*\(([^)]*)\)/g)) {
-    const literal = /^\s*(['"])([^'"]+)\1\s*$/.exec(match[1]);
-    check(Boolean(literal), 'Computed dynamic import in a built asset.');
-    refs.add(literal[2]);
-  }
-  for (const match of source.matchAll(/\b(?:import|export)\s*(?:[^;\n'"]*?\s*from\s*)?(['"])([^'"]+)\1/g)) refs.add(match[2]);
+  // Parse JS rather than matching words in strings such as the preview kind
+  // "import". Computed module imports still fail closed.
+  const file = ts.createSourceFile('asset.js', source, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS);
+  check(file.parseDiagnostics.length === 0, 'A built JS asset could not be parsed.');
+  const visit = node => {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
+      check(ts.isStringLiteralLike(node.moduleSpecifier), 'Nonliteral static module reference.');
+      refs.add(node.moduleSpecifier.text);
+    }
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      check(node.arguments.length === 1 && ts.isStringLiteralLike(node.arguments[0]), 'Computed dynamic import in a built asset.');
+      refs.add(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
   return [...refs];
 }
 
 async function main() {
-  check(process.argv.length === 2, 'No path or network arguments are accepted.');
+  check(process.argv.length === 2 || financial, 'Only the fixed --finance-6b3 profile is accepted.');
   const declared = JSON.parse(await readFile(resolve(repository, 'package.json'), 'utf8'));
   const lock = JSON.parse(await readFile(resolve(repository, 'package-lock.json'), 'utf8'));
   const packages = [];
@@ -91,7 +102,7 @@ async function main() {
 
   const outputReal = await realpath(output);
   const manifest = JSON.parse(await readFile(resolve(outputReal, '.vite/manifest.json'), 'utf8'));
-  const manifestEntry = manifest['scripts/finance-6b2/index.html'];
+  const manifestEntry = manifest[`scripts/${profile}/index.html`];
   check(manifestEntry?.isEntry === true && typeof manifestEntry.file === 'string', 'Isolated browser harness manifest entry is missing.');
   const assets = new Map();
   for (const name of await readdir(resolve(outputReal, 'assets'))) {
@@ -130,8 +141,8 @@ async function main() {
   }
   const entry = assets.get(manifestEntry.file);
   check(Boolean(entry), 'Harness main JS chunk is missing.');
-  const html = await readFile(resolve(outputReal, 'scripts/finance-6b2/index.html'), 'utf8');
-  for (const reference of moduleReferences(html)) localReference('scripts/finance-6b2/index.html', reference);
+  const html = await readFile(resolve(outputReal, `scripts/${profile}/index.html`), 'utf8');
+  for (const match of html.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)\s*=\s*(['"])([^'"]+)\1/g)) localReference(`scripts/${profile}/index.html`, match[2]);
   check(
     html.includes(`src="/${entry.file}"`) && !/<script[^>]+src\s*=\s*['"](?:https?:|\/\/)/i.test(html),
     'Harness HTML does not select only its local main entry.',
@@ -145,6 +156,8 @@ async function main() {
   const worker = pick(/^assets\/vault\.worker-[A-Za-z0-9_-]+\.js$/, 'Vault Worker');
   const probe = pick(/^assets\/probe\.worker-[A-Za-z0-9_-]+\.js$/, 'Capability probe Worker');
   const sodium = pick(/^assets\/libsodium-wrappers-[A-Za-z0-9_-]+\.js$/, 'Bundled Sodium ESM chunk');
+  const financialWorker = financial ? pick(/^assets\/financial\.worker-[A-Za-z0-9_-]+\.js$/, 'Financial domain Worker') : undefined;
+  if (financialWorker) check(entry.source.includes(`/${financialWorker.file}`), 'Financial controller does not reference its domain Worker.');
   check(entry.source.includes(`/${worker.file}`) && entry.source.includes(`/${probe.file}`), 'Main entry does not reference both local module Workers.');
   check(/new Worker\(new URL\(/.test(entry.source), 'Main entry is missing its module Worker constructors.');
   check(sodium.bytes >= 450_000 && sodium.bytes <= 650_000, 'Bundled Sodium ESM chunk is outside its expected approximately 535 kB size range.');
@@ -170,6 +183,7 @@ async function main() {
   );
   check(reachable(worker.file).has(sodium.file), 'Vault Worker cannot load its local Sodium ESM chunk.');
   check(reachable(probe.file).has(sodium.file), 'Probe Worker cannot load the local KDF chunk.');
+  if (financialWorker) check(reachable(financialWorker.file).has(sodium.file), 'Financial Worker cannot load the local KDF chunk.');
 
   const describe = asset => ({ file: asset.file, bytes: asset.bytes, sha256: asset.sha256 });
   console.log(
@@ -182,6 +196,7 @@ async function main() {
         main: describe(entry),
         vaultWorker: describe(worker),
         probeWorker: describe(probe),
+        ...(financialWorker ? { financialWorker: describe(financialWorker) } : {}),
         sodiumBundle: describe(sodium),
         mainKdfReachable: false,
         remoteModuleImports: false,
