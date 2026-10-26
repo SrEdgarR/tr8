@@ -1,6 +1,7 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import { initialControlState, sha256, stable } from './vault-control';
 import { signRecoveryCheckpoint, verifyRecoveryCheckpoint, keyFingerprint, assessAuthorityRecovery, type SignedCheckpoint, type RecoveryPin } from './recovery';
+import { decodeBase64Url, encodeBase64Url } from '../../src/app/finance/compatibility/protocol';
 const authority = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   owner = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 let keys: CryptoKeyPair, signed: SignedCheckpoint, pin: RecoveryPin;
@@ -32,7 +33,12 @@ describe('6B.5D.4 independent authority disaster recovery', () => {
     if (field === 'owner') copy.checkpoint.ownerId = authority;
     if (field === 'sequence') copy.checkpoint.sequence = '2';
     if (field === 'digest') copy.checkpoint.stateDigest = '0'.repeat(64);
-    if (field === 'signature') copy.signature = copy.signature.slice(0, -2) + 'AA';
+    if (field === 'signature') {
+      const signature = decodeBase64Url(copy.signature);
+      signature[0] ^= 1;
+      copy.signature = encodeBase64Url(signature);
+      expect(copy.signature).not.toBe(signed.signature);
+    }
     const key = field === 'key' ? ((await crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify'])) as CryptoKeyPair).publicKey : keys.publicKey;
     await expect(verifyRecoveryCheckpoint(copy, key, pin)).rejects.toThrow('UNTRUSTED_AUTHORITY');
   });
