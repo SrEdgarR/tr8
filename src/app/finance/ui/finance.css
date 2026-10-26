@@ -496,3 +496,98 @@
     transform: none !important;
   }
 }
+
+/* Keep finance navigation in place and scroll only the selected section. */
+.pw-content-finance > .tf-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+}
+.pw-content-finance > .tf-page:has(> .tf-section-content),
+.pw-content-finance > .tf-page:has(> .tf-vault-content) {
+  overflow: hidden;
+}
+.pw-content-finance .tf-page > .tf-heading,
+.pw-content-finance .tf-page > .tf-toolbar,
+.pw-content-finance .tf-page > .tf-project-tabs,
+.pw-content-finance .tf-page > [role='status'] {
+  flex-shrink: 0;
+}
+.pw-content-finance .tf-section-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 3px 4px 8px;
+  margin: -3px -4px -8px;
+}
+.pw-content-finance .tf-vault-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.pw-content-finance .tf-vault-content:has(> .tf-section-content) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.pw-content-finance .tf-vault-content > .tf-toolbar,
+.pw-content-finance .tf-vault-content > .tf-project-tabs {
+  flex-shrink: 0;
+}
+.pw-content-finance .tf-section-content > :last-child {
+  margin-bottom: 0;
+}
+@media (max-width: 700px) {
+  .pw-content-finance > .tf-page {
+    padding-top: 18px;
+    padding-bottom: 12px;
+  }
+  .pw-content-finance .tf-heading {
+    margin-bottom: 16px;
+  }
+  .pw-content-finance .tf-toolbar {
+    margin-bottom: 16px;
+  }
+  .pw-content-finance .tf-project-tabs {
+    margin-bottom: 18px;
+  }
+}
+.tf-projection > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 550;
+}
+.tf-projection > summary::-webkit-details-marker {
+  display: none;
+}
+.tf-projection > summary::after {
+  content: '+';
+  margin-left: auto;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+.tf-projection[open] > summary::after {
+  content: '−';
+}
+.tf-projection > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+  border-radius: 3px;
+}
+.tf-projection[open] > summary {
+  margin-bottom: 16px;
+}

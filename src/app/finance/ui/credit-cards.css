@@ -105,3 +105,56 @@
     padding-top: 20px;
   }
 }
+.tf-credit-basics {
+  margin-top: 16px;
+  gap: 18px;
+}
+.tf-credit-basics .tf-credit-pocket p {
+  margin: 10px 0 6px;
+}
+.tf-credit-details {
+  border-top: 1px solid var(--border);
+  margin-top: 18px;
+  padding-top: 12px;
+}
+.tf-credit-details > summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 0;
+}
+.tf-credit-details > summary::-webkit-details-marker {
+  display: none;
+}
+.tf-credit-details > summary:hover {
+  color: var(--text);
+}
+.tf-credit-details > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.tf-credit-details > summary svg {
+  transition: transform 160ms ease;
+}
+.tf-credit-details[open] > summary svg {
+  transform: rotate(180deg);
+}
+.tf-credit-details[open] .tf-credit-expanded {
+  animation: tf-dialog-enter 160ms ease both;
+}
+.tf-delete-action {
+  margin-right: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tf-credit-details > summary svg,
+  .tf-credit-details[open] .tf-credit-expanded {
+    animation: none;
+    transition: none;
+  }
+}

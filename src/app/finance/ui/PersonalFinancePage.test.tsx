@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import PersonalFinancePage from './PersonalFinancePage';
 import type { AccountFinanceApi, AccountFinanceWrite } from './account-api';
 import type { FinanceApi } from './api';
+import { saveCreditCard } from '../domain/credit-card-workspace';
 import { addAccount, emptyFinancialSnapshot } from '../domain/workspace';
 function setup(snapshot = emptyFinancialSnapshot()) {
   const account: AccountFinanceApi = {
@@ -26,7 +27,7 @@ function setup(snapshot = emptyFinancialSnapshot()) {
 describe('account finances by default', () => {
   it('opens the dashboard without asking for or contacting the encrypted vault', async () => {
     const h = setup();
-    await screen.findByRole('heading', { name: 'Panorama financiero' });
+    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
     expect(screen.queryByLabelText('Contraseña privada')).not.toBeInTheDocument();
     expect(h.vault.head).not.toHaveBeenCalled();
     expect(h.account.save).not.toHaveBeenCalled();
@@ -36,12 +37,12 @@ describe('account finances by default', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abrir bóveda cifrada opcional' }));
     await screen.findByText('En preparación');
     fireEvent.click(screen.getByRole('button', { name: 'Volver a Finanzas' }));
-    await screen.findByRole('heading', { name: 'Panorama financiero' });
+    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
   });
   it('retries the same financial write after an uncertain response and releases the modal', async () => {
     const h = setup();
     vi.mocked(h.account.save).mockRejectedValueOnce(Error('network'));
-    await screen.findByRole('heading', { name: 'Panorama financiero' });
+    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
     fireEvent.click(screen.getByRole('button', { name: 'Nueva cuenta' }));
     expect(screen.getByLabelText('Moneda de la cuenta')).toHaveValue('DOP');
     fireEvent.change(screen.getByLabelText('Nombre de la cuenta'), { target: { value: 'Cuenta ficticia' } });
@@ -58,7 +59,7 @@ describe('account finances by default', () => {
   });
   it('creates DOP accounts, records income and expense, and preserves the total through a transfer and reload', async () => {
     const h = setup();
-    await screen.findByRole('heading', { name: 'Panorama financiero' });
+    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
     async function save() {
       fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -123,7 +124,7 @@ describe('account finances by default', () => {
       });
     }
     setup(snapshot);
-    await screen.findByRole('heading', { name: 'Panorama financiero' });
+    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo movimiento' }));
     fireEvent.change(screen.getByLabelText('Tipo de movimiento'), { target: { value: 'transfer' } });
     const origin = screen.getByLabelText('Cuenta de origen');
@@ -165,5 +166,49 @@ describe('account finances by default', () => {
     expect(result.financialSpace.operations).toEqual(snapshot.financialSpace.operations);
     expect(screen.getByRole('region', { name: 'Patrimonio por moneda' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Cuentas financieras' })).toBeInTheDocument();
+  });
+  it('shows a compact card and deletes only its confirmed currency group through account settings', async () => {
+    let snapshot = addAccount(emptyFinancialSnapshot(), {
+      id: 'bank-safe',
+      name: 'Ahorro conservado',
+      type: 'debit',
+      currency: 'DOP',
+      openingBalanceMinor: 100000,
+      openingDate: '2026-01-01',
+    });
+    snapshot = saveCreditCard(snapshot, {
+      name: 'Tarjeta de prueba',
+      statementDay: 20,
+      paymentDay: 2,
+      asOfDate: '2026-01-01',
+      balances: [
+        { currency: 'DOP', creditLimitMinor: 100000, totalDebtMinor: 40000, statementPendingMinor: 30000 },
+        { currency: 'USD', creditLimitMinor: 10000, totalDebtMinor: 5000, statementPendingMinor: 2000 },
+      ],
+    });
+    const h = setup(snapshot);
+    await screen.findByRole('heading', { name: 'Tarjeta de prueba' });
+    expect(screen.queryByRole('heading', { name: 'Panorama financiero' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Saldos a fecha')).not.toBeInTheDocument();
+    const toggle = screen.getByLabelText('Ver detalles de Tarjeta de prueba');
+    const details = toggle.closest('details')!;
+    expect(details).not.toHaveAttribute('open');
+    expect(within(details).getAllByText('Límite')[0]).not.toBeVisible();
+    fireEvent.click(toggle);
+    expect(details).toHaveAttribute('open');
+    expect(within(details).getAllByText('Límite')[0]).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Configurar tarjeta Tarjeta de prueba' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar tarjeta' }));
+    const dialog = screen.getByRole('dialog', { name: 'Eliminar cuenta' });
+    expect(within(dialog).getByRole('list', { name: 'Saldos que se eliminarán' })).toHaveTextContent('DOP');
+    expect(h.account.save).not.toHaveBeenCalled();
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Tarjeta de prueba' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Eliminar cuenta definitivamente' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: 'Tarjeta de prueba' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Ahorro conservado' })).toBeInTheDocument();
+    const saved = vi.mocked(h.account.save).mock.calls[0][0].snapshot;
+    expect(saved.financialSpace.accounts).toEqual([snapshot.financialSpace.accounts[0]]);
+    expect(saved.financialSpace.operations).toEqual(snapshot.financialSpace.operations);
   });
 });

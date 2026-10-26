@@ -1916,3 +1916,16 @@
 .pw-sync[data-state='error'] {
   color: var(--danger, #e27d7d);
 }
+
+/* Finance owns its section scroller; the workspace surface and topbar stay still. */
+.personal-workspace .content.pw-content-finance {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.personal-workspace .pw-content-finance > .btn {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin: 16px var(--gutter) 0;
+}

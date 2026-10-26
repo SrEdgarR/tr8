@@ -206,7 +206,7 @@ describe('Financial forms and domain commands', () => {
     expect(screen.getByText('Plan ficticio')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar acción' }));
-    await screen.findByRole('heading', { name: 'Panorama financiero' });
+    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
     fireEvent.click(screen.getByRole('button', { name: 'Planes' }));
     expect(screen.getByText('Confirmado')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Confirmar' })).not.toBeInTheDocument();

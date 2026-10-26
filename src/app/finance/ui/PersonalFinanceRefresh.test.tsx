@@ -35,7 +35,7 @@ it('registers an explicit finance refresh and waits for its own read instead of 
   const onSyncState = vi.fn(),
     onRefreshReady = vi.fn();
   const view = render(<PersonalFinancePage accountApi={account} vaultApi={vault} onSyncState={onSyncState} onRefreshReady={onRefreshReady} />);
-  await screen.findByRole('heading', { name: 'Panorama financiero' });
+  await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
   const refresh = onRefreshReady.mock.calls.at(-1)![0];
   expect(refresh).toEqual(expect.any(Function));
   act(() => refresh());

@@ -32,6 +32,7 @@ import { formatMoneyMinor, localToday, parseAmountMinor } from '../domain/money'
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../domain/categories';
 import Field from './FinanceField';
 import CreditCardForm from './CreditCardForm';
+import AccountDeleteDialog from './AccountDeleteDialog';
 import CreditCardTile from './CreditCardTile';
 import { creditCardGroups } from '../domain/credit-card-grouping';
 import type { DataSyncState } from '../../types';
@@ -170,7 +171,7 @@ export default function FinancePage({ api, onSyncState }: { api: FinanceApi; onS
               Protegiendo y verificando la operación…
             </div>
           )}
-          <div key={view.formEpoch}>
+          <div key={view.formEpoch} className="tf-vault-content">
             {(view.stage === 'empty' || view.stage === 'locked') && (busy ? <Busy>Verificando la operación privada…</Busy> : <Access finance={finance} />)}
             {view.stage === 'custody' && <Custody finance={finance} />}
             {view.stage === 'preview' && view.preview && <BackupPreview finance={finance} />}
@@ -418,6 +419,7 @@ export function FinancialDashboard({
   const [tab, setTab] = useState('Resumen');
   const [editor, setEditor] = useState<'account' | 'movement' | null>(null);
   const [editingAccount, setEditingAccount] = useState<FinancialAccount | null>(null);
+  const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
   return (
     <>
       {readOnly && (
@@ -471,29 +473,49 @@ export function FinancialDashboard({
           </button>
         ))}
       </nav>
-      {(tab === 'Resumen' || tab === 'Cuentas') && (
-        <Overview
-          snapshot={snapshot}
-          accountsOnly={tab === 'Cuentas'}
-          canEdit={!readOnly && !f.busy}
-          onEdit={a => {
-            setEditingAccount(a);
-            setEditor('account');
-          }}
-        />
-      )}
-      {tab === 'Movimientos' && <History snapshot={snapshot} />}
-      {tab === 'Planes' && <Plans snapshot={snapshot} finance={f} readOnly={readOnly} />}
-      {tab === 'Seguridad' && security}
+      <div className="tf-section-content">
+        {(tab === 'Resumen' || tab === 'Cuentas') && (
+          <Overview
+            snapshot={snapshot}
+            accountsOnly={tab === 'Cuentas'}
+            canEdit={!readOnly && !f.busy}
+            onEdit={a => {
+              setEditingAccount(a);
+              setEditor('account');
+            }}
+          />
+        )}
+        {tab === 'Movimientos' && <History snapshot={snapshot} />}
+        {tab === 'Planes' && <Plans snapshot={snapshot} finance={f} readOnly={readOnly} />}
+        {tab === 'Seguridad' && security}
+      </div>
       {editor && (
         <RecordForm
           key={editingAccount?.id ?? editor}
           editingAccount={editingAccount}
           kind={editor}
+          onDelete={
+            editingAccount
+              ? () => {
+                  setDeleteAccountId(editingAccount.id);
+                  setEditor(null);
+                }
+              : undefined
+          }
           snapshot={snapshot}
           busy={f.busy}
           onClose={() => setEditor(null)}
           onSave={s => void f.save(s).then(() => setEditor(null))}
+        />
+      )}
+      {deleteAccountId && (
+        <AccountDeleteDialog
+          key={deleteAccountId}
+          snapshot={snapshot}
+          accountId={deleteAccountId}
+          busy={f.busy || readOnly}
+          onClose={() => setDeleteAccountId(null)}
+          onSave={s => f.save(s)}
         />
       )}
     </>
@@ -521,7 +543,7 @@ function Overview({
   onEdit: (a: FinancialAccount) => void;
 }) {
   const space = snapshot.financialSpace;
-  const [date, setDate] = useState(localToday());
+  const date = localToday();
   const [target, setTarget] = useState(localToday(new Date(Date.now() + 30 * 86400000)));
   const [projection, setProjection] = useState<ReturnType<typeof projectSnapshot> | null>(null);
   const [error, setError] = useState('');
@@ -530,7 +552,7 @@ function Overview({
   try {
     balances = calculateFinancialBalances(space.accounts, space.operations, date, space.currencyDefinitions);
   } catch {
-    balanceError = 'Selecciona una fecha igual o posterior a la apertura de tus cuentas.';
+    balanceError = 'No se pueden calcular los saldos actuales. Revisa las fechas de apertura de tus cuentas.';
   }
   const money = (n: number, c: string) =>
     formatMoneyMinor(
@@ -539,20 +561,6 @@ function Overview({
     );
   return (
     <>
-      <div className="tf-toolbar">
-        <h2>{accountsOnly ? 'Tus cuentas' : 'Panorama financiero'}</h2>
-        <Field label="Saldos a fecha">
-          <input
-            type="date"
-            required
-            value={date}
-            onChange={e => {
-              setDate(e.target.value);
-              setProjection(null);
-            }}
-          />
-        </Field>
-      </div>
       {balanceError && <ErrorNotice>{balanceError}</ErrorNotice>}
       {!accountsOnly && (
         <section className="tf-summary-section" aria-label="Patrimonio por moneda">
@@ -590,7 +598,7 @@ function Overview({
       ) : (
         <section className="tf-accounts-section" aria-label="Cuentas financieras">
           <div className="tf-section-title">
-            {!accountsOnly && <h2>Tus cuentas</h2>}
+            <h2>Tus cuentas</h2>
             <p className="muted">Administra cada cuenta y sus datos de apertura.</p>
           </div>
           <div className="tf-grid">
@@ -638,10 +646,10 @@ function Overview({
         </section>
       )}
       {!accountsOnly && space.accounts.length > 0 && (
-        <div className="tf-card">
-          <h2>
+        <details className="tf-card tf-projection">
+          <summary>
             <CalendarClock size={18} aria-hidden="true" /> Proyección
-          </h2>
+          </summary>
           <p className="muted">
             Estimación con los planes pendientes de fecha futura dentro del horizonte. Los planes no alteran tu saldo real y las monedas no se suman entre sí.
           </p>
@@ -684,7 +692,7 @@ function Overview({
               ))}
             </div>
           )}
-        </div>
+        </details>
       )}
     </>
   );
@@ -786,6 +794,7 @@ function OperationRow({ operation: o, snapshot }: { operation: FinancialOperatio
 function RecordForm({
   kind,
   editingAccount,
+  onDelete,
   snapshot,
   busy,
   onClose,
@@ -793,6 +802,7 @@ function RecordForm({
 }: {
   kind: 'account' | 'movement';
   editingAccount?: FinancialAccount | null;
+  onDelete?: () => void;
   snapshot: FinancialSnapshot;
   busy: boolean;
   onClose: () => void;
@@ -868,6 +878,7 @@ function RecordForm({
         busy={busy}
         onClose={onClose}
         onSave={onSave}
+        onDelete={onDelete}
         onBack={!editingAccount ? () => setType('cash') : undefined}
       />
     );
@@ -1051,6 +1062,11 @@ function RecordForm({
             )}
           </div>
           <div className="pw-form-footer">
+            {onDelete && (
+              <button type="button" className="btn btn-danger-ghost tf-delete-action" disabled={busy} onClick={onDelete}>
+                Eliminar cuenta
+              </button>
+            )}
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancelar
             </button>

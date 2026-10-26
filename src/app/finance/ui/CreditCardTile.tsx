@@ -1,4 +1,4 @@
-import { CalendarDays, CreditCard, MoreHorizontal } from 'lucide-react';
+import { CalendarDays, ChevronDown, CreditCard, MoreHorizontal } from 'lucide-react';
 import type { FinancialAccount, FinancialAccountBalance } from '../domain/types';
 import type { FinancialSnapshot } from '../domain/workspace-types';
 import { creditCardCycleStatus } from '../domain/credit-cards';
@@ -19,6 +19,22 @@ export default function CreditCardTile({
   onEdit: (a: FinancialAccount) => void;
 }) {
   const first = accounts[0];
+  const pockets = accounts.flatMap(a => {
+    if (a.type !== 'credit') return [];
+    const balance = balances.find(b => b.accountId === a.id);
+    const money = (n: number) =>
+      formatMoneyMinor(
+        n,
+        snapshot.financialSpace.currencyDefinitions.find(c => c.code === a.currency)!,
+      );
+    let cycle: ReturnType<typeof creditCardCycleStatus> | null = null;
+    try {
+      if (a.creditCard) cycle = creditCardCycleStatus({ ...a, creditCard: a.creditCard }, snapshot.financialSpace.operations, date);
+    } catch {
+      /* A date before opening is unavailable. */
+    }
+    return [{ account: a, balance, money, cycle }];
+  });
   return (
     <article className="tf-card tf-credit-card">
       <div className="tf-account-heading">
@@ -32,26 +48,24 @@ export default function CreditCardTile({
       <h3>{first.name}</h3>
       {first.bankName && <p className="tf-bank-name">{first.bankName}</p>}
       <p className="muted">Tarjeta de crédito · {accounts.map(a => a.currency).join(' / ')}</p>
-      <div className="tf-credit-balances">
-        {accounts.map(a => {
-          if (a.type !== 'credit') return null;
-          const b = balances.find(b => b.accountId === a.id);
-          const m = (n: number) =>
-            formatMoneyMinor(
-              n,
-              snapshot.financialSpace.currencyDefinitions.find(c => c.code === a.currency)!,
-            );
-          let cycle: ReturnType<typeof creditCardCycleStatus> | null = null;
-          try {
-            if (a.creditCard) cycle = creditCardCycleStatus({ ...a, creditCard: a.creditCard }, snapshot.financialSpace.operations, date);
-          } catch {
-            /* Date before opening remains unavailable. */
-          }
-          return (
-            <section className="tf-credit-pocket" key={a.id} aria-label={`Saldo de tarjeta ${a.currency}`}>
+      <div className="tf-credit-balances tf-credit-basics">
+        {pockets.map(({ account: a, balance: b, money: m }) => (
+          <section className="tf-credit-pocket" key={a.id} aria-label={`Saldo de tarjeta ${a.currency}`}>
+            <span className="tf-tag">{a.currency}</span>
+            <p className="muted">Deuda total</p>
+            <strong className="tf-amount">{b ? m(b.balanceMinor) : '—'}</strong>
+          </section>
+        ))}
+      </div>
+      <details className="tf-credit-details">
+        <summary aria-label={`Ver detalles de ${first.name}`}>
+          <span>Ver detalles</span>
+          <ChevronDown size={14} aria-hidden="true" />
+        </summary>
+        <div className="tf-credit-balances tf-credit-expanded">
+          {pockets.map(({ account: a, balance: b, money: m, cycle }) => (
+            <section className="tf-credit-pocket" key={a.id} aria-label={`Detalles de tarjeta ${a.currency}`}>
               <span className="tf-tag">{a.currency}</span>
-              <p className="muted">Deuda total</p>
-              <strong className="tf-amount">{b ? m(b.balanceMinor) : '—'}</strong>
               <dl className="tf-credit-detail">
                 <div>
                   <dt>Límite</dt>
@@ -62,11 +76,12 @@ export default function CreditCardTile({
                   <dd>{b ? m(b.availableCreditMinor ?? 0) : '—'}</dd>
                 </div>
               </dl>
-              {cycle && (
+              {cycle ? (
                 <>
                   <div className="tf-credit-cycle">
                     <span>
-                      <CalendarDays size={13} /> Último corte: {cycle.lastStatementDate}
+                      <CalendarDays size={13} aria-hidden="true" />
+                      Último corte: {cycle.lastStatementDate}
                     </span>
                     <dl className="tf-credit-detail">
                       <div>
@@ -101,12 +116,14 @@ export default function CreditCardTile({
                     </p>
                   )}
                 </>
+              ) : (
+                <p className="muted">Configura los días de corte y pago y el pendiente del último corte.</p>
               )}
-              {!cycle && <p className="muted">Configura los días de corte y pago y el pendiente del último corte.</p>}
+              <p className="muted">Apertura: {a.openingDate}</p>
             </section>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      </details>
     </article>
   );
 }

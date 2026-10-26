@@ -31,6 +31,7 @@ export default function CreditCardForm({
   busy,
   onClose,
   onSave,
+  onDelete,
   onBack,
 }: {
   snapshot: FinancialSnapshot;
@@ -40,6 +41,7 @@ export default function CreditCardForm({
   busy: boolean;
   onClose: () => void;
   onSave: (s: FinancialSnapshot) => void;
+  onDelete?: () => void;
   onBack?: () => void;
 }) {
   const space = snapshot.financialSpace,
@@ -282,6 +284,11 @@ export default function CreditCardForm({
             </div>
           </div>
           <div className="pw-form-footer">
+            {onDelete && (
+              <button type="button" className="btn btn-danger-ghost tf-delete-action" disabled={busy} onClick={onDelete}>
+                Eliminar tarjeta
+              </button>
+            )}
             {onBack && (
               <button className="btn btn-secondary" type="button" onClick={onBack}>
                 Volver

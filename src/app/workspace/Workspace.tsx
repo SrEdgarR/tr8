@@ -899,7 +899,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
             </button>
           </div>
         )}
-        <main className="content" id="workspace-content" tabIndex={-1} aria-busy={props.loading}>
+        <main className={financeView ? 'content pw-content-finance' : 'content'} id="workspace-content" tabIndex={-1} aria-busy={props.loading}>
           {props.loading ? (
             <Busy />
           ) : props.error && props.projects.length === 0 ? (
