@@ -7,6 +7,7 @@ export interface CurrencyDefinition {
 interface AccountBase {
   id: string;
   name: string;
+  bankName?: string;
   currency: string;
   openingBalanceMinor: number;
   openingDate: string;

@@ -33,6 +33,7 @@ export function validateFinancialSpace(candidate: unknown): FinancialSpace {
     const account = closedRecord(value, [
       'id',
       'name',
+      ...(Object.hasOwn(value as object, 'bankName') ? ['bankName'] : []),
       'currency',
       'openingBalanceMinor',
       'openingDate',
@@ -41,6 +42,7 @@ export function validateFinancialSpace(candidate: unknown): FinancialSpace {
     ]);
     financialText(account.id, 128);
     financialText(account.name);
+    if (account.bankName !== undefined) financialText(account.bankName, 120);
     if (String(account.id).trim() !== account.id || Object.is(account.openingBalanceMinor, -0)) throw new Error('La cuenta no es válida.');
   }
   const accounts = normalizeFinancialAccounts(rawAccounts, definitions);

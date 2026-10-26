@@ -314,3 +314,71 @@
     animation: none !important;
   }
 }
+
+.tf-project-tabs {
+  padding: 0;
+  margin-bottom: 26px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.tf-project-tabs .pw-view-tab {
+  flex-shrink: 0;
+}
+.tf-summary-section {
+  margin-bottom: 32px;
+}
+.tf-accounts-section {
+  border-top: 1px solid var(--border);
+  padding-top: 26px;
+  margin-bottom: 30px;
+}
+.tf-section-title {
+  margin-bottom: 18px;
+}
+.tf-section-title h2 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+.tf-section-title p {
+  font-size: 12px;
+  margin: 0;
+}
+.tf-account-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tf-account-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+.tf-bank-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-3);
+}
+.tf-form-intro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.tf-form-intro p {
+  color: var(--text-3);
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.tf-form-fields .pw-field > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}

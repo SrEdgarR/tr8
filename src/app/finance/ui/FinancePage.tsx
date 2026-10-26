@@ -1,11 +1,31 @@
 import { cloneElement, useId, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, CalendarClock, Download, KeyRound, LockKeyhole, Plus, ShieldCheck, Wallet, FileUp } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ArrowLeftRight,
+  CalendarClock,
+  Download,
+  KeyRound,
+  LockKeyhole,
+  Plus,
+  ShieldCheck,
+  Wallet,
+  FileUp,
+  MoreHorizontal,
+  Landmark,
+  CreditCard,
+  Coins,
+  CalendarDays,
+  LayoutGrid,
+  List,
+  Tag,
+} from 'lucide-react';
 import { Busy, Dialog, ErrorNotice } from '../../workspace/ui';
 import { useFinance } from './useFinance';
 import type { FinanceApi } from './api';
 import type { FinancialSnapshot } from '../domain/workspace-types';
-import type { FinancialOperation } from '../domain/types';
-import { addAccount, addEntry, prepareEntryOperation } from '../domain/workspace';
+import type { FinancialOperation, FinancialAccount } from '../domain/types';
+import { addAccount, updateAccount, accountHasActivity, addEntry, prepareEntryOperation } from '../domain/workspace';
 import { addPairedOperation, addRefund, preparePairedOperation, refundableExpenses } from '../domain/connected-operations';
 import { addPlan, filterHistory, projectSnapshot, resolvePlan } from '../domain/plans';
 import { calculateFinancialBalances } from '../domain/balances';
@@ -32,11 +52,19 @@ const categoryNames: Record<string, string> = {
   refund: 'Reembolso',
 };
 const id = () => crypto.randomUUID();
-function Field({ label, children }: { label: string; children: ReactElement<{ id?: string }> }) {
+function decimalAmount(amount: number): string {
+  const value = BigInt(amount),
+    absolute = value < 0n ? -value : value;
+  return `${value < 0n ? '-' : ''}${absolute / 100n}.${String(absolute % 100n).padStart(2, '0')}`;
+}
+function Field({ label, icon, children }: { label: string; icon?: ReactNode; children: ReactElement<{ id?: string }> }) {
   const fieldId = useId();
   return (
     <div className="pw-field">
-      <label htmlFor={fieldId}>{label}</label>
+      <label htmlFor={fieldId}>
+        {icon}
+        {label}
+      </label>
       {cloneElement(children, { id: fieldId })}
     </div>
   );
@@ -380,15 +408,9 @@ export function FinancialDashboard({
 }) {
   const [tab, setTab] = useState('Resumen');
   const [editor, setEditor] = useState<'account' | 'movement' | null>(null);
+  const [editingAccount, setEditingAccount] = useState<FinancialAccount | null>(null);
   return (
     <>
-      <nav className="tf-tabs" aria-label="Secciones de finanzas">
-        {['Resumen', 'Cuentas', 'Movimientos', 'Planes', 'Seguridad'].map(name => (
-          <button key={name} aria-current={tab === name ? 'page' : undefined} onClick={() => setTab(name)}>
-            {name}
-          </button>
-        ))}
-      </nav>
       {readOnly && (
         <div className="tf-card">
           <h2>Acceso de recuperación · Solo lectura</h2>
@@ -399,24 +421,71 @@ export function FinancialDashboard({
       {tab !== 'Seguridad' && (
         <div className="tf-toolbar">
           <span className="muted">
-            {snapshot.financialSpace.accounts.length} cuentas · {snapshot.financialSpace.operations.length} movimientos
+            {snapshot.financialSpace.accounts.length} {snapshot.financialSpace.accounts.length === 1 ? 'cuenta' : 'cuentas'} ·{' '}
+            {snapshot.financialSpace.operations.length} {snapshot.financialSpace.operations.length === 1 ? 'movimiento' : 'movimientos'}
           </span>
           <div className="tf-actions">
-            <button className="btn btn-secondary" disabled={f.busy || readOnly} onClick={() => setEditor('account')}>
+            <button
+              className="btn btn-secondary"
+              disabled={f.busy || readOnly}
+              onClick={() => {
+                setEditingAccount(null);
+                setEditor('account');
+              }}
+            >
               <Plus size={14} aria-hidden="true" /> Nueva cuenta
             </button>
-            <button className="btn btn-primary" disabled={f.busy || readOnly || !snapshot.financialSpace.accounts.length} onClick={() => setEditor('movement')}>
+            <button
+              className="btn btn-primary"
+              disabled={f.busy || readOnly || !snapshot.financialSpace.accounts.length}
+              onClick={() => {
+                setEditingAccount(null);
+                setEditor('movement');
+              }}
+            >
               <Plus size={14} aria-hidden="true" /> Nuevo movimiento
             </button>
           </div>
         </div>
       )}
-      {(tab === 'Resumen' || tab === 'Cuentas') && <Overview snapshot={snapshot} accountsOnly={tab === 'Cuentas'} />}
+      <nav className="pw-view-tabs tf-project-tabs" aria-label="Secciones de finanzas">
+        {[
+          { name: 'Resumen', icon: LayoutGrid },
+          { name: 'Cuentas', icon: Wallet },
+          { name: 'Movimientos', icon: List },
+          { name: 'Planes', icon: CalendarClock },
+          { name: 'Seguridad', icon: ShieldCheck },
+        ].map(({ name, icon: Icon }) => (
+          <button key={name} className={`pw-view-tab${tab === name ? ' on' : ''}`} aria-pressed={tab === name} onClick={() => setTab(name)}>
+            <Icon size={15} aria-hidden="true" />
+            {name}
+          </button>
+        ))}
+      </nav>
+      {(tab === 'Resumen' || tab === 'Cuentas') && (
+        <Overview
+          snapshot={snapshot}
+          accountsOnly={tab === 'Cuentas'}
+          canEdit={!readOnly && !f.busy}
+          onEdit={a => {
+            setEditingAccount(a);
+            setEditor('account');
+          }}
+        />
+      )}
       {tab === 'Movimientos' && <History snapshot={snapshot} />}
       {tab === 'Planes' && <Plans snapshot={snapshot} finance={f} readOnly={readOnly} />}
       {tab === 'Seguridad' && security}
       {editor && (
-        <RecordForm kind={editor} snapshot={snapshot} busy={f.busy} onClose={() => setEditor(null)} onSave={s => void f.save(s).then(() => setEditor(null))} />
+        <RecordForm
+          key={editingAccount?.id ?? editor}
+          editingAccount={editingAccount}
+          kind={editor}
+          snapshot={snapshot}
+          busy={f.busy}
+          onClose={() => setEditor(null)}
+          onSave={s => void f.save(s).then(() => setEditor(null))}
+        />
       )}
     </>
   );
@@ -431,7 +500,17 @@ function Recovery({ finance: f }: { finance: Finance }) {
     </PrivateForm>
   );
 }
-function Overview({ snapshot, accountsOnly }: { snapshot: FinancialSnapshot; accountsOnly: boolean }) {
+function Overview({
+  snapshot,
+  accountsOnly,
+  canEdit,
+  onEdit,
+}: {
+  snapshot: FinancialSnapshot;
+  accountsOnly: boolean;
+  canEdit: boolean;
+  onEdit: (a: FinancialAccount) => void;
+}) {
   const space = snapshot.financialSpace;
   const [date, setDate] = useState(localToday());
   const [target, setTarget] = useState(localToday(new Date(Date.now() + 30 * 86400000)));
@@ -467,25 +546,31 @@ function Overview({ snapshot, accountsOnly }: { snapshot: FinancialSnapshot; acc
       </div>
       {balanceError && <ErrorNotice>{balanceError}</ErrorNotice>}
       {!accountsOnly && (
-        <div className="tf-grid">
-          {balances?.currencies.map(c => (
-            <article className="tf-card tf-balance" key={c.currency}>
-              <span className="tf-tag">{c.currency}</span>
-              <p className="muted">Patrimonio neto</p>
-              <strong>{money(c.netWorthMinor, c.currency)}</strong>
-              <dl>
-                <div>
-                  <dt>Dinero disponible</dt>
-                  <dd>{money(c.liquidMinor, c.currency)}</dd>
-                </div>
-                <div>
-                  <dt>Deuda de tarjetas</dt>
-                  <dd>{money(c.creditDebtMinor, c.currency)}</dd>
-                </div>
-              </dl>
-            </article>
-          ))}
-        </div>
+        <section className="tf-summary-section" aria-label="Patrimonio por moneda">
+          <div className="tf-section-title">
+            <h2>Patrimonio por moneda</h2>
+            <p className="muted">Totales de tus cuentas, separados por moneda.</p>
+          </div>
+          <div className="tf-grid">
+            {balances?.currencies.map(c => (
+              <article className="tf-card tf-balance" key={c.currency}>
+                <span className="tf-tag">{c.currency}</span>
+                <p className="muted">Patrimonio neto</p>
+                <strong>{money(c.netWorthMinor, c.currency)}</strong>
+                <dl>
+                  <div>
+                    <dt>Dinero disponible</dt>
+                    <dd>{money(c.liquidMinor, c.currency)}</dd>
+                  </div>
+                  <div>
+                    <dt>Deuda de tarjetas</dt>
+                    <dd>{money(c.creditDebtMinor, c.currency)}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
       {!space.accounts.length ? (
         <div className="tf-card tf-gate">
@@ -494,23 +579,48 @@ function Overview({ snapshot, accountsOnly }: { snapshot: FinancialSnapshot; acc
           <p className="muted">Añade efectivo, una cuenta bancaria o una tarjeta. Cada moneda conservará sus propios saldos.</p>
         </div>
       ) : (
-        <div className="tf-grid">
-          {space.accounts.map(a => {
-            const b = balances?.accounts.find(b => b.accountId === a.id);
-            return (
-              <article key={a.id} className="tf-card">
-                <Wallet size={18} aria-hidden="true" />
-                <h3>{a.name}</h3>
-                <p className="muted">
-                  {a.type === 'credit' ? 'Tarjeta de crédito' : a.type === 'cash' ? 'Efectivo' : 'Cuenta bancaria'} · {a.currency}
-                </p>
-                <strong className="tf-amount">{b ? money(b.balanceMinor, a.currency) : '—'}</strong>
-                {a.type === 'credit' && b && <p className="muted">Crédito disponible: {money(b.availableCreditMinor!, a.currency)}</p>}
-                <p className="muted">Apertura: {a.openingDate}</p>
-              </article>
-            );
-          })}
-        </div>
+        <section className="tf-accounts-section" aria-label="Cuentas financieras">
+          <div className="tf-section-title">
+            <h2>Tus cuentas</h2>
+            <p className="muted">Administra cada cuenta y sus datos de apertura.</p>
+          </div>
+          <div className="tf-grid">
+            {space.accounts.map(a => {
+              const b = balances?.accounts.find(b => b.accountId === a.id);
+              return (
+                <article key={a.id} className="tf-card">
+                  <div className="tf-account-heading">
+                    <span className="tf-account-icon">
+                      {a.type === 'credit' ? (
+                        <CreditCard size={18} aria-hidden="true" />
+                      ) : a.type === 'debit' ? (
+                        <Landmark size={18} aria-hidden="true" />
+                      ) : (
+                        <Wallet size={18} aria-hidden="true" />
+                      )}
+                    </span>
+                    <button className="ibtn" aria-label={`Configurar cuenta ${a.name}`} disabled={!canEdit} onClick={() => onEdit(a)}>
+                      <MoreHorizontal size={18} aria-hidden="true" />
+                    </button>
+                  </div>
+                  <h3>{a.name}</h3>
+                  {a.bankName && (
+                    <p className="tf-bank-name">
+                      <Landmark size={13} aria-hidden="true" />
+                      {a.bankName}
+                    </p>
+                  )}
+                  <p className="muted">
+                    {a.type === 'credit' ? 'Tarjeta de crédito' : a.type === 'cash' ? 'Efectivo' : 'Cuenta bancaria'} · {a.currency}
+                  </p>
+                  <strong className="tf-amount">{b ? money(b.balanceMinor, a.currency) : '—'}</strong>
+                  {a.type === 'credit' && b && <p className="muted">Crédito disponible: {money(b.availableCreditMinor!, a.currency)}</p>}
+                  <p className="muted">Apertura: {a.openingDate}</p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
       )}
       {!accountsOnly && space.accounts.length > 0 && (
         <div className="tf-card">
@@ -660,12 +770,14 @@ function OperationRow({ operation: o, snapshot }: { operation: FinancialOperatio
 
 function RecordForm({
   kind,
+  editingAccount,
   snapshot,
   busy,
   onClose,
   onSave,
 }: {
   kind: 'account' | 'movement';
+  editingAccount?: FinancialAccount | null;
   snapshot: FinancialSnapshot;
   busy: boolean;
   onClose: () => void;
@@ -673,11 +785,14 @@ function RecordForm({
 }) {
   const s = snapshot.financialSpace;
   const [error, setError] = useState('');
-  const [type, setType] = useState('cash');
+  const [type, setType] = useState<string>(editingAccount?.type ?? 'cash');
   const [operation, setOperation] = useState<FinancialOperation['kind']>('expense');
   const [account, setAccount] = useState(s.accounts[0]?.id ?? '');
-  const [currency, setCurrency] = useState(s.currencyDefinitions.find(c => c.code === 'DOP')?.code ?? s.currencyDefinitions[0].code);
+  const [currency, setCurrency] = useState(
+    editingAccount?.currency ?? s.currencyDefinitions.find(c => c.code === 'DOP')?.code ?? s.currencyDefinitions[0].code,
+  );
   const [planned, setPlanned] = useState(false);
+  const linked = Boolean(editingAccount && accountHasActivity(snapshot, editingAccount.id));
   const paired = operation === 'transfer' || operation === 'card-payment';
   const sourceAccounts = s.accounts.filter(a => !paired || a.type !== 'credit');
   const selected = sourceAccounts.find(a => a.id === account) ?? sourceAccounts[0];
@@ -691,15 +806,17 @@ function RecordForm({
       const amount = parseAmountMinor(text('amount'), digits, kind === 'account' ? { allowZero: true, allowNegative: true } : {});
       let next: FinancialSnapshot;
       if (kind === 'account') {
-        next = addAccount(snapshot, {
-          id: id(),
+        const draft = {
+          ...(editingAccount ? {} : { id: id() }),
           name: text('name'),
+          ...(text('bankName').trim() ? { bankName: text('bankName').trim() } : {}),
           type,
           currency,
           openingBalanceMinor: amount,
           openingDate: text('date'),
           ...(type === 'credit' ? { creditLimitMinor: parseAmountMinor(text('limit'), digits, { allowZero: true }) } : {}),
-        });
+        };
+        next = editingAccount ? updateAccount(snapshot, editingAccount.id, draft) : addAccount(snapshot, draft);
       } else {
         const base = { id: id(), date: text('date'), amountMinor: amount, description: text('description'), note: text('note') };
         if (operation === 'refund') {
@@ -725,30 +842,44 @@ function RecordForm({
     }
   }
   return (
-    <Dialog title={kind === 'account' ? 'Nueva cuenta' : 'Nuevo movimiento'} onClose={onClose} busy={busy}>
+    <Dialog title={kind === 'account' ? (editingAccount ? 'Configurar cuenta' : 'Nueva cuenta') : 'Nuevo movimiento'} onClose={onClose} busy={busy}>
       <form className="pw-form" onSubmit={submit} autoComplete="off">
         <fieldset disabled={busy} className="tf-form-fields">
           <div className="pw-form-body">
             {error && <ErrorNotice>{error}</ErrorNotice>}
             {kind === 'account' ? (
               <>
-                <Field label="Nombre de la cuenta">
-                  <input name="name" required maxLength={120} data-initial-focus />
+                <div className="tf-form-intro">
+                  <span className="tf-account-icon">
+                    <Wallet size={22} aria-hidden="true" />
+                  </span>
+                  <p>
+                    {editingAccount
+                      ? 'Actualiza los datos de tu cuenta. Los movimientos se conservan.'
+                      : 'Organiza tu dinero con una cuenta de efectivo, bancaria o tarjeta.'}
+                  </p>
+                </div>
+                <Field label="Nombre de la cuenta" icon={<Tag size={14} aria-hidden="true" />}>
+                  <input name="name" required maxLength={120} defaultValue={editingAccount?.name} data-initial-focus />
                 </Field>
-                <Field label="Tipo de cuenta">
-                  <select value={type} onChange={e => setType(e.target.value)}>
+                <Field label="Banco (opcional)" icon={<Landmark size={14} aria-hidden="true" />}>
+                  <input name="bankName" maxLength={120} placeholder="Nombre del banco o institución" defaultValue={editingAccount?.bankName} />
+                </Field>
+                <Field label="Tipo de cuenta" icon={<Wallet size={14} aria-hidden="true" />}>
+                  <select disabled={linked} value={type} onChange={e => setType(e.target.value)}>
                     <option value="cash">Efectivo</option>
                     <option value="debit">Cuenta bancaria</option>
                     <option value="credit">Tarjeta de crédito</option>
                   </select>
                 </Field>
-                <Field label="Moneda de la cuenta">
+                <Field label="Moneda de la cuenta" icon={<Coins size={14} aria-hidden="true" />}>
                   <select value={currency} onChange={e => setCurrency(e.target.value)}>
                     {s.currencyDefinitions.map(c => (
                       <option key={c.code}>{c.code}</option>
                     ))}
                   </select>
                 </Field>
+                {linked && <p className="muted">La moneda y el tipo se conservan porque esta cuenta tiene movimientos o planes.</p>}
               </>
             ) : (
               <>
@@ -839,16 +970,36 @@ function RecordForm({
                   : `Importe · ${selected?.currency ?? ''}`
               }
             >
-              <input name="amount" required inputMode="decimal" defaultValue={kind === 'account' ? '0' : undefined} placeholder="0,00" />
+              <input
+                name="amount"
+                required
+                inputMode="decimal"
+                defaultValue={kind === 'account' ? (editingAccount ? decimalAmount(editingAccount.openingBalanceMinor) : '0') : undefined}
+                placeholder="0,00"
+              />
             </Field>
             {kind === 'account' && type === 'credit' && (
               <Field label="Límite de crédito">
-                <input name="limit" inputMode="decimal" required defaultValue="0" />
+                <input
+                  name="limit"
+                  inputMode="decimal"
+                  required
+                  defaultValue={editingAccount?.type === 'credit' ? decimalAmount(editingAccount.creditLimitMinor) : '0'}
+                />
               </Field>
             )}
-            <Field label={kind === 'account' ? 'Fecha de apertura' : 'Fecha del movimiento'}>
-              <input name="date" type="date" required defaultValue={localToday()} max={kind === 'account' ? localToday() : undefined} />
+            <Field label={kind === 'account' ? 'Fecha de apertura' : 'Fecha del movimiento'} icon={<CalendarDays size={14} aria-hidden="true" />}>
+              <input
+                name="date"
+                type="date"
+                required
+                defaultValue={editingAccount?.openingDate ?? localToday()}
+                max={kind === 'account' ? localToday() : undefined}
+              />
             </Field>
+            {kind === 'account' && editingAccount && (
+              <p className="muted">El saldo inicial corresponde a la apertura. Cambiarlo recalcula los saldos; los movimientos registrados se conservan.</p>
+            )}
             {kind === 'movement' && (
               <>
                 <Field label="Nota opcional">

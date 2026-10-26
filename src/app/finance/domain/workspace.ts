@@ -52,6 +52,7 @@ export function addAccount(snapshot: FinancialSnapshot, candidate: unknown): Fin
   const keys = [
     'id',
     'name',
+    ...(Object.hasOwn(candidate, 'bankName') ? ['bankName'] : []),
     'type',
     'openingBalanceMinor',
     'openingDate',
@@ -89,4 +90,33 @@ export function addEntry(snapshot: FinancialSnapshot, candidate: unknown): Finan
       operations: [...space.operations, operation],
     }),
   };
+}
+
+/** Account identity and ledger references are preserved when editing metadata. */
+export function accountHasActivity(snapshot: FinancialSnapshot, accountId: string): boolean {
+  const space = snapshot.financialSpace;
+  return [...space.operations, ...(space.plans ?? []).map(p => p.operation)].some(
+    op =>
+      ('accountId' in op && op.accountId === accountId) ||
+      ('fromAccountId' in op && (op.fromAccountId === accountId || op.toAccountId === accountId)) ||
+      ('destinationAccountId' in op && op.destinationAccountId === accountId),
+  );
+}
+export function updateAccount(snapshot: FinancialSnapshot, accountId: string, candidate: unknown): FinancialSnapshot {
+  const space = validateFinancialSnapshot(snapshot).financialSpace;
+  const previous = space.accounts.find(a => a.id === accountId);
+  if (!previous) throw new Error('La cuenta ya no está disponible.');
+  const input = closedRecord(candidate, [
+    'name',
+    'type',
+    'currency',
+    'openingBalanceMinor',
+    'openingDate',
+    ...(candidate && typeof candidate === 'object' && Object.hasOwn(candidate, 'bankName') ? ['bankName'] : []),
+    ...(candidate && typeof candidate === 'object' && Object.getOwnPropertyDescriptor(candidate, 'type')?.value === 'credit' ? ['creditLimitMinor'] : []),
+  ]);
+  const account = createFinancialAccount({ ...input, id: accountId }, space.currencyDefinitions);
+  if (accountHasActivity(snapshot, accountId) && (account.currency !== previous.currency || account.type !== previous.type))
+    throw new Error('La moneda y el tipo se conservan cuando la cuenta tiene movimientos o planes.');
+  return { schemaVersion: 1, financialSpace: validateFinancialSpace({ ...space, accounts: space.accounts.map(a => (a.id === accountId ? account : a)) }) };
 }

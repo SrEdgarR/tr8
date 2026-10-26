@@ -30,7 +30,10 @@ describe('account finances by default', () => {
     expect(screen.queryByLabelText('Contraseña privada')).not.toBeInTheDocument();
     expect(h.vault.head).not.toHaveBeenCalled();
     expect(h.account.save).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Bóveda opcional' }));
+    expect(screen.queryByRole('button', { name: 'Bóveda opcional' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Acceso con tu cuenta de TR8/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Seguridad' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir bóveda cifrada opcional' }));
     await screen.findByText('En preparación');
     fireEvent.click(screen.getByRole('button', { name: 'Volver a Finanzas' }));
     await screen.findByRole('heading', { name: 'Panorama financiero' });
@@ -136,5 +139,31 @@ describe('account finances by default', () => {
     fireEvent.change(origin, { target: { value: 'bank' } });
     expect(screen.getByLabelText('Cuenta de destino')).toHaveValue('');
     expect(within(screen.getByLabelText('Cuenta de destino')).queryByRole('option', { name: 'bank' })).not.toBeInTheDocument();
+  });
+  it('edits an existing account and optional bank without changing its identity or ledger', async () => {
+    const snapshot = addAccount(emptyFinancialSnapshot(), {
+      id: 'bank',
+      name: 'Cuenta anterior',
+      type: 'debit',
+      currency: 'DOP',
+      openingBalanceMinor: 12345,
+      openingDate: '2026-01-01',
+    });
+    const h = setup(snapshot);
+    await screen.findByRole('heading', { name: 'Cuenta anterior' });
+    fireEvent.click(screen.getByRole('button', { name: 'Configurar cuenta Cuenta anterior' }));
+    expect(screen.getByLabelText('Nombre de la cuenta')).toHaveValue('Cuenta anterior');
+    expect(screen.getByLabelText('Saldo inicial')).toHaveValue('123.45');
+    fireEvent.change(screen.getByLabelText('Nombre de la cuenta'), { target: { value: 'Mi ahorro' } });
+    fireEvent.change(screen.getByLabelText('Banco (opcional)'), { target: { value: 'Banco ficticio' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Mi ahorro' })).toBeInTheDocument();
+    expect(screen.getByText('Banco ficticio')).toBeInTheDocument();
+    const result = vi.mocked(h.account.save).mock.calls[0][0].snapshot;
+    expect(result.financialSpace.accounts[0]).toEqual({ ...snapshot.financialSpace.accounts[0], name: 'Mi ahorro', bankName: 'Banco ficticio' });
+    expect(result.financialSpace.operations).toEqual(snapshot.financialSpace.operations);
+    expect(screen.getByRole('region', { name: 'Patrimonio por moneda' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Cuentas financieras' })).toBeInTheDocument();
   });
 });

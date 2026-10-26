@@ -17,6 +17,7 @@ export function normalizeFinancialAccount(candidate: unknown, currencies: readon
   const base = {
     id: requireText(input.id),
     name: requireText(input.name),
+    ...(input.bankName === undefined ? {} : { bankName: requireText(input.bankName) }),
     currency: requireCurrency(input.currency, requireCurrencyDefinitions(currencies)),
     openingBalanceMinor: requireMinor(input.openingBalanceMinor),
     openingDate: requireDate(input.openingDate),

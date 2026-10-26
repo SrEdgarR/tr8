@@ -135,10 +135,6 @@ function AccountFinancePage({ api, onVault }: { api: AccountFinanceApi; onVault:
           <h1>Finanzas</h1>
           <p className="muted">Tus cuentas, tus planes y una visión clara de tu dinero.</p>
         </div>
-        <button className="btn btn-secondary" disabled={blocked} onClick={onVault}>
-          <ShieldCheck size={15} aria-hidden="true" />
-          Bóveda opcional
-        </button>
       </header>
       {error && <ErrorNotice>{error}</ErrorNotice>}
       {pending && (
@@ -163,7 +159,6 @@ function AccountFinancePage({ api, onVault }: { api: AccountFinanceApi; onVault:
         )
       ) : (
         <>
-          <p className="muted">Acceso con tu cuenta de TR8 · Sin contraseña privada adicional</p>
           {busy && <div role="status">Guardando tus finanzas…</div>}
           <FinancialDashboard
             snapshot={record.snapshot}
