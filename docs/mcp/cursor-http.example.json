@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "tr8": {
+      "url": "https://tr8.vercel.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:TR8_MCP_TOKEN}"
+      }
+    }
+  }
+}

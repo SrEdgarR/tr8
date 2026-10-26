@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tr8": {
+      "command": "node",
+      "args": ["C:/RUTA/tr8/scripts/mcp/stdio.mjs"],
+      "env": {
+        "TR8_MCP_TOKEN": "PEGA_AQUI_TU_CLAVE_DE_CONEXION_TR8"
+      }
+    }
+  }
+}

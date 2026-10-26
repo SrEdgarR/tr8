@@ -7,12 +7,16 @@ export default function SettingsDisclosure({
   icon,
   value,
   children,
+  onExpandedChange,
+  disabled = false,
 }: {
   title: string;
   description: string;
   icon: ReactNode;
   value?: ReactNode;
   children: ReactNode;
+  onExpandedChange?: (expanded: boolean) => void;
+  disabled?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const contentId = useId();
@@ -26,7 +30,12 @@ export default function SettingsDisclosure({
           aria-describedby={`${contentId}-description${value ? ` ${contentId}-value` : ''}`}
           aria-expanded={expanded}
           aria-controls={contentId}
-          onClick={() => setExpanded(current => !current)}
+          disabled={disabled}
+          onClick={() => {
+            const next = !expanded;
+            setExpanded(next);
+            onExpandedChange?.(next);
+          }}
         >
           <span className="pw-settings-item-icon" aria-hidden="true">
             {icon}

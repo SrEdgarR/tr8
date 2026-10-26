@@ -24,6 +24,7 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 - Inicio con resumen y próximos vencimientos. Los datos se guardan en Postgres y se recuperan al volver a entrar.
 - Acceso por identidad habilitada, membresía, permisos y proyecto, aplicado en Postgres mediante RLS y RPC verificadas. La caché está separada por usuario y espacio.
 - Actividad de equipos y proyectos, filtrada por el acceso vigente. Retirar un miembro o su acceso conserva el trabajo y elimina responsabilidades que dejen de ser válidas.
+- [Conector MCP para agentes](docs/mcp/README.md): proyectos, tareas y calendario mediante Streamable HTTP o un adaptador stdio para clientes como Claude Desktop y Cursor. Claves revocables por espacio, lectura o escritura y caducidad; sin acceso a Finanzas ni administración de miembros.
 
 Las altas e invitaciones externas permanecen desactivadas, por decisión del propietario, hasta disponer de correo y provisión de cuentas adecuados. Se pueden administrar miembros existentes y preparar roles y proyectos. El correo opcional de etapa 4B sigue pendiente de proveedor y remitente verificado. Se mantienen Supabase Free y Vercel Hobby. Pulso dispone de un contrato y prototipo de compatibilidad con datos sintéticos; las finanzas reales aún no están habilitadas.
 

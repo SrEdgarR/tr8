@@ -7,11 +7,13 @@ import AuthScreen from './auth/AuthScreen';
 import Workspace from './workspace/Workspace';
 import ProcessesPanel from './workspace/ProcessesPanel';
 import GoogleCalendarPanel from './workspace/GoogleCalendarPanel';
+import McpConnectionsPanel from './workspace/McpConnectionsPanel';
 import GoogleCalendarReturn from './workspace/GoogleCalendarReturn';
 import PublicInformation from './PublicInformation';
 import type { ProcessesApi } from './data/processes';
 import type { GoogleCalendarApi } from './data/google-calendar';
 import { createGoogleTasksRepository, type GoogleTasksApi } from './data/google-tasks';
+import { createMcpRepository } from './data/mcp';
 import { callbackRequestedRecovery, configuration, supabase } from './data/client';
 import { createRepository, type WorkspaceData } from './data/repository';
 import { dataError, DataError } from './data/errors';
@@ -345,6 +347,7 @@ function ScopedWorkspace({
     [client, session.user.id],
   );
   const accountFinanceApi = useMemo(() => createAccountFinanceApi(client, session.user.id), [client, session.user.id]);
+  const mcpApi = useMemo(() => createMcpRepository(client, session.user.id), [client, session.user.id]);
   const [financeSyncState, setFinanceSyncState] = useState<DataSyncState>('checking');
   const [financeRefresh, setFinanceRefresh] = useState<(() => void) | null>(null);
   const registerFinanceRefresh = useCallback((refresh: (() => void) | null) => setFinanceRefresh(() => refresh), []);
@@ -623,7 +626,17 @@ function ScopedWorkspace({
           </Suspense>
         ) : undefined
       }
-      integrations={<GoogleCalendarPanel key={google.scopeKey.join(':')} api={google} tasksApi={googleTasks} collapsible />}
+      integrations={
+        <>
+          <GoogleCalendarPanel key={google.scopeKey.join(':')} api={google} tasksApi={googleTasks} collapsible />
+          <McpConnectionsPanel
+            key={`${session.user.id}:${selected.id}:${scopeRevision}`}
+            api={mcpApi}
+            workspaceId={selected.id}
+            workspaceName={selected.kind === 'personal' ? 'Mi espacio personal' : selected.name}
+          />
+        </>
+      }
       processes={
         <ProcessesPanel
           key={processes.scopeKey.join(':')}

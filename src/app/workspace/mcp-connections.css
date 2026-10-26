@@ -1,0 +1,147 @@
+.pw-mcp-panel {
+  display: grid;
+  gap: 22px;
+}
+.pw-mcp-panel h4 {
+  margin: 0;
+  font-size: 13px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.pw-mcp-panel p {
+  margin: 7px 0 0;
+  line-height: 1.65;
+  font-size: 12px;
+}
+.pw-mcp-scope {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.pw-mcp-scope > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.pw-mcp-scope strong {
+  font-size: 13px;
+}
+.pw-mcp-create fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.pw-mcp-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.pw-mcp-panel .pw-field {
+  margin: 0;
+}
+.pw-mcp-create .btn {
+  justify-self: start;
+}
+.pw-mcp-actions,
+.pw-mcp-list-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pw-mcp-list-heading {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.pw-mcp-token {
+  padding: 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-md);
+  display: grid;
+  gap: 12px;
+  background: var(--accent-soft);
+}
+.pw-mcp-token p {
+  margin: 0;
+}
+.pw-mcp-token input {
+  font-family: var(--font-mono, monospace);
+}
+.pw-mcp-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--green, var(--accent));
+}
+.pw-mcp-credential {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid var(--border);
+  padding: 14px 0;
+}
+.pw-mcp-credential-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  color: var(--text-3);
+}
+.pw-mcp-credential-copy {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.pw-mcp-credential-copy strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.pw-mcp-credential-copy span {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.pw-mcp-help {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.pw-mcp-help summary {
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.pw-mcp-help .pw-field {
+  margin-top: 14px;
+}
+.pw-mcp-help pre {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.65;
+}
+.pw-mcp-help .btn {
+  margin-top: 12px;
+}
+@media (max-width: 560px) {
+  .pw-mcp-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .pw-mcp-credential {
+    flex-wrap: wrap;
+  }
+  .pw-mcp-credential > .btn {
+    margin-left: 44px;
+  }
+}

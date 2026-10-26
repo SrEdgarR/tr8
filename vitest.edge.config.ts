@@ -7,6 +7,7 @@ export default defineConfig({
       'supabase/functions/_shared/**/*.test.ts',
       'supabase/functions/tr8-finance/**/*.test.ts',
       'server/finance-authority/**/*.test.ts',
+      'server/mcp/**/*.test.ts',
       'cloudflare/finance-authority-test/**/*.test.ts',
       'cloudflare/vault-control-test/**/*.test.ts',
     ],
