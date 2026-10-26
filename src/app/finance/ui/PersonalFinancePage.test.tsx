@@ -27,7 +27,7 @@ function setup(snapshot = emptyFinancialSnapshot()) {
 describe('account finances by default', () => {
   it('opens the dashboard without asking for or contacting the encrypted vault', async () => {
     const h = setup();
-    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
+    await screen.findByRole('heading', { name: 'Disponibilidad por moneda' });
     expect(screen.queryByLabelText('Contraseña privada')).not.toBeInTheDocument();
     expect(h.vault.head).not.toHaveBeenCalled();
     expect(h.account.save).not.toHaveBeenCalled();
@@ -37,12 +37,12 @@ describe('account finances by default', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abrir bóveda cifrada opcional' }));
     await screen.findByText('En preparación');
     fireEvent.click(screen.getByRole('button', { name: 'Volver a Finanzas' }));
-    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
+    await screen.findByRole('heading', { name: 'Disponibilidad por moneda' });
   });
   it('retries the same financial write after an uncertain response and releases the modal', async () => {
     const h = setup();
     vi.mocked(h.account.save).mockRejectedValueOnce(Error('network'));
-    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
+    await screen.findByRole('heading', { name: 'Disponibilidad por moneda' });
     fireEvent.click(screen.getByRole('button', { name: 'Nueva cuenta' }));
     expect(screen.getByLabelText('Moneda de la cuenta')).toHaveValue('DOP');
     fireEvent.change(screen.getByLabelText('Nombre de la cuenta'), { target: { value: 'Cuenta ficticia' } });
@@ -59,7 +59,7 @@ describe('account finances by default', () => {
   });
   it('creates DOP accounts, records income and expense, and preserves the total through a transfer and reload', async () => {
     const h = setup();
-    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
+    await screen.findByRole('heading', { name: 'Disponibilidad por moneda' });
     async function save() {
       fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -100,7 +100,9 @@ describe('account finances by default', () => {
     const cash = await screen.findByRole('heading', { name: 'Efectivo QA' });
     expect(within(cash.closest('article')!).getByText('DOP 1.075,60')).toBeInTheDocument();
     expect(within(screen.getByRole('heading', { name: 'Banco QA' }).closest('article')!).getByText('DOP 500,05')).toBeInTheDocument();
-    expect(screen.getAllByText('DOP 1.575,65')).toHaveLength(2);
+    const summary = screen.getByRole('article', { name: 'Disponibilidad en DOP' });
+    expect(within(summary).getByText('Disponible después del próximo pago').nextElementSibling).toHaveTextContent('DOP 1.575,65');
+    expect(within(summary).getByText('Patrimonio neto').nextElementSibling).toHaveTextContent('DOP 1.575,65');
     expect(h.vault.head).not.toHaveBeenCalled();
     expect(h.vault.save).not.toHaveBeenCalled();
     expect(screen.queryByLabelText('Contraseña privada')).not.toBeInTheDocument();
@@ -124,7 +126,7 @@ describe('account finances by default', () => {
       });
     }
     setup(snapshot);
-    await screen.findByRole('heading', { name: 'Patrimonio por moneda' });
+    await screen.findByRole('heading', { name: 'Disponibilidad por moneda' });
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo movimiento' }));
     fireEvent.change(screen.getByLabelText('Tipo de movimiento'), { target: { value: 'transfer' } });
     const origin = screen.getByLabelText('Cuenta de origen');
@@ -164,7 +166,7 @@ describe('account finances by default', () => {
     const result = vi.mocked(h.account.save).mock.calls[0][0].snapshot;
     expect(result.financialSpace.accounts[0]).toEqual({ ...snapshot.financialSpace.accounts[0], name: 'Mi ahorro', bankName: 'Banco ficticio' });
     expect(result.financialSpace.operations).toEqual(snapshot.financialSpace.operations);
-    expect(screen.getByRole('region', { name: 'Patrimonio por moneda' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Disponibilidad por moneda' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Cuentas financieras' })).toBeInTheDocument();
   });
   it('shows a compact card and deletes only its confirmed currency group through account settings', async () => {

@@ -28,12 +28,14 @@ import { addAccount, updateAccount, accountHasActivity, addEntry, prepareEntryOp
 import { addPairedOperation, addRefund, preparePairedOperation, refundableExpenses } from '../domain/connected-operations';
 import { addPlan, filterHistory, projectSnapshot, resolvePlan } from '../domain/plans';
 import { calculateFinancialBalances } from '../domain/balances';
+import { calculatePaymentAvailability } from '../domain/payment-availability';
 import { formatMoneyMinor, localToday, parseAmountMinor } from '../domain/money';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../domain/categories';
 import Field from './FinanceField';
 import CreditCardForm from './CreditCardForm';
 import AccountDeleteDialog from './AccountDeleteDialog';
 import CreditCardTile from './CreditCardTile';
+import PaymentAvailabilitySummary from './PaymentAvailabilitySummary';
 import { creditCardGroups } from '../domain/credit-card-grouping';
 import type { DataSyncState } from '../../types';
 import './finance.css';
@@ -548,9 +550,11 @@ function Overview({
   const [projection, setProjection] = useState<ReturnType<typeof projectSnapshot> | null>(null);
   const [error, setError] = useState('');
   let balances: ReturnType<typeof calculateFinancialBalances> | null = null;
+  let availability: ReturnType<typeof calculatePaymentAvailability> = [];
   let balanceError = '';
   try {
     balances = calculateFinancialBalances(space.accounts, space.operations, date, space.currencyDefinitions);
+    availability = calculatePaymentAvailability(space.accounts, space.operations, date, space.currencyDefinitions);
   } catch {
     balanceError = 'No se pueden calcular los saldos actuales. Revisa las fechas de apertura de tus cuentas.';
   }
@@ -563,31 +567,13 @@ function Overview({
     <>
       {balanceError && <ErrorNotice>{balanceError}</ErrorNotice>}
       {!accountsOnly && (
-        <section className="tf-summary-section" aria-label="Patrimonio por moneda">
-          <div className="tf-section-title">
-            <h2>Patrimonio por moneda</h2>
-            <p className="muted">Totales de tus cuentas, separados por moneda.</p>
-          </div>
-          <div className="tf-grid">
-            {balances?.currencies.map(c => (
-              <article className="tf-card tf-balance" key={c.currency}>
-                <span className="tf-tag">{c.currency}</span>
-                <p className="muted">Patrimonio neto</p>
-                <strong>{money(c.netWorthMinor, c.currency)}</strong>
-                <dl>
-                  <div>
-                    <dt>Dinero disponible</dt>
-                    <dd>{money(c.liquidMinor, c.currency)}</dd>
-                  </div>
-                  <div>
-                    <dt>Deuda de tarjetas</dt>
-                    <dd>{money(c.creditDebtMinor, c.currency)}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        </section>
+        <PaymentAvailabilitySummary
+          summaries={availability}
+          currencies={space.currencyDefinitions}
+          accounts={space.accounts}
+          canEdit={canEdit}
+          onEdit={onEdit}
+        />
       )}
       {!space.accounts.length ? (
         <div className="tf-card tf-gate">
