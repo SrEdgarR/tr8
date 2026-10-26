@@ -142,6 +142,36 @@ try {
   );
   check((await stdio.listTools()).tools.length === 11, 'STDIO_TOOLS_MISSING');
   check((await call(stdio, 'get_project', { id: projectId })).id === projectId, 'STDIO_READ_FAILED');
+  // Isolate this key from HTTP preflights so its private counters must equal
+  // exactly three. Management intentionally exposes no quota counters: the ID
+  // below lets the operator verify them with a read-only SQL query after cleanup.
+  const quotaCredential = await rpc('tr8_mcp_credentials', {
+    p_action: 'create',
+    p_input: { name: 'QA MCP quota ' + projectId, workspace_id: workspace.id, access: 'read', expires_in_days: 1 },
+  });
+  connections.push(quotaCredential);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetch(config.url + '/rest/v1/rpc/tr8_mcp_dispatch', {
+      method: 'POST',
+      headers: { apikey: config.key, 'Content-Type': 'application/json', ...(attempt < 2 ? { Prefer: 'tx=rollback' } : {}) },
+      body: JSON.stringify({
+        p_token: quotaCredential.token,
+        p_action: 'update_task',
+        p_input: { id: taskId, version: scheduled.version, patch: { title: 'QA quota probe must remain denied' } },
+      }),
+    });
+    check(response.ok, 'QUOTA_FAILURE_MUST_COMMIT_ENVELOPE');
+    const preferences = response.headers.get('preference-applied') ?? '';
+    check(!preferences.split(',').some(preference => /^\s*tx\s*=\s*rollback\s*$/i.test(preference)), 'ROLLBACK_OVERRIDE_BYPASSES_QUOTA');
+    const result = await response.json();
+    check(
+      Object.keys(result).length === 1 && Object.keys(result._tr8_mcp_error ?? {}).length === 1 && result._tr8_mcp_error?.code === 'PT403',
+      'DIRECT_READ_ONLY_BYPASSED',
+    );
+  }
+  const listedQuotaCredential = (await rpc('tr8_mcp_credentials', { p_action: 'list', p_input: {} })).find(item => item.id === quotaCredential.id);
+  check(!!listedQuotaCredential, 'QUOTA_CREDENTIAL_NOT_LISTED');
+  check(!('minute_count' in listedQuotaCredential) && !('day_count' in listedQuotaCredential), 'PRIVATE_COUNTERS_EXPOSED');
   console.log(
     JSON.stringify({
       environment: 'tr8-test',
@@ -153,6 +183,14 @@ try {
       readOnlyEnforced: true,
       revocationEnforced: true,
       calendar: true,
+      quotaProbe: {
+        credentialId: quotaCredential.id,
+        failedDirectCalls: 3,
+        rollbackPreferenceIgnored: true,
+        expectedMinuteCount: 3,
+        expectedDayCount: 3,
+        privateCountersRequireSqlVerification: true,
+      },
     }),
   );
 } finally {

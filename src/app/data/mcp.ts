@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { DataError } from './errors';
+import { verifiedAccessToken } from './verified-access-token';
 
 export type McpAccess = 'read' | 'write';
 export interface McpCredential {
@@ -73,9 +74,9 @@ export function createMcpRepository(client: SupabaseClient, ownerId: string): Mc
     throw new DataError('Tu sesión cambió. Vuelve a abrir Configuración.');
   }
   async function request(action: 'list' | 'create' | 'revoke', input: Record<string, unknown>) {
-    await identity();
+    const token = await verifiedAccessToken(client, ownerId);
     try {
-      const { data, error } = await client.rpc('tr8_mcp_credentials', { p_action: action, p_input: input });
+      const { data, error } = await client.rpc('tr8_mcp_credentials', { p_action: action, p_input: input }).setHeader('Authorization', `Bearer ${token}`);
       if (error) throw requestError(error.code);
       await identity();
       return data as unknown;

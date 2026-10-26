@@ -3,6 +3,7 @@ import { requireClosedRecord, validateEpoch } from '../compatibility/protocol';
 import { validateFinancialSnapshot } from '../domain/snapshot';
 import { emptyFinancialSnapshot } from '../domain/workspace';
 import type { FinancialSnapshot } from '../domain/workspace-types';
+import { verifiedAccessToken } from '../../data/verified-access-token';
 export interface AccountFinanceRecord {
   version: string;
   snapshot: FinancialSnapshot;
@@ -36,12 +37,13 @@ export function accountFinanceRecord(value: unknown): AccountFinanceRecord {
 }
 export function createAccountFinanceApi(client: SupabaseClient, ownerId: string): AccountFinanceApi {
   async function request(write?: AccountFinanceWrite) {
-    const identity = await client.auth.getUser();
-    if (identity.error || identity.data.user?.id !== ownerId) throw Error('Tu sesión cambió. Vuelve a iniciar sesión.');
-    const { data, error } = await client.rpc(
-      'tr8_account_finance',
-      write ? { p_snapshot: validateFinancialSnapshot(write.snapshot), p_expected_version: write.expectedVersion, p_operation_id: write.operationId } : {},
-    );
+    const token = await verifiedAccessToken(client, ownerId);
+    const { data, error } = await client
+      .rpc(
+        'tr8_account_finance',
+        write ? { p_snapshot: validateFinancialSnapshot(write.snapshot), p_expected_version: write.expectedVersion, p_operation_id: write.operationId } : {},
+      )
+      .setHeader('Authorization', `Bearer ${token}`);
     if (error) throw error;
     const record = accountFinanceRecord(data);
     const again = await client.auth.getUser();

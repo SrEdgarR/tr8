@@ -24,9 +24,10 @@ begin
   perform pg_temp.r_assert(not exists(select 1 from cron.job where jobname in ('tr8-google-worker','tr8-google-maintenance') and active),'Google schedules are inactive');
   insert into auth.users(id,aud,role,email,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
     values(v_user,'authenticated','authenticated','tr8-reeligibility@example.test',clock_timestamp(),'{}','{}',clock_timestamp(),clock_timestamp());
+  insert into auth.sessions(id,user_id,created_at,updated_at) values(v_user,v_user,now(),now());
   insert into tr8_private.app_users(user_id,enabled,display_name) values(v_user,true,'Synthetic reeligibility');
   perform set_config('request.jwt.claim.sub',v_user::text,true);
-  perform set_config('request.jwt.claims',jsonb_build_object('sub',v_user,'role','authenticated')::text,true);
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',v_user,'role','authenticated','session_id',v_user)::text,true);
   v_workspace:=(public.tr8_v2_get_context()->>'personal_workspace_id')::uuid;
   perform public.tr8_v2_create_project(v_workspace,v_project,'TR8 synthetic reeligibility','Not sent to Google','#5A67D8','active');
   perform public.tr8_v2_create_task(v_workspace,v_task,v_project,'Synthetic date cycle','', 'todo','none',null,'2026-11-05');

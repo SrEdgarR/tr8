@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { handleMcpRequest } from './http';
-import { McpBackendError } from './backend';
+import { createMcpDispatch, McpBackendError } from './backend';
 
 const token = 'tr8_mcp_' + 'a'.repeat(64);
 const endpoint = 'https://tr8.example/api/mcp';
@@ -121,5 +121,124 @@ describe('standard remote TR8 MCP transport', () => {
     });
     expect(response.status).toBe(503);
     expect(await response.text()).not.toContain(token);
+  });
+
+  it('bounds the time spent reading an authenticated slow request body and cancels the stream', async () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn();
+    let source: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        source = controller;
+        controller.enqueue(new TextEncoder().encode('{'));
+      },
+      cancel,
+    });
+    let response: Response | undefined;
+    const pending = handleMcpRequest(new Request(endpoint, { method: 'POST', headers, body: stream, duplex: 'half' } as RequestInit), {
+      dispatch: () => async () => context,
+    }).then(result => {
+      response = result;
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(response?.status).toBe(408);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(await response?.text()).not.toContain(token);
+    } finally {
+      if (!cancel.mock.calls.length) source!.close();
+      await pending;
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops reading when the caller aborts and ignores a sensitive abort reason', async () => {
+    const abort = new AbortController();
+    const cancel = vi.fn();
+    const source = new ReadableStream<Uint8Array>({ cancel });
+    abort.abort(Error('private token ' + token));
+    const response = await handleMcpRequest(
+      new Request(endpoint, { method: 'POST', headers, body: source, signal: abort.signal, duplex: 'half' } as RequestInit),
+      { dispatch: () => async () => context },
+    );
+    expect(response.status).toBe(408);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(await response.text()).not.toContain(token);
+  });
+
+  it('cancels an in-progress read when the caller disconnects', async () => {
+    vi.useFakeTimers();
+    const abort = new AbortController();
+    const cancel = vi.fn();
+    const source = new ReadableStream<Uint8Array>({ cancel });
+    const pending = handleMcpRequest(new Request(endpoint, { method: 'POST', headers, body: source, signal: abort.signal, duplex: 'half' } as RequestInit), {
+      dispatch: () => async () => context,
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      abort.abort();
+      expect((await pending).status).toBe(408);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(source.locked).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects an oversized stream without waiting for its hostile cancellation hook', async () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn(() => new Promise<void>(() => undefined));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(256 * 1024 + 1));
+      },
+      cancel,
+    });
+    let response: Response | undefined;
+    const pending = handleMcpRequest(new Request(endpoint, { method: 'POST', headers, body: stream, duplex: 'half' } as RequestInit), {
+      dispatch: () => async () => context,
+    }).then(result => {
+      response = result;
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(response?.status).toBe(413);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(stream.locked).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+      await pending;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps committed SQL failure envelopes out of MCP results and preserves the public error code', async () => {
+    const dispatch = createMcpDispatch(token, {
+      url: 'https://example.supabase.co',
+      key: 'public-key',
+      fetch: async (_url, init) => {
+        const action = JSON.parse(String(init?.body)).p_action;
+        return Response.json(action === 'context' ? context : { _tr8_mcp_error: { code: 'PT409', message: 'private token ' + token } });
+      },
+    });
+    const response = await handleMcpRequest(
+      request({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'tr8_update_task',
+          arguments: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', version: 1, patch: { status: 'done' } },
+        },
+      }),
+      { dispatch: () => dispatch },
+    );
+    const result = await response.text();
+    expect(response.status).toBe(200);
+    expect(JSON.parse(result).result.isError).toBe(true);
+    expect(result).toContain('PT409');
+    expect(result).not.toContain('_tr8_mcp_error');
+    expect(result).not.toContain(token);
   });
 });

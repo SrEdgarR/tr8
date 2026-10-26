@@ -16,8 +16,11 @@ begin
 end;
 $$;
 create function pg_temp.mcp_error(command text,expected text,label text) returns void language plpgsql as $$
+declare result jsonb;
 begin
-  begin execute command;
+  begin
+    execute command into result;
+    if result#>>'{_tr8_mcp_error,code}'=expected then perform pg_temp.mcp_assert(true,label); return; end if;
   exception when others then
     if sqlstate=expected then perform pg_temp.mcp_assert(true,label); return; end if;
     raise exception 'MCP assertion failed: %; expected %, got % (%)',label,expected,sqlstate,sqlerrm;
@@ -28,7 +31,7 @@ $$;
 create function pg_temp.mcp_actor(actor uuid) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claim.sub',coalesce(actor::text,''),true);
-  perform set_config('request.jwt.claims',case when actor is null then '{}' else jsonb_build_object('sub',actor,'role','authenticated')::text end,true);
+  perform set_config('request.jwt.claims',case when actor is null then '{}' else jsonb_build_object('sub',actor,'role','authenticated','session_id',actor)::text end,true);
 end;
 $$;
 create function pg_temp.mcp_put(k text,v jsonb) returns void language sql as $$
@@ -47,6 +50,9 @@ grant execute on function pg_temp.mcp_assert(boolean,text),pg_temp.mcp_error(tex
 insert into auth.users(id,aud,role,email,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 select ('f8000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'authenticated','authenticated',
   'tr8-mcp-synthetic-'||n||'@example.test',statement_timestamp(),'{}','{}',statement_timestamp(),statement_timestamp() from generate_series(1,3)n;
+-- Sessions are real fixtures; JWT/session binding is part of authorization.
+insert into auth.sessions(id,user_id,created_at,updated_at)
+select id,id,statement_timestamp(),statement_timestamp() from auth.users where id::text like 'f8000000%';
 insert into tr8_private.app_users(user_id,enabled,display_name)
 select ('f8000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,true,'MCP synthetic '||n from generate_series(1,3)n;
 

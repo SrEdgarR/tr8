@@ -44,7 +44,7 @@ create function pg_temp.as_user(p_user_id uuid)
 returns void language plpgsql security invoker set search_path = '' as $$
 begin
   perform set_config('request.jwt.claim.sub', coalesce(p_user_id::text, ''), true);
-  perform set_config('request.jwt.claims', case when p_user_id is null then '{}' else jsonb_build_object('sub',p_user_id,'role','authenticated','user_metadata',jsonb_build_object('role','Owner','email','tr8-stage1-owner@example.test'))::text end, true);
+  perform set_config('request.jwt.claims', case when p_user_id is null then '{}' else jsonb_build_object('sub',p_user_id,'role','authenticated','session_id',p_user_id,'user_metadata',jsonb_build_object('role','Owner','email','tr8-stage1-owner@example.test'))::text end, true);
 end;
 $$;
 create function pg_temp.remember(p_key text, p_value jsonb)
@@ -85,6 +85,9 @@ values
  ('f100000a-0000-4000-8000-00000000000a','authenticated','authenticated','tr8-stage1-revoked@example.test',now(),'{}','{}',now(),now()),
  ('f100000b-0000-4000-8000-00000000000b','authenticated','authenticated','tr8-stage1-issuer-lost@example.test',now(),'{}','{}',now(),now());
 update auth.users set deleted_at=now() where id='f1000006-0000-4000-8000-000000000006';
+-- Sessions are real fixtures; JWT/session binding is part of authorization.
+insert into auth.sessions(id,user_id,created_at,updated_at)
+select id,id,statement_timestamp(),statement_timestamp() from auth.users where id::text like 'f10000%';
 insert into tr8_private.app_users(user_id,enabled,display_name)
 values
  ('f1000001-0000-4000-8000-000000000001',true,'Synthetic owner'),

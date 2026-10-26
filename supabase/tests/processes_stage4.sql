@@ -26,7 +26,7 @@ end; $$;
 create function pg_temp.s4_actor(p_id uuid)
 returns void language plpgsql security invoker set search_path='' as $$ begin
   perform set_config('request.jwt.claim.sub',coalesce(p_id::text,''),true);
-  perform set_config('request.jwt.claims',case when p_id is null then '{}' else jsonb_build_object('sub',p_id,'role','authenticated',
+  perform set_config('request.jwt.claims',case when p_id is null then '{}' else jsonb_build_object('sub',p_id,'role','authenticated','session_id',p_id,
     'user_metadata',jsonb_build_object('role','Owner','permissions',array['*']))::text end,true);
 end; $$;
 create function pg_temp.s4_put(p_key text,p_value jsonb)
@@ -50,6 +50,9 @@ update tr8_private.process_runtime set day=(clock_timestamp() at time zone 'UTC'
 insert into auth.users(id,aud,role,email,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 select ('f4000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'authenticated','authenticated','tr8-stage4-'||n||'@example.test',
   statement_timestamp(),'{}','{"role":"Owner"}',statement_timestamp(),statement_timestamp() from generate_series(1,4) n;
+-- Sessions are real fixtures; JWT/session binding is part of authorization.
+insert into auth.sessions(id,user_id,created_at,updated_at)
+select id,id,statement_timestamp(),statement_timestamp() from auth.users where id::text like 'f4000000%';
 insert into tr8_private.app_users(user_id,enabled,display_name)
 select ('f4000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,n<>3,'Synthetic stage 4 '||n from generate_series(1,3) n;
 

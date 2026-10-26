@@ -34,6 +34,21 @@ function harness(overrides: Partial<FinanceRuntime> = {}) {
 }
 
 describe('finance synthetic HTTP boundary', () => {
+  it('bounds total read time and does not await an uncooperative cancellation', async () => {
+    vi.useFakeTimers();
+    try {
+      const cancel = vi.fn(() => new Promise<void>(() => {}));
+      const pending = readFinanceBytes(new Response(new ReadableStream<Uint8Array>({ cancel })), 4096).then(
+        () => 'accepted',
+        error => error.code,
+      );
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(await Promise.race([pending, Promise.resolve('still-reading')])).toBe('BODY_TIMEOUT');
+      expect(cancel).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('is off before authentication and never activates production by configuration', async () => {
     const { handle, runtime } = harness({ enabled: false });
     expect((await handle(request())).status).toBe(503);

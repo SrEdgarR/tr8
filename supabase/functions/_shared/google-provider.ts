@@ -382,8 +382,13 @@ function eventPage(value: unknown): GoogleEventPage {
 }
 
 function calendarPath(id: string): string {
-  if (!string(id, 2048) || id === 'primary') throw new GoogleProviderError('permanent', 'invalid_resource');
+  if (!string(id, 2048) || ['primary', '.', '..'].includes(id)) throw new GoogleProviderError('permanent', 'invalid_resource');
   return `${calendarBase}/calendars/${encodeURIComponent(id)}`;
+}
+
+/** One strong opaque version, never a wildcard, weak validator or list. */
+function concreteVersion(value: unknown): value is string {
+  return string(value, 512) && /^"[\x21\x23-\x7e]+"$/.test(value);
 }
 
 function eventPath(calendarId: string, id?: string): string {
@@ -505,7 +510,7 @@ export class GoogleProvider {
 
   private authorized(accessToken: string, method = 'GET', body?: unknown, etag?: string): RequestInit {
     if (!string(accessToken, 16_384)) throw new GoogleProviderError('reauthorization', 'authorization_expired');
-    if (etag !== undefined && !string(etag, 512)) throw new GoogleProviderError('permanent', 'invalid_resource');
+    if (etag !== undefined && !concreteVersion(etag)) throw new GoogleProviderError('permanent', 'invalid_resource');
     return {
       method,
       headers: {
@@ -556,21 +561,23 @@ export class GoogleProvider {
     return event(await this.request('event.insert', `${eventPath(calendarId)}?sendUpdates=none`, this.authorized(accessToken, 'POST', eventBody(body))));
   }
 
-  async updateEvent(accessToken: string, calendarId: string, body: GoogleEventWrite, etag?: string): Promise<GoogleEventResource> {
+  async updateEvent(accessToken: string, calendarId: string, body: GoogleEventWrite, etag: string): Promise<GoogleEventResource> {
+    if (!concreteVersion(etag)) throw new GoogleProviderError('permanent', 'invalid_resource');
     return event(
       await this.request('event.update', `${eventPath(calendarId, body.id)}?sendUpdates=none`, this.authorized(accessToken, 'PUT', eventBody(body), etag)),
     );
   }
 
   async patchEvent(accessToken: string, calendarId: string, body: GoogleEventPatch, etag: string): Promise<GoogleEventResource> {
-    if (!string(etag, 512)) throw new GoogleProviderError('permanent', 'invalid_resource');
+    if (!concreteVersion(etag)) throw new GoogleProviderError('permanent', 'invalid_resource');
     const projection = patchBody(body);
     return event(
       await this.request('event.update', `${eventPath(calendarId, body.id)}?sendUpdates=none`, this.authorized(accessToken, 'PATCH', projection, etag)),
     );
   }
 
-  async deleteEvent(accessToken: string, calendarId: string, id: string, etag?: string): Promise<void> {
+  async deleteEvent(accessToken: string, calendarId: string, id: string, etag: string): Promise<void> {
+    if (!concreteVersion(etag)) throw new GoogleProviderError('permanent', 'invalid_resource');
     await this.request('event.delete', `${eventPath(calendarId, id)}?sendUpdates=none`, this.authorized(accessToken, 'DELETE', undefined, etag));
   }
 }

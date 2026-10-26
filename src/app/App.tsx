@@ -14,6 +14,7 @@ import type { ProcessesApi } from './data/processes';
 import type { GoogleCalendarApi } from './data/google-calendar';
 import { createGoogleTasksRepository, type GoogleTasksApi } from './data/google-tasks';
 import { createMcpRepository } from './data/mcp';
+import { createAccountDataClient } from './data/account-client';
 import { callbackRequestedRecovery, configuration, supabase } from './data/client';
 import { createRepository, type WorkspaceData } from './data/repository';
 import { dataError, DataError } from './data/errors';
@@ -140,8 +141,9 @@ function ConnectedApp({ client }: { client: SupabaseClient }) {
 }
 
 function WorkspaceContext({ client, session }: { client: SupabaseClient; session: Session }) {
-  const repository = useMemo(() => createRepository(client), [client]);
-  const tasksRepository = useMemo(() => createGoogleTasksRepository(client), [client]);
+  const dataClient = useMemo(() => createAccountDataClient(client, session.user.id, configuration!), [client, session.user.id]);
+  const repository = useMemo(() => createRepository(dataClient), [dataClient]);
+  const tasksRepository = useMemo(() => createGoogleTasksRepository(dataClient), [dataClient]);
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -301,6 +303,7 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
     <ScopedWorkspace
       key={`${session.user.id}:${selected.id}:${[...selected.permissions].sort().join(',')}`}
       client={client}
+      dataClient={dataClient}
       session={session}
       google={google}
       googleTasks={googleTasks}
@@ -325,6 +328,7 @@ function WorkspaceContext({ client, session }: { client: SupabaseClient; session
 
 function ScopedWorkspace({
   client,
+  dataClient,
   session,
   selected,
   workspaces,
@@ -334,6 +338,7 @@ function ScopedWorkspace({
   googleTasks,
 }: {
   client: SupabaseClient;
+  dataClient: SupabaseClient;
   session: Session;
   selected: WorkspaceSummary;
   workspaces: WorkspaceSummary[];
@@ -352,7 +357,7 @@ function ScopedWorkspace({
   const [financeRefresh, setFinanceRefresh] = useState<(() => void) | null>(null);
   const registerFinanceRefresh = useCallback((refresh: (() => void) | null) => setFinanceRefresh(() => refresh), []);
   const queryClient = useQueryClient();
-  const repository = useMemo(() => createRepository(client), [client]);
+  const repository = useMemo(() => createRepository(dataClient), [dataClient]);
   const scopeRevision = [...selected.permissions].sort().join('|');
   const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
@@ -406,6 +411,10 @@ function ScopedWorkspace({
     () => ['collaboration', session.user.id, selected.id, scopeRevision, projectRevision],
     [session.user.id, selected.id, scopeRevision, projectRevision],
   );
+  const authorizationScope = useRef(collaborationScope);
+  useEffect(() => {
+    authorizationScope.current = collaborationScope;
+  }, [collaborationScope]);
   const calendarWorkspaceRevision = JSON.stringify(
     [...workspaces]
       .sort((left, right) => left.id.localeCompare(right.id))
@@ -473,13 +482,16 @@ function ScopedWorkspace({
   const mutation = useMutation({ mutationFn: async (operation: () => Promise<unknown>) => operation(), retry: false });
 
   async function write<T>(operation: () => Promise<T>, accept?: (data: WorkspaceData, row: T) => WorkspaceData): Promise<T> {
+    const requestScope = collaborationScope;
     if (!active.current) throw new DataError('El espacio cambió. Abre de nuevo el proyecto antes de guardar.');
+    if (authorizationScope.current !== requestScope) throw new DataError('El acceso cambió. Vuelve a consultar el proyecto.');
     if (accessError) throw accessError;
     if (locked.current) throw new DataError('Espera a que termine el guardado en curso.');
     locked.current = true;
     try {
       const row = (await mutation.mutateAsync(operation)) as T;
       if (!active.current) throw new DataError('El espacio cambió durante el guardado. Comprueba el resultado al volver a abrirlo.');
+      if (authorizationScope.current !== requestScope) throw new DataError('El acceso cambió durante el guardado. Vuelve a consultar el proyecto.');
       if (active.current) {
         if (accept) queryClient.setQueryData<WorkspaceData>(queryKey, previous => accept(previous ?? { projects: [], tasks: [] }, row));
         void queryClient.invalidateQueries({ queryKey });
@@ -524,10 +536,12 @@ function ScopedWorkspace({
   });
   const acceptTask = (data: WorkspaceData, row: Task): WorkspaceData => ({ ...data, tasks: [...data.tasks.filter(task => task.id !== row.id), row] });
   async function readCollaboration<T>(operation: () => Promise<T>): Promise<T> {
+    const requestScope = collaborationScope;
     if (!active.current || accessError) throw accessError ?? new DataError('Este espacio ya no está abierto.');
     try {
       const result = await operation();
       if (!active.current) throw new DataError('El espacio cambió. Vuelve a abrirlo para consultar los datos.');
+      if (authorizationScope.current !== requestScope) throw new DataError('El acceso cambió. Vuelve a consultar el proyecto.');
       return result;
     } catch (cause) {
       const error = dataError(cause);

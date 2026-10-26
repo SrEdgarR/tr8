@@ -51,18 +51,23 @@ export function version(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) throw new GoogleServiceError('INVALID_INPUT');
   return value;
 }
-export async function boundedJson(request: Request | Response, limit = 16_384): Promise<unknown> {
+export async function boundedJson(request: Request | Response, limit = 16_384, timeoutMs = 8000): Promise<unknown> {
   if (!request.body) throw new GoogleServiceError('INVALID_INPUT');
+  const declared = request.headers.get('content-length');
+  if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > limit)) throw new GoogleServiceError('INVALID_INPUT');
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let length = 0;
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new GoogleServiceError('INVALID_INPUT')), timeoutMs);
+  });
   try {
     while (true) {
-      const part = await reader.read();
+      const part = await Promise.race([reader.read(), deadline]);
       if (part.done) break;
       length += part.value.length;
       if (length > limit) {
-        await reader.cancel();
         throw new GoogleServiceError('INVALID_INPUT');
       }
       chunks.push(part.value);
@@ -75,9 +80,13 @@ export async function boundedJson(request: Request | Response, limit = 16_384): 
     }
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch (cause) {
+    // Cancellation belongs to the receiver; a sender must not prolong the
+    // deadline by leaving its cancel hook or transport pending.
+    void reader.cancel().catch(() => {});
     if (cause instanceof GoogleServiceError) throw cause;
     throw new GoogleServiceError('INVALID_INPUT');
   } finally {
+    clearTimeout(timer!);
     reader.releaseLock();
   }
 }
@@ -167,7 +176,8 @@ export function createGoogleRuntime(get: (name: string) => string | undefined, f
     workerSecret,
     async authenticate(request) {
       const authorization = request.headers.get('authorization') ?? '';
-      if (!/^Bearer [A-Za-z0-9_.-]{20,16384}$/.test(authorization)) throw new GoogleServiceError('AUTH_REQUIRED', 401);
+      if (!/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(authorization) || authorization.length > 16_384)
+        throw new GoogleServiceError('AUTH_REQUIRED', 401);
       const response = await platform('/auth/v1/user', { apikey: publicKey, Authorization: authorization });
       if (!response.ok) throw new GoogleServiceError('AUTH_REQUIRED', 401);
       const user = object(await boundedJson(response));
@@ -175,7 +185,20 @@ export function createGoogleRuntime(get: (name: string) => string | undefined, f
         const payload = authorization.slice(7).split('.')[1];
         const claims = object(JSON.parse(atob(payload.replaceAll('-', '+').replaceAll('_', '/'))));
         const id = uuid(user.id);
-        if (claims.sub !== id || claims.role !== 'authenticated' || typeof claims.exp !== 'number' || claims.exp * 1000 <= Date.now()) throw new Error();
+        const now = Date.now() / 1000;
+        if (
+          claims.sub !== id ||
+          claims.iss !== `${projectOrigin}/auth/v1` ||
+          claims.role !== 'authenticated' ||
+          claims.is_anonymous !== false ||
+          user.is_anonymous === true ||
+          !(claims.aud === 'authenticated' || (Array.isArray(claims.aud) && claims.aud.includes('authenticated'))) ||
+          typeof claims.exp !== 'number' ||
+          !Number.isSafeInteger(claims.exp) ||
+          claims.exp <= now ||
+          (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || !Number.isSafeInteger(claims.nbf) || claims.nbf > now))
+        )
+          throw new Error();
         return { id, session: uuid(claims.session_id) };
       } catch {
         throw new GoogleServiceError('AUTH_REQUIRED', 401);

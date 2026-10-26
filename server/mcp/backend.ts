@@ -15,6 +15,19 @@ export class McpBackendError extends Error {
   }
 }
 
+function backendError(code: unknown) {
+  if (typeof code === 'string') {
+    if (['PT401', 'PT403', 'PT404', 'PT409', 'PT429', 'INVALID_INPUT', 'UNAVAILABLE'].includes(code)) return new McpBackendError(code);
+    if (code === '42501') return new McpBackendError('PT403');
+    if (/^22[A-Z0-9]{3}$/.test(code) || code === '23514') return new McpBackendError('INVALID_INPUT');
+  }
+  return new McpBackendError('UNAVAILABLE');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 /** Public Supabase key only. Delegation is checked again inside every RPC. */
 export function createMcpDispatch(token: string, options: { url: string; key: string; fetch?: typeof fetch }): McpDispatch {
   const base = new URL(options.url);
@@ -40,12 +53,21 @@ export function createMcpDispatch(token: string, options: { url: string; key: st
     } catch {
       throw new McpBackendError('UNAVAILABLE');
     }
-    if (!response.ok) {
-      const code = data && typeof data === 'object' && 'code' in data ? String(data.code) : '';
-      if (['PT401', 'PT403', 'PT404', 'PT409', 'PT429'].includes(code)) throw new McpBackendError(code);
-      if (code === '42501') throw new McpBackendError('PT403');
-      if (code.startsWith('22') || code === '23514') throw new McpBackendError('INVALID_INPUT');
-      throw new McpBackendError('UNAVAILABLE');
+    if (!response.ok) throw backendError(isRecord(data) ? data.code : undefined);
+    // The RPC returns failures as data so the attempted-call quota can commit
+    // while its inner transaction rolls back any business changes. Never expose
+    // database diagnostics, or accidentally treat that envelope as business data.
+    if (isRecord(data) && Object.hasOwn(data, '_tr8_mcp_error')) {
+      const error = data._tr8_mcp_error;
+      if (
+        Object.keys(data).length !== 1 ||
+        !isRecord(error) ||
+        typeof error.code !== 'string' ||
+        Object.keys(error).some(key => key !== 'code' && key !== 'message') ||
+        (Object.hasOwn(error, 'message') && typeof error.message !== 'string')
+      )
+        throw new McpBackendError('UNAVAILABLE');
+      throw backendError(error.code);
     }
     return data;
   };

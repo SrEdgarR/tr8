@@ -204,9 +204,13 @@ Ejemplos de peticiones al agente:
 
 La entrega incluye 64 comprobaciones SQL de aislamiento, permisos, revocación,
 caducidad, cuotas, versiones y conservación de datos. El ensayo HTTP alojado
-realiza 26 comprobaciones con Supabase de prueba, incluidas escrituras, reintentos
-sin duplicados, conflictos, calendario, cliente HTTP y adaptador stdio. Elimina
-únicamente el proyecto sintético creado por el ensayo y revoca sus conexiones.
+realiza 37 comprobaciones con Supabase de prueba, incluidas escrituras, reintentos
+sin duplicados, conflictos, calendario, cliente HTTP y adaptador stdio. Comprueba
+también tres escrituras denegadas por RPC directa y que PostgREST ignore
+`Prefer: tx=rollback`. Emite el ID de esa conexión sintética para verificar por
+SQL de solo lectura que sus contadores privados sean exactamente tres; esos
+contadores no se publican en la API de gestión. Elimina únicamente el proyecto
+sintético creado por el ensayo y revoca sus conexiones.
 
 Para repetir ese ensayo desde el repositorio, prepara un archivo privado con
 `url`, `key` pública y `users.owner` (`id`, `email`, `password`) de la identidad
@@ -217,11 +221,18 @@ node node_modules/typescript/bin/tsc -p tsconfig.mcp.json --noEmit false --outDi
 node scripts/mcp/http-smoke.mjs /ruta/privada/http-fixtures.json
 ```
 
-Cada conexión admite 60 llamadas internas exitosas por minuto y 1.000 al día.
+Cada conexión admite 60 llamadas internas por minuto y 1.000 al día, incluidos
+los intentos fallidos efectuados con una credencial válida y autorizada.
 HTTP comprueba el contexto antes de cada petición, además de validar la acción:
 una interacción del cliente puede consumir más de una llamada interna. Estos
 límites acotan el uso; no representan una cuota gratuita del proveedor de IA.
 El conector no utiliza ninguna API de modelos ni necesita su clave.
+
+La lectura de cada cuerpo HTTP está limitada a 256 KiB y cinco segundos. Una
+solicitud que se interrumpa o no termine de llegar se cancela; no conserva
+lectores ni temporizadores. La cuota por conexión no sustituye la protección
+global contra ataques de tráfico: el servidor no mantiene un limitador
+distribuido por IP para solicitudes sin credencial válida.
 
 Las pruebas del adaptador conectan un `Client` MCP independiente por stdio con
 un servidor HTTP del SDK, comprueban herramientas, resultados, prompts, recursos,

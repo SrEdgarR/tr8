@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import worker, { Tr8SyntheticAuthority, SYNTHETIC_OWNER, SYNTHETIC_VAULT } from './worker';
+import worker, { Tr8SyntheticAuthority, SYNTHETIC_OWNER, SYNTHETIC_VAULT, body } from './worker';
 import type { Row } from '../../server/finance-authority/journal-core';
 const token = 'f'.repeat(64),
   authorityId = 'f629a76f-842c-4f8e-8557-b4b7fa4563b1',
@@ -58,6 +58,28 @@ beforeEach(() => {
 });
 afterEach(() => db.close());
 describe('Cloudflare synthetic Worker HTTP boundary with real SQLite adapter', () => {
+  it('cancels a stalled body without waiting for its sender or touching SQLite', async () => {
+    vi.useFakeTimers();
+    try {
+      const cancel = vi.fn(() => new Promise<void>(() => {}));
+      const request = new Request('https://synthetic.invalid/v1/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: new ReadableStream<Uint8Array>({ cancel }),
+        duplex: 'half',
+      } as RequestInit);
+      const pending = body(request).then(
+        () => 'accepted',
+        error => error.code,
+      );
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(await Promise.race([pending, Promise.resolve('still-reading')])).toBe('INVALID_INPUT');
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('requires a secret before allocating or reading a journal', async () => {
     delete env.ACCESS_TOKEN;
     expect((await bootstrap()).status).toBe(401);

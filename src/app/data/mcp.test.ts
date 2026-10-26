@@ -16,10 +16,12 @@ const metadata = (): McpCredential => ({
   last_used_at: null,
 });
 function setup(result: unknown) {
-  const rpc = vi.fn(async () => ({ data: result, error: null as { code: string; message: string } | null }));
+  const setHeader = vi.fn(async () => ({ data: result, error: null as { code: string; message: string } | null }));
+  const rpc = vi.fn(() => ({ setHeader }));
   const getUser = vi.fn(async () => ({ data: { user: { id: owner } }, error: null }));
-  const client = { rpc, auth: { getUser } } as unknown as SupabaseClient;
-  return { api: createMcpRepository(client, owner), rpc, getUser };
+  const getSession = vi.fn(async () => ({ data: { session: { access_token: 'synthetic-owner-token', user: { id: owner } } }, error: null }));
+  const client = { rpc, auth: { getUser, getSession } } as unknown as SupabaseClient;
+  return { api: createMcpRepository(client, owner), rpc, getUser, setHeader };
 }
 
 it('does not contact Supabase on construction and lists metadata only under a stable identity', async () => {
@@ -28,6 +30,7 @@ it('does not contact Supabase on construction and lists metadata only under a st
   expect(await h.api.list()).toEqual([metadata()]);
   expect(h.rpc).toHaveBeenCalledExactlyOnceWith('tr8_mcp_credentials', { p_action: 'list', p_input: {} });
   expect(h.getUser).toHaveBeenCalledTimes(2);
+  expect(h.setHeader).toHaveBeenCalledWith('Authorization', 'Bearer synthetic-owner-token');
 });
 it('creates an explicitly scoped key once and retains the server-confirmed permissions', async () => {
   const h = setup({ ...metadata(), token: secret });
@@ -46,7 +49,7 @@ it('refuses invalid drafts before any request and requires revocation to be ackn
   await expect(h.api.create({ name: '', workspace_id: workspace, access: 'read', expires_in_days: 30 })).rejects.toThrow('Revisa');
   expect(h.rpc).not.toHaveBeenCalled();
   await expect(h.api.revoke(id)).rejects.toThrow('No pudimos comprobar');
-  h.rpc.mockResolvedValue({ data: { ...metadata(), revoked_at: '2026-10-27T00:00:00Z' }, error: null });
+  h.setHeader.mockResolvedValue({ data: { ...metadata(), revoked_at: '2026-10-27T00:00:00Z' }, error: null });
   expect((await h.api.revoke(id)).revoked_at).toBe('2026-10-27T00:00:00Z');
 });
 it('discards a response after the authenticated user changes', async () => {
@@ -56,7 +59,7 @@ it('discards a response after the authenticated user changes', async () => {
 });
 it('never reflects database messages or key material in errors', async () => {
   const h = setup(null);
-  h.rpc.mockResolvedValue({ data: null, error: { code: 'P0001', message: secret } });
+  h.setHeader.mockResolvedValue({ data: null, error: { code: 'P0001', message: secret } });
   try {
     await h.api.list();
     throw Error('expected failure');
@@ -64,6 +67,6 @@ it('never reflects database messages or key material in errors', async () => {
     expect(String(cause)).toContain('No se pudo confirmar');
     expect(String(cause)).not.toContain(secret);
   }
-  h.rpc.mockRejectedValueOnce(Error(secret));
+  h.setHeader.mockRejectedValueOnce(Error(secret));
   await expect(h.api.list()).rejects.toThrow('No se pudo confirmar');
 });

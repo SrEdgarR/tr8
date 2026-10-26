@@ -24,7 +24,7 @@ end;$$;
 create function pg_temp.d_actor(actor uuid) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claim.sub',coalesce(actor::text,''),true);
-  perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'role','authenticated')::text,true);
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'role','authenticated','session_id',actor)::text,true);
 end;$$;
 do $$begin execute format('grant usage on schema %I to anon,authenticated',pg_my_temp_schema()::regnamespace);end;$$;
 grant select,insert,update on pg_temp.deletion_ids to authenticated;
@@ -33,6 +33,9 @@ grant execute on function pg_temp.d_assert(boolean,text),pg_temp.d_error(text,te
 insert into auth.users(id,aud,role,email,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 select ('f8d00000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'authenticated','authenticated',
   'tr8-project-delete-'||n||'@example.test',now(),'{}','{}',now(),now() from generate_series(1,6)n;
+-- Sessions are real fixtures; JWT/session binding is part of authorization.
+insert into auth.sessions(id,user_id,created_at,updated_at)
+select id,id,statement_timestamp(),statement_timestamp() from auth.users where id::text like 'f8d00000%';
 insert into tr8_private.app_users(user_id,enabled,display_name)
 select ('f8d00000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,n<>6,'Deletion fixture '||n from generate_series(1,6)n;
 set local role authenticated;

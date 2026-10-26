@@ -352,16 +352,7 @@ export function createGoogleWorkerHandler(runtime: GoogleRuntime) {
       if (request.method !== 'POST' || request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') {
         throw new GoogleServiceError('INVALID_INPUT');
       }
-      let bodyTimer: ReturnType<typeof setTimeout>;
-      const input = new Promise<never>((_resolve, reject) => {
-        bodyTimer = setTimeout(() => reject(new GoogleServiceError('INVALID_INPUT')), 2000);
-      });
-      let body: Record<string, unknown>;
-      try {
-        body = object(await Promise.race([boundedJson(request), input]));
-      } finally {
-        clearTimeout(bodyTimer!);
-      }
+      const body = object(await boundedJson(request, 16_384, 2000));
       if (
         Object.keys(body).some(key => !['limit', 'source'].includes(key)) ||
         (body.limit !== undefined && body.limit !== 1 && body.limit !== 2) ||

@@ -18,8 +18,8 @@ function setup(fetcher: typeof fetch = vi.fn<typeof fetch>(async () => Response.
   };
   return { env, make: () => createGoogleRuntime(name => env[name], fetcher), fetcher };
 }
-function token(sub = userId) {
-  return `synthetic.${btoa(JSON.stringify({ sub, role: 'authenticated', session_id: sessionId, exp: Math.floor(Date.now() / 1000) + 3600 })).replaceAll('=', '')}.signature`;
+function token(sub = userId, overrides: Record<string, unknown> = {}) {
+  return `synthetic.${btoa(JSON.stringify({ sub, role: 'authenticated', iss: 'https://project.supabase.co/auth/v1', aud: 'authenticated', is_anonymous: false, session_id: sessionId, exp: Math.floor(Date.now() / 1000) + 3600, ...overrides })).replaceAll('=', '')}.signature`;
 }
 describe('Google server runtime', () => {
   it('fails closed until every server prerequisite exists', () => {
@@ -71,5 +71,39 @@ describe('Google server runtime', () => {
   });
   it('limits request size before JSON parsing', async () => {
     await expect(boundedJson(new Request('https://example.test', { method: 'POST', body: 'x'.repeat(20_000) }))).rejects.toBeInstanceOf(GoogleServiceError);
+  });
+  it.each([
+    { iss: 'https://another.supabase.co/auth/v1' },
+    { aud: 'anon' },
+    { is_anonymous: true },
+    { exp: Number.MAX_VALUE },
+    { nbf: Math.floor(Date.now() / 1000) + 3600 },
+  ])('rejects a verified but unsuitable session context %j', async claims => {
+    const f = setup(vi.fn<typeof fetch>(async () => Response.json({ id: userId })));
+    await expect(
+      f.make().authenticate(new Request('https://project.supabase.co', { headers: { Authorization: `Bearer ${token(userId, claims)}` } })),
+    ).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+  });
+  it('rejects anonymous Auth users even when their token omits the anonymous flag', async () => {
+    const f = setup(vi.fn<typeof fetch>(async () => Response.json({ id: userId, is_anonymous: true })));
+    await expect(f.make().authenticate(new Request('https://project.supabase.co', { headers: { Authorization: `Bearer ${token()}` } }))).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+    });
+  });
+  it('stops reading a stalled stream at its deadline and cancels without waiting for the sender', async () => {
+    vi.useFakeTimers();
+    try {
+      const cancel = vi.fn(() => new Promise<void>(() => {}));
+      const body = new ReadableStream<Uint8Array>({ cancel });
+      const pending = boundedJson(new Response(body)).then(
+        () => 'accepted',
+        error => error.code,
+      );
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(await Promise.race([pending, Promise.resolve('still-reading')])).toBe('INVALID_INPUT');
+      expect(cancel).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

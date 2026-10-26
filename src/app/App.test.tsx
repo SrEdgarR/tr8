@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
     updateTask: vi.fn(),
     deleteTask: vi.fn(),
     roles: vi.fn(),
+    projectAccess: vi.fn(),
     activity: vi.fn(),
     calendarPreferences: vi.fn(),
     setCalendarPreferences: vi.fn(),
@@ -51,7 +52,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./data/client', () => ({
-  configuration: { ownerEmail: 'owner@example.com', url: 'https://test.supabase.co' },
+  configuration: { ownerEmail: 'owner@example.com', url: 'https://test.supabase.co', publishableKey: 'sb_publishable_fixture' },
   supabase: { auth: mocks.auth },
   callbackRequestedRecovery: false,
 }));
@@ -483,6 +484,50 @@ describe('sesiones y datos del espacio personal', () => {
     expect(mocks.repository.load).toHaveBeenCalledOnce();
     expect(mocks.repository.projectCapabilities).toHaveBeenCalledOnce();
     expect(workspace().workspace?.permissions).toEqual(['role.manage']);
+  });
+
+  it('descarta la respuesta de un guardado iniciado antes de perder acceso al proyecto', async () => {
+    const pending = deferred<Task>();
+    mocks.repository.updateTask.mockReturnValue(pending.promise);
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    let save!: Promise<Task>;
+    act(() => {
+      save = workspace().onUpdateTask(task(), { title: 'Respuesta privada tardía' });
+    });
+    await waitFor(() => expect(mocks.repository.updateTask).toHaveBeenCalledOnce());
+    mocks.repository.projectCapabilities.mockResolvedValue([]);
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['workspace', 'owner-a', 'personal-a'] });
+    });
+    await waitFor(() => expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument());
+    // Keep the next refresh pending so it cannot mask a stale optimistic insertion.
+    mocks.repository.load.mockReturnValue(new Promise<WorkspaceData>(() => {}));
+    const rejected = expect(save).rejects.toThrow('El acceso cambió');
+    await act(async () => {
+      pending.resolve(task('Respuesta privada tardía', 2));
+      await rejected;
+    });
+    expect(workspace().tasks).toEqual([]);
+    expect(screen.queryByText('Respuesta privada tardía')).not.toBeInTheDocument();
+  });
+
+  it('descarta una lectura de acceso al proyecto si sus permisos cambian durante la petición', async () => {
+    const pending = deferred<never[]>();
+    mocks.repository.projectAccess.mockReturnValue(pending.promise);
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    const read = workspace().collaboration!.projectAccess('project-a');
+    mocks.repository.projectCapabilities.mockResolvedValue([]);
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['workspace', 'owner-a', 'personal-a'] });
+    });
+    await waitFor(() => expect(workspace().capabilities).toEqual({}));
+    const rejected = expect(read).rejects.toThrow('El acceso cambió');
+    await act(async () => {
+      pending.resolve([]);
+      await rejected;
+    });
   });
 
   it('permite administrar roles sin requerir acceso al contenido de proyectos', async () => {

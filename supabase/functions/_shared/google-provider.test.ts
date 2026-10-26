@@ -179,6 +179,20 @@ describe('Optional Google Tasks OAuth grant', () => {
 });
 
 describe('Budget, network and error handling', () => {
+  it.each(['.', '..'])('rejects dot calendar segments before URL normalization: %s', async id => {
+    const { provider, fetch, beforeRequest } = adapter([json({ id })]);
+    await expect(provider.getCalendar('access', id)).rejects.toMatchObject({ reason: 'invalid_resource' });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(beforeRequest).not.toHaveBeenCalled();
+  });
+  it.each([undefined, '*', ' * ', '"one", "two"'])('requires one concrete version for Calendar writes: %s', async etag => {
+    const { provider, fetch, beforeRequest } = adapter([json({ id: write.id }), json({ id: write.id }), new Response(null, { status: 204 })]);
+    await expect(provider.updateEvent('access', 'calendar@example.test', write, etag as string)).rejects.toMatchObject({ reason: 'invalid_resource' });
+    await expect(provider.patchEvent('access', 'calendar@example.test', write, etag as string)).rejects.toMatchObject({ reason: 'invalid_resource' });
+    await expect(provider.deleteEvent('access', 'calendar@example.test', write.id, etag as string)).rejects.toMatchObject({ reason: 'invalid_resource' });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(beforeRequest).not.toHaveBeenCalled();
+  });
   it('reserves every external request including OAuth, reconciliation reads and deletion', async () => {
     const { provider, beforeRequest, fetch } = adapter([
       json(tokenResponse),
@@ -193,8 +207,8 @@ describe('Budget, network and error handling', () => {
     await provider.getCalendar('access', 'calendar@example.test');
     await provider.getEvent('access', 'calendar@example.test', write.id);
     await provider.insertEvent('access', 'calendar@example.test', write);
-    await provider.updateEvent('access', 'calendar@example.test', write);
-    await provider.deleteEvent('access', 'calendar@example.test', write.id);
+    await provider.updateEvent('access', 'calendar@example.test', write, '"current-version"');
+    await provider.deleteEvent('access', 'calendar@example.test', write.id, '"current-version"');
     await provider.revoke('refresh');
     expect(beforeRequest.mock.calls.map(([operation]) => operation)).toEqual([
       'oauth.refresh',

@@ -44,18 +44,25 @@ export async function body(request: Request): Promise<unknown> {
   const reader = request.body.getReader();
   const bytes = new Uint8Array(4096);
   let size = 0;
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new JournalError('INVALID_INPUT')), 2000);
+  });
   try {
     for (;;) {
-      const part = await reader.read();
+      const part = await Promise.race([reader.read(), deadline]);
       if (part.done) break;
       if (part.value.length > bytes.length - size) {
-        await reader.cancel();
         fail('INVALID_INPUT');
       }
       bytes.set(part.value, size);
       size += part.value.length;
     }
+  } catch (error) {
+    void reader.cancel().catch(() => {});
+    throw error;
   } finally {
+    clearTimeout(timer!);
     reader.releaseLock();
   }
   try {

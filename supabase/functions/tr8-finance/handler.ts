@@ -39,19 +39,26 @@ export async function readFinanceBytes(message: Request | Response, limit = MAX_
   const bytes = new Uint8Array(limit);
   const reader = message.body.getReader();
   let length = 0;
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new FinanceError('BODY_TIMEOUT', 408)), 8000);
+  });
   try {
     for (;;) {
-      const part = await reader.read();
+      const part = await Promise.race([reader.read(), deadline]);
       if (part.done) break;
       if (!ArrayBuffer.isView(part.value) || Object.prototype.toString.call(part.value) !== '[object Uint8Array]') throw new FinanceError('INVALID_INPUT');
       if (part.value.byteLength > limit - length) {
-        void reader.cancel().catch(() => {});
         throw new FinanceError('ENVELOPE_TOO_LARGE', 413);
       }
       bytes.set(part.value, length);
       length += part.value.byteLength;
     }
+  } catch (error) {
+    void reader.cancel().catch(() => {});
+    throw error;
   } finally {
+    clearTimeout(timer!);
     reader.releaseLock();
   }
   return bytes.slice(0, length);

@@ -7,6 +7,8 @@ export interface McpHttpOptions {
   allowedOrigins?: string[];
 }
 const MAX_BODY = 256 * 1024;
+const BODY_READ_TIMEOUT_MS = 5000;
+class BodyReadInterrupted extends Error {}
 const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 function failure(status: number, code: string, message: string) {
   return Response.json(
@@ -15,28 +17,54 @@ function failure(status: number, code: string, message: string) {
   );
 }
 async function body(request: Request) {
-  if (Number(request.headers.get('content-length')) > MAX_BODY) throw new RangeError();
   if (!request.body) throw new SyntaxError();
   const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  while (true) {
-    const part = await reader.read();
-    if (part.done) break;
-    size += part.value.byteLength;
-    if (size > MAX_BODY) {
-      await reader.cancel();
+  const cancel = () => {
+    // A hostile stream's cancel hook must not keep this request alive either.
+    void reader.cancel().catch(() => undefined);
+  };
+  if (request.signal.aborted) {
+    cancel();
+    reader.releaseLock();
+    throw new BodyReadInterrupted();
+  }
+  let interrupt!: () => void;
+  const interrupted = new Promise<never>((_, reject) => {
+    interrupt = () => {
+      reject(new BodyReadInterrupted());
+      cancel();
+    };
+  });
+  const timeout = setTimeout(interrupt, BODY_READ_TIMEOUT_MS);
+  request.signal.addEventListener('abort', interrupt, { once: true });
+  try {
+    if (Number(request.headers.get('content-length')) > MAX_BODY) {
+      cancel();
       throw new RangeError();
     }
-    chunks.push(part.value);
+    const read = async () => {
+      // Bound memory even when a sender splits its body into tiny chunks. Race
+      // once, rather than retaining an abort-promise listener for every chunk.
+      const bytes = new Uint8Array(MAX_BODY);
+      let size = 0;
+      while (true) {
+        const part = await reader.read();
+        if (part.done) break;
+        if (size + part.value.byteLength > MAX_BODY) {
+          cancel();
+          throw new RangeError();
+        }
+        bytes.set(part.value, size);
+        size += part.value.byteLength;
+      }
+      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, size)));
+    };
+    return await Promise.race([read(), interrupted]);
+  } finally {
+    clearTimeout(timeout);
+    request.signal.removeEventListener('abort', interrupt);
+    reader.releaseLock();
   }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
 }
 
 export async function handleMcpRequest(request: Request, options: McpHttpOptions): Promise<Response> {
@@ -74,6 +102,7 @@ export async function handleMcpRequest(request: Request, options: McpHttpOptions
     try {
       parsedBody = await body(request);
     } catch (cause) {
+      if (cause instanceof BodyReadInterrupted) return failure(408, 'REQUEST_TIMEOUT', 'No se recibió la solicitud MCP a tiempo.');
       return failure(cause instanceof RangeError ? 413 : 400, 'INVALID_REQUEST', 'Solicitud MCP inválida o demasiado grande.');
     }
   }
