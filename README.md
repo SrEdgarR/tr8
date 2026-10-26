@@ -140,8 +140,16 @@ El código JavaScript del prototipo permanece en las demás carpetas de `src/` c
 
 La integración continua ejecuta TypeScript, pruebas, ESLint, formato y compilación. Las pruebas SQL requieren una conexión de administración a una base de pruebas: crean usuarios ficticios dentro de una transacción y revierten sus cambios. No usan contraseñas reales.
 
-La [etapa financiera 6B.4](docs/pulso-6b4/README.md) añade `/finance` al espacio
-personal. Producción muestra el estado de preparación: la admisión de finanzas
-reales sigue cerrada por el ADR de restauración. La interfaz completa se prueba
-con identidades ficticias en una entrada separada; nunca carga saldos de ejemplo
-como si fueran del propietario ni guarda el contenido financiero en React Query.
+Finanzas está activa en el espacio personal. El [contrato productivo actual](docs/finance-release/README.md)
+describe el acceso con la cuenta, sin contraseña privada adicional por defecto,
+y la bóveda cifrada opcional e independiente. Los roles de equipos no conceden
+acceso financiero y los documentos no se guardan en React Query. La
+[etapa 6B.4](docs/pulso-6b4/README.md) conserva el registro histórico del ensayo.
+
+## Auditoría de seguridad
+
+El [informe del 26 de octubre de 2026](docs/security/2026-10-26-audit.md) recoge
+las reproducciones, correcciones y pruebas de seguridad de la aplicación y MCP,
+incluidos los límites que siguen vigentes en el plan gratuito. El acceso del
+navegador comprueba sesiones vivas; las conexiones MCP conservan su caducidad y
+revocación propias. Las altas externas permanecen desactivadas.
