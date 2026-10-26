@@ -584,6 +584,10 @@
     margin-bottom: 18px;
   }
 }
+.tf-plans-page {
+  display: grid;
+  gap: 18px;
+}
 .tf-projection > summary {
   cursor: pointer;
   display: flex;

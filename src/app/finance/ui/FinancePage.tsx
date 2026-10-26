@@ -26,7 +26,7 @@ import type { FinancialSnapshot } from '../domain/workspace-types';
 import type { FinancialOperation, FinancialAccount } from '../domain/types';
 import { addAccount, updateAccount, accountHasActivity, addEntry, prepareEntryOperation } from '../domain/workspace';
 import { addPairedOperation, addRefund, preparePairedOperation, refundableExpenses } from '../domain/connected-operations';
-import { addPlan, filterHistory, projectSnapshot, resolvePlan } from '../domain/plans';
+import { addPlan, filterHistory, resolvePlan } from '../domain/plans';
 import { calculateFinancialBalances } from '../domain/balances';
 import { calculatePaymentAvailability } from '../domain/payment-availability';
 import { formatMoneyMinor, localToday, parseAmountMinor } from '../domain/money';
@@ -36,6 +36,7 @@ import CreditCardForm from './CreditCardForm';
 import AccountDeleteDialog from './AccountDeleteDialog';
 import CreditCardTile from './CreditCardTile';
 import PaymentAvailabilitySummary from './PaymentAvailabilitySummary';
+import FinancialProjection from './FinancialProjection';
 import { creditCardGroups } from '../domain/credit-card-grouping';
 import type { DataSyncState } from '../../types';
 import './finance.css';
@@ -488,7 +489,12 @@ export function FinancialDashboard({
           />
         )}
         {tab === 'Movimientos' && <History snapshot={snapshot} />}
-        {tab === 'Planes' && <Plans snapshot={snapshot} finance={f} readOnly={readOnly} />}
+        {tab === 'Planes' && (
+          <div className="tf-plans-page">
+            <Plans snapshot={snapshot} finance={f} readOnly={readOnly} />
+            {snapshot.financialSpace.accounts.length > 0 && <FinancialProjection snapshot={snapshot} />}
+          </div>
+        )}
         {tab === 'Seguridad' && security}
       </div>
       {editor && (
@@ -546,9 +552,6 @@ function Overview({
 }) {
   const space = snapshot.financialSpace;
   const date = localToday();
-  const [target, setTarget] = useState(localToday(new Date(Date.now() + 30 * 86400000)));
-  const [projection, setProjection] = useState<ReturnType<typeof projectSnapshot> | null>(null);
-  const [error, setError] = useState('');
   let balances: ReturnType<typeof calculateFinancialBalances> | null = null;
   let availability: ReturnType<typeof calculatePaymentAvailability> = [];
   let balanceError = '';
@@ -630,55 +633,6 @@ function Overview({
             })}
           </div>
         </section>
-      )}
-      {!accountsOnly && space.accounts.length > 0 && (
-        <details className="tf-card tf-projection">
-          <summary>
-            <CalendarClock size={18} aria-hidden="true" /> Proyección
-          </summary>
-          <p className="muted">
-            Estimación con los planes pendientes de fecha futura dentro del horizonte. Los planes no alteran tu saldo real y las monedas no se suman entre sí.
-          </p>
-          <form
-            className="tf-actions"
-            onSubmit={e => {
-              e.preventDefault();
-              try {
-                if (target < date || Date.parse(target) - Date.parse(date) > 366 * 86400000)
-                  throw Error('Elige un horizonte de hasta un año posterior a la fecha de saldo.');
-                setProjection(projectSnapshot(snapshot, date, target));
-                setError('');
-              } catch (error) {
-                setProjection(null);
-                setError(error instanceof Error ? error.message : 'No se pudo calcular.');
-              }
-            }}
-          >
-            <Field label="Proyectar hasta">
-              <input
-                required
-                type="date"
-                value={target}
-                onChange={e => {
-                  setTarget(e.target.value);
-                  setProjection(null);
-                }}
-              />
-            </Field>
-            <button className="btn btn-secondary">Calcular proyección</button>
-          </form>
-          {error && <ErrorNotice>{error}</ErrorNotice>}
-          {projection && (
-            <div className="tf-grid">
-              {projection.projected.currencies.map(c => (
-                <div key={c.currency} className="tf-projected">
-                  <span>{c.currency} · Patrimonio proyectado</span>
-                  <strong>{money(c.netWorthMinor, c.currency)}</strong>
-                </div>
-              ))}
-            </div>
-          )}
-        </details>
       )}
     </>
   );
