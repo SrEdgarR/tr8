@@ -106,6 +106,7 @@ export function updateAccount(snapshot: FinancialSnapshot, accountId: string, ca
   const space = validateFinancialSnapshot(snapshot).financialSpace;
   const previous = space.accounts.find(a => a.id === accountId);
   if (!previous) throw new Error('La cuenta ya no está disponible.');
+  if (previous.type === 'credit' && previous.creditCard) throw new Error('Edita la tarjeta completa para conservar sus monedas y calendario.');
   const input = closedRecord(candidate, [
     'name',
     'type',

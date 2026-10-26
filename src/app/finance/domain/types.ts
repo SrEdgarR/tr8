@@ -1,3 +1,4 @@
+import type { CreditCardMetadata } from './credit-cards';
 // Pure in-memory contracts. These types are not a repository or a remote schema.
 export interface CurrencyDefinition {
   code: string;
@@ -13,7 +14,8 @@ interface AccountBase {
   openingDate: string;
 }
 
-export type FinancialAccount = (AccountBase & { type: 'debit' | 'cash' }) | (AccountBase & { type: 'credit'; creditLimitMinor: number });
+export type FinancialAccount =
+  (AccountBase & { type: 'debit' | 'cash' }) | (AccountBase & { type: 'credit'; creditLimitMinor: number; creditCard?: CreditCardMetadata });
 
 interface OperationBase {
   id: string;

@@ -1,14 +1,25 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Download, FileUp, ShieldCheck, Wallet } from 'lucide-react';
 import FinancePage, { FinancialDashboard } from './FinancePage';
 import type { FinanceApi } from './api';
+import type { DataSyncState } from '../../types';
 import type { AccountFinanceApi, AccountFinanceRecord, AccountFinanceWrite } from './account-api';
 import { validateFinancialSnapshot } from '../domain/snapshot';
 import { MAX_PLAINTEXT_BYTES, parseStrictJson } from '../compatibility/protocol';
 import type { FinancialSnapshot } from '../domain/workspace-types';
 import { Busy, ErrorNotice } from '../../workspace/ui';
 import './finance.css';
-export default function PersonalFinancePage({ accountApi, vaultApi }: { accountApi: AccountFinanceApi; vaultApi: FinanceApi }) {
+export default function PersonalFinancePage({
+  accountApi,
+  vaultApi,
+  onSyncState,
+  onRefreshReady,
+}: {
+  accountApi: AccountFinanceApi;
+  vaultApi: FinanceApi;
+  onSyncState?: (state: DataSyncState) => void;
+  onRefreshReady?: (refresh: (() => void) | null) => void;
+}) {
   const [vault, setVault] = useState(false);
   if (vault)
     return (
@@ -17,17 +28,27 @@ export default function PersonalFinancePage({ accountApi, vaultApi }: { accountA
           <ArrowLeft size={15} aria-hidden="true" />
           Volver a Finanzas
         </button>
-        <FinancePage api={vaultApi} />
+        <FinancePage api={vaultApi} onSyncState={onSyncState} />
       </>
     );
-  return <AccountFinancePage api={accountApi} onVault={() => setVault(true)} />;
+  return <AccountFinancePage api={accountApi} onVault={() => setVault(true)} onSyncState={onSyncState} onRefreshReady={onRefreshReady} />;
 }
 function errorMessage(error: unknown) {
   return error && typeof error === 'object' && 'code' in error && error.code === 'PT409'
     ? 'Tus finanzas cambiaron en otra sesión. Recarga para consultar la versión actual.'
     : 'No se pudo confirmar la operación. Puedes reintentar el mismo guardado o recargar la versión guardada.';
 }
-function AccountFinancePage({ api, onVault }: { api: AccountFinanceApi; onVault: () => void }) {
+function AccountFinancePage({
+  api,
+  onVault,
+  onSyncState,
+  onRefreshReady,
+}: {
+  api: AccountFinanceApi;
+  onVault: () => void;
+  onSyncState?: (state: DataSyncState) => void;
+  onRefreshReady?: (refresh: (() => void) | null) => void;
+}) {
   const [record, setRecord] = useState<AccountFinanceRecord | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -37,6 +58,7 @@ function AccountFinancePage({ api, onVault }: { api: AccountFinanceApi; onVault:
     current = useRef<AccountFinanceRecord | null>(null);
   useEffect(() => {
     const ticket = ++generation.current;
+    onSyncState?.('checking');
     current.current = null;
     setRecord(null);
     setPending(null);
@@ -51,16 +73,21 @@ function AccountFinancePage({ api, onVault }: { api: AccountFinanceApi; onVault:
       setBusy(false);
       saving.current = false;
       setError('Tu sesión cambió. Vuelve a iniciar sesión.');
+      onSyncState?.('error');
     });
     void api.load().then(
       value => {
         if (ticket === generation.current) {
           current.current = value;
           setRecord(value);
+          onSyncState?.('synced');
         }
       },
       () => {
-        if (ticket === generation.current) setError('No se pudieron cargar tus finanzas. Vuelve a intentarlo.');
+        if (ticket === generation.current) {
+          setError('No se pudieron cargar tus finanzas. Vuelve a intentarlo.');
+          onSyncState?.('error');
+        }
       },
     );
     return () => {
@@ -69,12 +96,14 @@ function AccountFinancePage({ api, onVault }: { api: AccountFinanceApi; onVault:
       // eslint-disable-next-line react-hooks/exhaustive-deps
       generation.current++;
       current.current = null;
+      onSyncState?.('checking');
     };
-  }, [api]);
-  async function reload() {
+  }, [api, onSyncState]);
+  const reload = useCallback(async () => {
     if (saving.current) return;
     const ticket = ++generation.current;
     setBusy(true);
+    onSyncState?.('checking');
     try {
       const value = await api.load();
       if (ticket === generation.current) {
@@ -82,18 +111,33 @@ function AccountFinancePage({ api, onVault }: { api: AccountFinanceApi; onVault:
         setRecord(value);
         setPending(null);
         setError('');
+        onSyncState?.('synced');
       }
     } catch (e) {
-      if (ticket === generation.current) setError(errorMessage(e));
+      if (ticket === generation.current) {
+        setError(errorMessage(e));
+        onSyncState?.('error');
+      }
     } finally {
       if (ticket === generation.current) setBusy(false);
     }
-  }
+  }, [api, onSyncState]);
+  useEffect(() => {
+    onRefreshReady?.(
+      busy || pending
+        ? null
+        : () => {
+            void reload();
+          },
+    );
+    return () => onRefreshReady?.(null);
+  }, [busy, pending, reload, onRefreshReady]);
   async function persist(write: AccountFinanceWrite) {
     if (saving.current) return;
     saving.current = true;
     setBusy(true);
     setError('');
+    onSyncState?.('saving');
     const ticket = generation.current;
     try {
       const saved = await api.save(write);
@@ -101,6 +145,7 @@ function AccountFinancePage({ api, onVault }: { api: AccountFinanceApi; onVault:
         current.current = saved;
         setRecord(saved);
         setPending(null);
+        onSyncState?.('synced');
       }
     } catch (e) {
       if (ticket === generation.current) {
@@ -111,6 +156,7 @@ function AccountFinancePage({ api, onVault }: { api: AccountFinanceApi; onVault:
           setPending(null);
         } else setPending(write);
         setError(errorMessage(e));
+        onSyncState?.(denied ? 'error' : 'pending');
       }
     } finally {
       if (ticket === generation.current) {

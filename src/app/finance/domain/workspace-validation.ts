@@ -1,3 +1,4 @@
+import { validateCreditCardGroups } from './credit-card-grouping';
 import { normalizeFinancialAccounts } from './accounts';
 import { catalogDefinitions } from './catalog';
 import type { FinancialSpace } from './workspace-types';
@@ -38,7 +39,7 @@ export function validateFinancialSpace(candidate: unknown): FinancialSpace {
       'openingBalanceMinor',
       'openingDate',
       'type',
-      ...(type === 'credit' ? ['creditLimitMinor'] : []),
+      ...(type === 'credit' ? ['creditLimitMinor', ...(Object.hasOwn(value as object, 'creditCard') ? ['creditCard'] : [])] : []),
     ]);
     financialText(account.id, 128);
     financialText(account.name);
@@ -46,6 +47,7 @@ export function validateFinancialSpace(candidate: unknown): FinancialSpace {
     if (String(account.id).trim() !== account.id || Object.is(account.openingBalanceMinor, -0)) throw new Error('La cuenta no es válida.');
   }
   const accounts = normalizeFinancialAccounts(rawAccounts, definitions);
+  validateCreditCardGroups(accounts);
   const operations = validateWorkspaceOperations(space.operations, accounts, definitions, version);
   return {
     domainSchemaVersion: version,

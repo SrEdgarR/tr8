@@ -1,4 +1,4 @@
-import { cloneElement, useId, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -13,7 +13,6 @@ import {
   FileUp,
   MoreHorizontal,
   Landmark,
-  CreditCard,
   Coins,
   CalendarDays,
   LayoutGrid,
@@ -31,7 +30,13 @@ import { addPlan, filterHistory, projectSnapshot, resolvePlan } from '../domain/
 import { calculateFinancialBalances } from '../domain/balances';
 import { formatMoneyMinor, localToday, parseAmountMinor } from '../domain/money';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../domain/categories';
+import Field from './FinanceField';
+import CreditCardForm from './CreditCardForm';
+import CreditCardTile from './CreditCardTile';
+import { creditCardGroups } from '../domain/credit-card-grouping';
+import type { DataSyncState } from '../../types';
 import './finance.css';
+import './credit-cards.css';
 
 type Finance = ReturnType<typeof useFinance>;
 const kinds = { income: 'Ingreso', expense: 'Gasto', transfer: 'Transferencia', 'card-payment': 'Pago de tarjeta', refund: 'Reembolso' };
@@ -56,18 +61,6 @@ function decimalAmount(amount: number): string {
   const value = BigInt(amount),
     absolute = value < 0n ? -value : value;
   return `${value < 0n ? '-' : ''}${absolute / 100n}.${String(absolute % 100n).padStart(2, '0')}`;
-}
-function Field({ label, icon, children }: { label: string; icon?: ReactNode; children: ReactElement<{ id?: string }> }) {
-  const fieldId = useId();
-  return (
-    <div className="pw-field">
-      <label htmlFor={fieldId}>
-        {icon}
-        {label}
-      </label>
-      {cloneElement(children, { id: fieldId })}
-    </div>
-  );
 }
 function Secret({ label, value, onChange, minLength }: { label: string; value: string; onChange: (v: string) => void; minLength?: number }) {
   return (
@@ -105,9 +98,25 @@ function PrivateForm({ children, onSubmit, busy, label }: { children: ReactNode;
   );
 }
 
-export default function FinancePage({ api }: { api: FinanceApi }) {
+export default function FinancePage({ api, onSyncState }: { api: FinanceApi; onSyncState?: (state: DataSyncState) => void }) {
   const finance = useFinance(api);
   const { view, busy } = finance;
+  const syncState: DataSyncState = busy
+    ? view.stage === 'checking'
+      ? 'checking'
+      : 'saving'
+    : view.error || view.stage === 'unavailable'
+      ? 'error'
+      : view.stage === 'open'
+        ? 'synced'
+        : ['pending', 'custody', 'preview'].includes(view.stage)
+          ? 'pending'
+          : view.stage === 'checking'
+            ? 'checking'
+            : 'locked';
+  useEffect(() => {
+    onSyncState?.(syncState);
+  }, [onSyncState, syncState]);
   return (
     <section className="tf-page" aria-label="Finanzas personales">
       <header className="tf-heading">
@@ -421,8 +430,8 @@ export function FinancialDashboard({
       {tab !== 'Seguridad' && (
         <div className="tf-toolbar">
           <span className="muted">
-            {snapshot.financialSpace.accounts.length} {snapshot.financialSpace.accounts.length === 1 ? 'cuenta' : 'cuentas'} ·{' '}
-            {snapshot.financialSpace.operations.length} {snapshot.financialSpace.operations.length === 1 ? 'movimiento' : 'movimientos'}
+            {creditCardGroups(snapshot.financialSpace.accounts).length} {creditCardGroups(snapshot.financialSpace.accounts).length === 1 ? 'cuenta' : 'cuentas'}{' '}
+            · {snapshot.financialSpace.operations.length} {snapshot.financialSpace.operations.length === 1 ? 'movimiento' : 'movimientos'}
           </span>
           <div className="tf-actions">
             <button
@@ -581,23 +590,30 @@ function Overview({
       ) : (
         <section className="tf-accounts-section" aria-label="Cuentas financieras">
           <div className="tf-section-title">
-            <h2>Tus cuentas</h2>
+            {!accountsOnly && <h2>Tus cuentas</h2>}
             <p className="muted">Administra cada cuenta y sus datos de apertura.</p>
           </div>
           <div className="tf-grid">
-            {space.accounts.map(a => {
+            {creditCardGroups(space.accounts).map(group => {
+              const a = group[0];
+              if (a.type === 'credit')
+                return (
+                  <CreditCardTile
+                    key={a.creditCard?.id ?? a.id}
+                    accounts={group}
+                    snapshot={snapshot}
+                    date={date}
+                    balances={balances?.accounts ?? []}
+                    canEdit={canEdit}
+                    onEdit={onEdit}
+                  />
+                );
               const b = balances?.accounts.find(b => b.accountId === a.id);
               return (
                 <article key={a.id} className="tf-card">
                   <div className="tf-account-heading">
                     <span className="tf-account-icon">
-                      {a.type === 'credit' ? (
-                        <CreditCard size={18} aria-hidden="true" />
-                      ) : a.type === 'debit' ? (
-                        <Landmark size={18} aria-hidden="true" />
-                      ) : (
-                        <Wallet size={18} aria-hidden="true" />
-                      )}
+                      {a.type === 'debit' ? <Landmark size={18} aria-hidden="true" /> : <Wallet size={18} aria-hidden="true" />}
                     </span>
                     <button className="ibtn" aria-label={`Configurar cuenta ${a.name}`} disabled={!canEdit} onClick={() => onEdit(a)}>
                       <MoreHorizontal size={18} aria-hidden="true" />
@@ -611,10 +627,9 @@ function Overview({
                     </p>
                   )}
                   <p className="muted">
-                    {a.type === 'credit' ? 'Tarjeta de crédito' : a.type === 'cash' ? 'Efectivo' : 'Cuenta bancaria'} · {a.currency}
+                    {a.type === 'cash' ? 'Efectivo' : 'Cuenta bancaria'} · {a.currency}
                   </p>
                   <strong className="tf-amount">{b ? money(b.balanceMinor, a.currency) : '—'}</strong>
-                  {a.type === 'credit' && b && <p className="muted">Crédito disponible: {money(b.availableCreditMinor!, a.currency)}</p>}
                   <p className="muted">Apertura: {a.openingDate}</p>
                 </article>
               );
@@ -786,6 +801,8 @@ function RecordForm({
   const s = snapshot.financialSpace;
   const [error, setError] = useState('');
   const [type, setType] = useState<string>(editingAccount?.type ?? 'cash');
+  const [accountName, setAccountName] = useState(editingAccount?.name ?? '');
+  const [bankName, setBankName] = useState(editingAccount?.bankName ?? '');
   const [operation, setOperation] = useState<FinancialOperation['kind']>('expense');
   const [account, setAccount] = useState(s.accounts[0]?.id ?? '');
   const [currency, setCurrency] = useState(
@@ -841,6 +858,19 @@ function RecordForm({
       setError(error instanceof Error ? error.message : 'Revisa los datos del formulario.');
     }
   }
+  if (kind === 'account' && type === 'credit')
+    return (
+      <CreditCardForm
+        snapshot={snapshot}
+        initialAccount={editingAccount}
+        initialName={accountName}
+        initialBank={bankName}
+        busy={busy}
+        onClose={onClose}
+        onSave={onSave}
+        onBack={!editingAccount ? () => setType('cash') : undefined}
+      />
+    );
   return (
     <Dialog title={kind === 'account' ? (editingAccount ? 'Configurar cuenta' : 'Nueva cuenta') : 'Nuevo movimiento'} onClose={onClose} busy={busy}>
       <form className="pw-form" onSubmit={submit} autoComplete="off">
@@ -860,10 +890,16 @@ function RecordForm({
                   </p>
                 </div>
                 <Field label="Nombre de la cuenta" icon={<Tag size={14} aria-hidden="true" />}>
-                  <input name="name" required maxLength={120} defaultValue={editingAccount?.name} data-initial-focus />
+                  <input name="name" required maxLength={120} value={accountName} onChange={e => setAccountName(e.target.value)} data-initial-focus />
                 </Field>
                 <Field label="Banco (opcional)" icon={<Landmark size={14} aria-hidden="true" />}>
-                  <input name="bankName" maxLength={120} placeholder="Nombre del banco o institución" defaultValue={editingAccount?.bankName} />
+                  <input
+                    name="bankName"
+                    maxLength={120}
+                    placeholder="Nombre del banco o institución"
+                    value={bankName}
+                    onChange={e => setBankName(e.target.value)}
+                  />
                 </Field>
                 <Field label="Tipo de cuenta" icon={<Wallet size={14} aria-hidden="true" />}>
                   <select disabled={linked} value={type} onChange={e => setType(e.target.value)}>

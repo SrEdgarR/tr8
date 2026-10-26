@@ -37,6 +37,7 @@ import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon, StatusDot } from '.
 import { errorMessage, localDate } from './helpers';
 import { ActivityPanel, ProjectAccessDialog, TeamAdministration } from './Collaboration';
 import { canInProject, canInWorkspace } from './permissions';
+import SyncStatus from './SyncStatus';
 import './workspace.css';
 
 type ProjectActions = {
@@ -594,6 +595,7 @@ function AccountPage({ email, pending, onSignOut, onPasswordReset }: Pick<Worksp
 export default function Workspace(props: WorkspaceProps & { processes?: ReactNode; integrations?: ReactNode; finance?: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const financeView = location.pathname === '/finance' && Boolean(props.finance);
   const [searchParams, setSearchParams] = useSearchParams();
   const [mobileNav, setMobileNav] = useState(false);
   const [projectEditor, setProjectEditor] = useState<{ project?: Project } | null>(null);
@@ -849,20 +851,37 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
             <span className="cur trunc">{pageName}</span>
           </div>
           <div className="sp" />
-          <span className="pw-sync" role="status">
-            {pending ? (
-              'Guardando…'
-            ) : props.refreshing ? (
-              'Actualizando…'
-            ) : (
-              <>
-                <ShieldCheck size={12} aria-hidden="true" />
-                {props.workspace?.kind === 'team' ? 'Acceso por proyecto' : 'Privado'}
-              </>
-            )}
-          </span>
-          <button className="ibtn" aria-label="Actualizar datos" disabled={props.loading || props.refreshing || pending} onClick={props.onRetry}>
-            <RefreshCw size={14} className={props.refreshing ? 'pw-spin' : ''} aria-hidden="true" />
+          <SyncStatus
+            scope={financeView ? 'Finanzas' : 'Proyectos y tareas'}
+            state={
+              props.accessUnavailable
+                ? 'error'
+                : financeView
+                  ? (props.financeSyncState ?? 'checking')
+                  : props.error || actionError
+                    ? 'error'
+                    : pending
+                      ? 'saving'
+                      : props.loading || props.refreshing
+                        ? 'checking'
+                        : 'synced'
+            }
+          />
+          <button
+            className="ibtn"
+            aria-label="Actualizar datos"
+            disabled={
+              financeView
+                ? !props.onRefreshFinance || ['checking', 'saving', 'pending'].includes(props.financeSyncState ?? 'checking')
+                : props.loading || props.refreshing || pending
+            }
+            onClick={financeView ? props.onRefreshFinance : props.onRetry}
+          >
+            <RefreshCw
+              size={14}
+              className={(financeView ? props.financeSyncState === 'checking' || props.financeSyncState === 'saving' : props.refreshing) ? 'pw-spin' : ''}
+              aria-hidden="true"
+            />
           </button>
         </header>
         {(props.error || actionError) && (

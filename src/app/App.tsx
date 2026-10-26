@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -15,7 +15,7 @@ import { createGoogleTasksRepository, type GoogleTasksApi } from './data/google-
 import { callbackRequestedRecovery, configuration, supabase } from './data/client';
 import { createRepository, type WorkspaceData } from './data/repository';
 import { dataError, DataError } from './data/errors';
-import type { CalendarApi, CollaborationApi, Project, Task, WorkspaceProps, WorkspaceSummary } from './types';
+import type { CalendarApi, CollaborationApi, DataSyncState, Project, Task, WorkspaceProps, WorkspaceSummary } from './types';
 import { createFinanceApi, changeFinanceAccountPassword } from './finance/ui/api';
 import { createAccountFinanceApi } from './finance/ui/account-api';
 
@@ -345,6 +345,9 @@ function ScopedWorkspace({
     [client, session.user.id],
   );
   const accountFinanceApi = useMemo(() => createAccountFinanceApi(client, session.user.id), [client, session.user.id]);
+  const [financeSyncState, setFinanceSyncState] = useState<DataSyncState>('checking');
+  const [financeRefresh, setFinanceRefresh] = useState<(() => void) | null>(null);
+  const registerFinanceRefresh = useCallback((refresh: (() => void) | null) => setFinanceRefresh(() => refresh), []);
   const queryClient = useQueryClient();
   const repository = useMemo(() => createRepository(client), [client]);
   const scopeRevision = [...selected.permissions].sort().join('|');
@@ -605,10 +608,18 @@ function ScopedWorkspace({
       capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
       collaboration={collaboration}
       calendar={calendar}
+      financeSyncState={financeSyncState}
+      onRefreshFinance={financeRefresh ?? undefined}
       finance={
         selected.kind === 'personal' ? (
           <Suspense fallback={<div role="status">Abriendo Finanzas…</div>}>
-            <FinancePage key={`${session.user.id}:${selected.id}`} vaultApi={financeApi} accountApi={accountFinanceApi} />
+            <FinancePage
+              key={`${session.user.id}:${selected.id}`}
+              vaultApi={financeApi}
+              accountApi={accountFinanceApi}
+              onSyncState={setFinanceSyncState}
+              onRefreshReady={registerFinanceRefresh}
+            />
           </Suspense>
         ) : undefined
       }

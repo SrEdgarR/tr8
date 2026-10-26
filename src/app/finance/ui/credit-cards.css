@@ -1,0 +1,107 @@
+.tf-card-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.tf-credit-row {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 18px;
+  margin: 18px 0;
+  background: var(--surface);
+}
+.tf-credit-row-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.tf-credit-row-title h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.tf-cycle-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border: 1px solid var(--border);
+  padding: 14px;
+  border-radius: var(--r-lg);
+  margin: 18px 0;
+}
+.tf-cycle-preview span {
+  display: grid;
+  gap: 5px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.tf-cycle-preview strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+.tf-credit-balances {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 20px;
+  margin-top: 18px;
+}
+.tf-credit-pocket + .tf-credit-pocket {
+  border-left: 1px solid var(--border);
+  padding-left: 20px;
+}
+.tf-credit-detail {
+  margin: 14px 0 0;
+  display: grid;
+  gap: 10px;
+}
+.tf-credit-detail div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 12px;
+}
+.tf-credit-detail dt {
+  color: var(--text-3);
+}
+.tf-credit-detail dd {
+  margin: 0;
+  text-align: right;
+}
+.tf-credit-cycle {
+  border-top: 1px solid var(--border);
+  margin-top: 18px;
+  padding-top: 14px;
+}
+.tf-credit-cycle > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.tf-cycle-alert {
+  color: var(--accent);
+}
+.tf-credit-card .tf-amount {
+  font-size: 22px;
+}
+@media (min-width: 760px) {
+  .tf-credit-card:has(.tf-credit-pocket:nth-child(2)) {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 600px) {
+  .tf-card-form-grid,
+  .tf-cycle-preview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tf-credit-pocket + .tf-credit-pocket {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+    padding-top: 20px;
+  }
+}

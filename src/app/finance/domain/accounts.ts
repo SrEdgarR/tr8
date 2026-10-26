@@ -1,3 +1,4 @@
+import { validateCreditCardMetadata } from './credit-cards';
 import type { CurrencyDefinition, FinancialAccount } from './types';
 import { requireCurrency, requireCurrencyDefinitions, requireDate, requireMinor, requireRecord, requireText } from './validation';
 
@@ -28,7 +29,12 @@ export function normalizeFinancialAccount(candidate: unknown, currencies: readon
   if (input.type === 'credit') {
     const creditLimitMinor = requireMinor(input.creditLimitMinor);
     if (creditLimitMinor < 0) throw new Error('El límite de crédito no puede ser negativo.');
-    return { ...base, type: 'credit', creditLimitMinor };
+    return {
+      ...base,
+      type: 'credit',
+      creditLimitMinor,
+      ...(input.creditCard === undefined ? {} : { creditCard: validateCreditCardMetadata(input.creditCard) }),
+    };
   }
   throw new Error('Selecciona una cuenta de débito, efectivo o tarjeta.');
 }

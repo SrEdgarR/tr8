@@ -229,7 +229,11 @@ export interface WorkspaceInvitation {
   created_at: string;
 }
 
+export type DataSyncState = 'checking' | 'saving' | 'synced' | 'pending' | 'error' | 'locked';
+
 export interface WorkspaceProps {
+  financeSyncState?: DataSyncState;
+  onRefreshFinance?: () => void;
   workspace?: WorkspaceSummary;
   workspaces?: WorkspaceSummary[];
   readOnly?: boolean;

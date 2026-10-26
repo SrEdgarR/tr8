@@ -1899,3 +1899,20 @@
 .pw-project-settings-actions .btn {
   justify-content: flex-start;
 }
+
+.pw-sync {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+}
+.pw-sync[data-state='synced'] {
+  color: var(--st-done, #79b994);
+}
+.pw-sync[data-state='pending'],
+.pw-sync[data-state='offline'] {
+  color: var(--st-progress, #d0ad66);
+}
+.pw-sync[data-state='error'] {
+  color: var(--danger, #e27d7d);
+}
