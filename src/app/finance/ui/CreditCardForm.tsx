@@ -1,3 +1,4 @@
+import './credit-card-form-layout.css';
 import { useState, type FormEvent } from 'react';
 import { CalendarDays, Coins, CreditCard, Landmark, Link2, Plus, Tag, Trash2 } from 'lucide-react';
 import { Dialog, ErrorNotice } from '../../workspace/ui';
@@ -122,153 +123,163 @@ export default function CreditCardForm({
     }
   }
   return (
-    <Dialog title={initial ? 'Configurar tarjeta' : 'Nueva tarjeta de crédito'} onClose={onClose} busy={busy} wide>
+    <Dialog title={initial ? 'Configurar tarjeta' : 'Nueva tarjeta de crédito'} onClose={onClose} busy={busy} wide className="tf-card-dialog">
       <form className="pw-form tf-card-form" onSubmit={submit} autoComplete="off">
         <fieldset className="tf-form-fields" disabled={busy}>
           <div className="pw-form-body">
             {error && <ErrorNotice>{error}</ErrorNotice>}
-            <div className="tf-form-intro">
-              <span className="tf-account-icon">
-                <CreditCard size={22} />
-              </span>
-              <p>Una tarjeta, con deuda y límite independientes para cada moneda.</p>
-            </div>
-            <div className="tf-card-form-grid">
-              <Field label="Nombre de la tarjeta" icon={<Tag size={14} />}>
-                <input required maxLength={120} value={name} onChange={e => setName(e.target.value)} data-initial-focus />
-              </Field>
-              <Field label="Banco (opcional)" icon={<Landmark size={14} />}>
-                <input maxLength={120} value={bank} onChange={e => setBank(e.target.value)} />
-              </Field>
-              <Field label="Día de corte" icon={<CalendarDays size={14} />}>
-                <input required type="number" min={1} max={31} value={cut || ''} onChange={e => setCut(Number(e.target.value))} />
-              </Field>
-              <Field label="Día de pago programado" icon={<CalendarDays size={14} />}>
-                <input required type="number" min={1} max={31} value={pay || ''} onChange={e => setPay(Number(e.target.value))} />
-              </Field>
-            </div>
-            {dates && (
-              <div className="tf-cycle-preview">
-                <span>
-                  Último corte <strong>{dates.lastStatementDate}</strong>
-                </span>
-                <span>
-                  Pago programado <strong>{dates.paymentDate}</strong>
-                </span>
-                <span>
-                  Próximo corte <strong>{dates.nextStatementDate}</strong>
-                </span>
-                <span>
-                  Siguiente pago <strong>{dates.nextPaymentDate}</strong>
-                </span>
-              </div>
-            )}
-            <p className="muted">
-              El calendario no registra pagos automáticamente. Indica cuánto queda pendiente del último corte; los pagos que ya hiciste deben estar descontados.
-            </p>
-            {rows.map((r, index) => (
-              <section className="tf-credit-row" key={r.key} aria-label={`Saldo ${r.currency}`}>
-                <div className="tf-credit-row-title">
-                  <h3>{r.currency} · Saldo y límite</h3>
-                  {!members.some(a => a.id === r.accountId) && rows.length > 1 && (
+            <div className="tf-card-layout">
+              <section className="tf-card-config" aria-label="Datos y calendario de la tarjeta">
+                <div className="tf-form-intro">
+                  <span className="tf-account-icon">
+                    <CreditCard size={22} />
+                  </span>
+                  <p>Una tarjeta, con deuda y límite independientes para cada moneda.</p>
+                </div>
+                <div className="tf-card-form-grid">
+                  <Field label="Nombre de la tarjeta" icon={<Tag size={14} />}>
+                    <input required maxLength={120} value={name} onChange={e => setName(e.target.value)} data-initial-focus />
+                  </Field>
+                  <Field label="Banco (opcional)" icon={<Landmark size={14} />}>
+                    <input maxLength={120} value={bank} onChange={e => setBank(e.target.value)} />
+                  </Field>
+                  <Field label="Día de corte" icon={<CalendarDays size={14} />}>
+                    <input required type="number" min={1} max={31} value={cut || ''} onChange={e => setCut(Number(e.target.value))} />
+                  </Field>
+                  <Field label="Día de pago programado" icon={<CalendarDays size={14} />}>
+                    <input required type="number" min={1} max={31} value={pay || ''} onChange={e => setPay(Number(e.target.value))} />
+                  </Field>
+                </div>
+                {dates && (
+                  <div className="tf-cycle-preview">
+                    <span>
+                      Último corte <strong>{dates.lastStatementDate}</strong>
+                    </span>
+                    <span>
+                      Pago programado <strong>{dates.paymentDate}</strong>
+                    </span>
+                    <span>
+                      Próximo corte <strong>{dates.nextStatementDate}</strong>
+                    </span>
+                    <span>
+                      Siguiente pago <strong>{dates.nextPaymentDate}</strong>
+                    </span>
+                  </div>
+                )}
+                <p className="muted">
+                  El calendario no registra pagos automáticamente. Indica cuánto queda pendiente del último corte; los pagos que ya hiciste deben estar
+                  descontados.
+                </p>
+              </section>
+              <section className="tf-card-balances" aria-label="Saldos por moneda">
+                <div className="tf-card-currency-grid">
+                  {rows.map((r, index) => (
+                    <section className="tf-credit-row" key={r.key} aria-label={`Saldo ${r.currency}`}>
+                      <div className="tf-credit-row-title">
+                        <h3>{r.currency} · Saldo y límite</h3>
+                        {!members.some(a => a.id === r.accountId) && rows.length > 1 && (
+                          <button
+                            type="button"
+                            className="ibtn"
+                            aria-label={`Quitar moneda ${r.currency}`}
+                            onClick={() => setRows(old => old.filter(a => a.key !== r.key))}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+                      {r.accountId && (
+                        <p className="muted">
+                          Saldo existente: {space.accounts.find(a => a.id === r.accountId)?.name}. Se conservan sus movimientos y saldo de apertura.
+                        </p>
+                      )}
+                      <div className="tf-card-form-grid">
+                        <Field label={`Moneda ${index + 1}`} icon={<Coins size={14} />}>
+                          <select disabled={Boolean(r.accountId)} value={r.currency} onChange={e => change(r.key, { currency: e.target.value })}>
+                            {space.currencyDefinitions
+                              .filter(c => c.code === r.currency || !rows.some(row => row.currency === c.code))
+                              .map(c => (
+                                <option key={c.code}>{c.code}</option>
+                              ))}
+                          </select>
+                        </Field>
+                        <Field label={`Límite de crédito · ${r.currency}`} icon={<CreditCard size={14} />}>
+                          <input required inputMode="decimal" value={r.limit} onChange={e => change(r.key, { limit: e.target.value })} />
+                        </Field>
+                        <Field label={`Deuda total actual · ${r.currency}`} icon={<Coins size={14} />}>
+                          <input
+                            required
+                            readOnly={Boolean(r.accountId)}
+                            inputMode="decimal"
+                            value={r.total}
+                            onChange={e => change(r.key, { total: e.target.value })}
+                          />
+                        </Field>
+                        <Field label={`Pendiente del corte ${dates?.lastStatementDate ?? ''} · ${r.currency}`} icon={<CalendarDays size={14} />}>
+                          <input
+                            required={!r.defer}
+                            disabled={r.defer}
+                            inputMode="decimal"
+                            value={r.pending}
+                            onChange={e => change(r.key, { pending: e.target.value })}
+                            placeholder="0,00"
+                          />
+                        </Field>
+                      </div>
+                      <label className="tf-checkbox tf-defer-control">
+                        <input type="checkbox" checked={r.defer} onChange={e => change(r.key, { defer: e.target.checked })} />
+                        <span>Completar la deuda al corte después</span>
+                      </label>
+                      {!r.defer && r.pending !== '' && dates && (
+                        <p className="muted">
+                          Pendiente para el {dates.paymentDate}:{' '}
+                          {(() => {
+                            try {
+                              return formatMoneyMinor(
+                                parseAmountMinor(r.pending, 2, { allowZero: true }),
+                                space.currencyDefinitions.find(c => c.code === r.currency)!,
+                              );
+                            } catch {
+                              return 'Revisa el importe';
+                            }
+                          })()}
+                        </p>
+                      )}
+                    </section>
+                  ))}
+                </div>
+                <div className="tf-actions">
+                  {rows.length < space.currencyDefinitions.length && (
                     <button
+                      className="btn btn-secondary"
                       type="button"
-                      className="ibtn"
-                      aria-label={`Quitar moneda ${r.currency}`}
-                      onClick={() => setRows(old => old.filter(a => a.key !== r.key))}
+                      onClick={() => {
+                        const c = space.currencyDefinitions.find(c => !rows.some(r => r.currency === c.code));
+                        if (c) setRows(old => [...old, { key: crypto.randomUUID(), currency: c.code, limit: '0', total: '0', pending: '', defer: false }]);
+                      }}
                     >
-                      <Trash2 size={15} />
+                      <Plus size={14} />
+                      Añadir otra moneda
                     </button>
                   )}
-                </div>
-                {r.accountId && (
-                  <p className="muted">
-                    Saldo existente: {space.accounts.find(a => a.id === r.accountId)?.name}. Se conservan sus movimientos y saldo de apertura.
-                  </p>
-                )}
-                <div className="tf-card-form-grid">
-                  <Field label={`Moneda ${index + 1}`} icon={<Coins size={14} />}>
-                    <select disabled={Boolean(r.accountId)} value={r.currency} onChange={e => change(r.key, { currency: e.target.value })}>
-                      {space.currencyDefinitions
-                        .filter(c => c.code === r.currency || !rows.some(row => row.currency === c.code))
-                        .map(c => (
-                          <option key={c.code}>{c.code}</option>
+                  {linkable.length > 0 && (
+                    <Field label="Vincular saldo existente" icon={<Link2 size={14} />}>
+                      <select value="" onChange={e => link(e.target.value)}>
+                        <option value="">Selecciona otra moneda de esta tarjeta</option>
+                        {linkable.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.name} · {a.currency}
+                          </option>
                         ))}
-                    </select>
-                  </Field>
-                  <Field label={`Límite de crédito · ${r.currency}`} icon={<CreditCard size={14} />}>
-                    <input required inputMode="decimal" value={r.limit} onChange={e => change(r.key, { limit: e.target.value })} />
-                  </Field>
-                  <Field label={`Deuda total actual · ${r.currency}`} icon={<Coins size={14} />}>
-                    <input
-                      required
-                      readOnly={Boolean(r.accountId)}
-                      inputMode="decimal"
-                      value={r.total}
-                      onChange={e => change(r.key, { total: e.target.value })}
-                    />
-                  </Field>
-                  <Field label={`Pendiente del corte ${dates?.lastStatementDate ?? ''} · ${r.currency}`} icon={<CalendarDays size={14} />}>
-                    <input
-                      required={!r.defer}
-                      disabled={r.defer}
-                      inputMode="decimal"
-                      value={r.pending}
-                      onChange={e => change(r.key, { pending: e.target.value })}
-                      placeholder="0,00"
-                    />
-                  </Field>
+                      </select>
+                    </Field>
+                  )}
                 </div>
-                <label className="tf-checkbox">
-                  <input type="checkbox" checked={r.defer} onChange={e => change(r.key, { defer: e.target.checked })} /> Completar la deuda al corte después
-                </label>
-                {!r.defer && r.pending !== '' && dates && (
-                  <p className="muted">
-                    Pendiente para el {dates.paymentDate}:{' '}
-                    {(() => {
-                      try {
-                        return formatMoneyMinor(
-                          parseAmountMinor(r.pending, 2, { allowZero: true }),
-                          space.currencyDefinitions.find(c => c.code === r.currency)!,
-                        );
-                      } catch {
-                        return 'Revisa el importe';
-                      }
-                    })()}
-                  </p>
+                {rows.some(r => r.accountId) && (
+                  <p className="muted">Guardar reúne los saldos seleccionados en una tarjeta. No suma monedas ni elimina cuentas o movimientos.</p>
                 )}
               </section>
-            ))}
-            <div className="tf-actions">
-              {rows.length < space.currencyDefinitions.length && (
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  onClick={() => {
-                    const c = space.currencyDefinitions.find(c => !rows.some(r => r.currency === c.code));
-                    if (c) setRows(old => [...old, { key: crypto.randomUUID(), currency: c.code, limit: '0', total: '0', pending: '', defer: false }]);
-                  }}
-                >
-                  <Plus size={14} />
-                  Añadir otra moneda
-                </button>
-              )}
-              {linkable.length > 0 && (
-                <Field label="Vincular saldo existente" icon={<Link2 size={14} />}>
-                  <select value="" onChange={e => link(e.target.value)}>
-                    <option value="">Selecciona otra moneda de esta tarjeta</option>
-                    {linkable.map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} · {a.currency}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
             </div>
-            {rows.some(r => r.accountId) && (
-              <p className="muted">Guardar reúne los saldos seleccionados en una tarjeta. No suma monedas ni elimina cuentas o movimientos.</p>
-            )}
           </div>
           <div className="pw-form-footer">
             {onBack && (

@@ -1,0 +1,275 @@
+/* This dialog lays out card identity and currency balances side by side. */
+.pw-dialog.tf-card-dialog {
+  width: min(1440px, calc(100vw - 40px));
+  max-width: none;
+  max-height: calc(100dvh - 40px);
+}
+.pw-dialog.tf-card-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tf-card-dialog > .pw-dialog-head,
+.tf-card-dialog .pw-form-footer {
+  flex-shrink: 0;
+}
+.tf-card-dialog .tf-card-form,
+.tf-card-dialog .tf-form-fields {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.tf-card-dialog .tf-card-form {
+  flex: 1 1 auto;
+}
+.tf-card-dialog .pw-form-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+}
+.tf-card-dialog .tf-card-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  min-width: 0;
+}
+.tf-card-dialog .tf-card-config,
+.tf-card-dialog .tf-card-balances {
+  min-width: 0;
+}
+.tf-card-dialog .tf-card-config {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.tf-card-dialog .tf-card-config .tf-form-intro {
+  margin: 0;
+}
+.tf-card-dialog .tf-card-config > .tf-card-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.tf-card-dialog .tf-card-config > .tf-card-form-grid > .pw-field:nth-child(-n + 2) {
+  grid-column: 1 / -1;
+}
+.tf-card-dialog .tf-card-config > .tf-cycle-preview {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+  margin: 0;
+}
+.tf-card-dialog .tf-card-config > p,
+.tf-card-dialog .tf-card-balances > p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.tf-card-dialog .tf-card-currency-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+}
+.tf-card-dialog .tf-credit-row {
+  min-width: 0;
+  margin: 0;
+  padding: 20px;
+  border-radius: 12px;
+}
+.tf-card-dialog .tf-credit-row > .tf-card-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.tf-card-dialog .tf-credit-row > .tf-credit-row-title {
+  margin-bottom: 18px;
+}
+.tf-card-dialog .tf-credit-row > p {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.tf-card-dialog .tf-credit-row > .tf-defer-control + p {
+  margin: 14px 0 0;
+}
+.tf-card-dialog .tf-card-balances > .tf-actions {
+  margin: 18px 0 14px;
+  align-items: end;
+}
+.tf-card-dialog .tf-card-balances > .tf-actions > .pw-field {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.tf-card-dialog .tf-card-config .pw-field > label,
+.tf-card-dialog .tf-credit-row .pw-field > label {
+  line-height: 1.5;
+}
+
+/* Keep a native checkbox's semantics while presenting the TR8 switch. */
+.tf-card-dialog .tf-defer-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2, var(--surface));
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+.tf-card-dialog .tf-defer-control > span {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.tf-card-dialog .tf-defer-control > input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  grid-column: 2;
+  grid-row: 1;
+  display: block;
+  width: 36px;
+  height: 20px;
+  min-width: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-3, #343434);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+.tf-card-dialog .tf-defer-control > input[type='checkbox']::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-3);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+  transition:
+    transform 160ms ease,
+    background 160ms ease;
+}
+.tf-card-dialog .tf-defer-control > input[type='checkbox']:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.tf-card-dialog .tf-defer-control > input[type='checkbox']:checked::before {
+  transform: translateX(16px);
+  background: #fff;
+}
+.tf-card-dialog .tf-defer-control > input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.tf-card-dialog .tf-defer-control > input[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.tf-card-dialog .tf-defer-control:has(> input:checked) {
+  border-color: var(--border-strong);
+  background: var(--accent-soft);
+}
+.tf-card-dialog .tf-defer-control:has(> input:disabled) {
+  color: var(--text-3);
+  cursor: default;
+}
+@media (hover: hover) and (pointer: fine) {
+  .tf-card-dialog .tf-defer-control:hover:not(:has(> input:disabled)) {
+    border-color: var(--border-strong);
+  }
+}
+@media (min-width: 1000px) {
+  .tf-card-dialog .tf-card-layout {
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 28px;
+  }
+  .tf-card-dialog .tf-card-config {
+    border-right: 1px solid var(--border);
+    padding-right: 24px;
+  }
+  .tf-card-dialog .tf-card-currency-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tf-card-dialog .tf-card-currency-grid > .tf-credit-row:only-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1000px) and (max-width: 1439px) {
+  .tf-card-dialog .tf-card-layout {
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 20px;
+  }
+  .tf-card-dialog .tf-card-config {
+    padding-right: 18px;
+  }
+  .tf-card-dialog .tf-credit-row > .tf-card-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tf-card-dialog .tf-credit-row {
+    padding: 16px;
+  }
+}
+@media (min-width: 1000px) and (max-height: 800px) {
+  .tf-card-dialog .pw-form-body {
+    padding: 18px;
+  }
+  .tf-card-dialog .tf-card-config,
+  .tf-card-dialog .tf-card-config > .tf-card-form-grid,
+  .tf-card-dialog .tf-credit-row > .tf-card-form-grid {
+    gap: 12px;
+  }
+  .tf-card-dialog .tf-credit-row {
+    padding: 16px;
+  }
+}
+@media (max-width: 600px) {
+  .pw-dialog.tf-card-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+  .tf-card-dialog .pw-form-body {
+    padding: 18px;
+  }
+  .tf-card-dialog .tf-card-config > .tf-card-form-grid,
+  .tf-card-dialog .tf-credit-row > .tf-card-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tf-card-dialog .tf-card-config > .tf-card-form-grid > .pw-field {
+    grid-column: auto;
+  }
+  .tf-card-dialog .tf-credit-row {
+    padding: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tf-card-dialog .tf-defer-control,
+  .tf-card-dialog .tf-defer-control > input[type='checkbox'],
+  .tf-card-dialog .tf-defer-control > input[type='checkbox']::before {
+    transition: none;
+  }
+}
+@media (min-width: 1000px) {
+  .tf-card-dialog .tf-card-config > .tf-card-form-grid > .pw-field:nth-child(n + 3) > label {
+    min-height: 3em;
+    align-items: flex-end;
+  }
+}
+@media (min-width: 1440px) {
+  .tf-card-dialog .tf-credit-row > .tf-card-form-grid > .pw-field > label {
+    min-height: 3em;
+    align-items: flex-end;
+  }
+}

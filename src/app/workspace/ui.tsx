@@ -57,14 +57,17 @@ export function Dialog({
   onClose,
   busy = false,
   wide = false,
+  className,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   busy?: boolean;
   wide?: boolean;
+  className?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const backdropPress = useRef<{ x: number; y: number } | null>(null);
   const titleId = useId();
   useEffect(() => {
     const element = dialog.current;
@@ -80,8 +83,25 @@ export function Dialog({
   return (
     <dialog
       ref={dialog}
-      className={`pw-dialog${wide ? ' pw-dialog-wide' : ''}`}
+      className={`pw-dialog${wide ? ' pw-dialog-wide' : ''}${className ? ` ${className}` : ''}`}
       aria-labelledby={titleId}
+      onPointerDown={event => {
+        backdropPress.current = null;
+        if (busy || event.button !== 0 || event.isPrimary === false || event.target !== event.currentTarget) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)
+          backdropPress.current = { x: event.clientX, y: event.clientY };
+      }}
+      onPointerCancel={() => {
+        backdropPress.current = null;
+      }}
+      onClick={event => {
+        const press = backdropPress.current;
+        backdropPress.current = null;
+        if (!press || busy || event.target !== event.currentTarget || Math.hypot(event.clientX - press.x, event.clientY - press.y) > 8) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
+      }}
       onCancel={event => {
         event.preventDefault();
         if (!busy) onClose();
