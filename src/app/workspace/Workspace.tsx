@@ -1,14 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
+  Activity,
   Archive,
   ArrowRight,
   CheckCheck,
-  CalendarDays,
   ChevronRight,
   Clock3,
   FolderClosed,
-  Home,
-  LayoutGrid,
   ListTodo,
   LogOut,
   Menu,
@@ -16,17 +14,15 @@ import {
   Plus,
   RefreshCw,
   Search,
-  ShieldCheck,
   Settings2,
+  ShieldCheck,
   Trash2,
-  UserRound,
   Users,
-  Wallet,
   X,
 } from 'lucide-react';
-import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { formatDate, PROJECT_STATUSES } from '../constants';
-import type { CalendarApi, CalendarItem, CollaborationApi, Project, Task, TaskStatus, WorkspaceProps, WorkspaceSummary } from '../types';
+import type { CalendarApi, CalendarItem, CollaborationApi, Project, Task, TaskStatus, WorkspaceMember, WorkspaceProps, WorkspaceSummary } from '../types';
 import Calendar from './Calendar';
 import CalendarSettings from './CalendarZoneSettings';
 import ProjectForm from './ProjectForm';
@@ -38,7 +34,12 @@ import { errorMessage, localDate } from './helpers';
 import { ActivityPanel, ProjectAccessDialog, TeamAdministration } from './Collaboration';
 import { canInProject, canInWorkspace } from './permissions';
 import SyncStatus from './SyncStatus';
+import WorkspaceSidebar from './WorkspaceSidebar';
+import WorkspaceCreateMenu from './WorkspaceCreateMenu';
+import { IdentityAvatar, ProjectGlyph, ProjectStatusDot } from './project-identity';
+import useAppearance from './useAppearance';
 import './workspace.css';
+import './visual-navigation.css';
 
 type ProjectActions = {
   onEdit: (project: Project) => void;
@@ -52,6 +53,7 @@ type ProjectActions = {
   collaboration?: CollaborationApi;
   calendar?: CalendarApi;
   calendarWorkspaces?: WorkspaceSummary[];
+  members?: WorkspaceMember[];
   onOpenCalendar?: (item: CalendarItem) => void;
   scopeSearch?: string;
 };
@@ -63,12 +65,15 @@ function ProjectCard({ project, tasks, pending, can, scopeSearch = '', onEdit, o
     <article className="pcard pw-project-card">
       <Link to={`/projects/${project.id}${scopeSearch}`} className="pw-project-main">
         <div className="row">
-          <ProjectIcon color={project.color} />
+          <ProjectIcon color={project.color} icon={project.icon} />
           <h2>{project.name}</h2>
         </div>
         <p className="desc">{project.description || 'Un espacio para organizar tus ideas y avanzar, tarea a tarea.'}</p>
         <div className="row">
-          <span className="pstatus">{PROJECT_STATUSES.find(item => item.id === project.status)?.name}</span>
+          <span className="pstatus pw-project-status">
+            <ProjectStatusDot status={project.status} />
+            {PROJECT_STATUSES.find(item => item.id === project.status)?.name}
+          </span>
           {project.archived_at && (
             <span className="pw-archived-tag">
               <Archive size={12} aria-hidden="true" />
@@ -336,7 +341,7 @@ function ProjectPage({
     <div className="page flush pw-project-page">
       <div className="proj-h">
         <div className="t">
-          <ProjectIcon color={project.color} large />
+          <ProjectIcon color={project.color} icon={project.icon} large />
           <div className="grow">
             <h1>{project.name}</h1>
             <p className="pw-project-description">{project.description || 'Organiza las tareas de este proyecto.'}</p>
@@ -353,7 +358,10 @@ function ProjectPage({
           </button>
         </div>
         <div className="row pw-project-meta">
-          <span className="pstatus">{PROJECT_STATUSES.find(item => item.id === project.status)?.name}</span>
+          <span className="pstatus pw-project-status">
+            <ProjectStatusDot status={project.status} />
+            {PROJECT_STATUSES.find(item => item.id === project.status)?.name}
+          </span>
           <span>
             {projectTasks.length} {projectTasks.length === 1 ? 'tarea' : 'tareas'}
           </span>
@@ -424,6 +432,7 @@ function ProjectPage({
         key={project.id}
         tasks={projectTasks}
         projects={projects}
+        members={actions.members}
         pending={actions.pending}
         readOnly={Boolean(project.archived_at)}
         canCreate={actions.can(project.id, 'task.create') && !project.archived_at}
@@ -431,6 +440,11 @@ function ProjectPage({
         onCreate={status => onNewTask(project, status)}
         onOpen={onOpen}
         onMove={onMove}
+        activityContent={
+          actions.collaboration && actions.can(project.id, 'audit.read') ? (
+            <ActivityPanel key={`activity:${project.id}`} api={actions.collaboration} projectId={project.id} />
+          ) : undefined
+        }
         calendarContent={
           actions.calendar && actions.onOpenCalendar ? (
             <Calendar
@@ -445,9 +459,6 @@ function ProjectPage({
           ) : undefined
         }
       />
-      {actions.collaboration && actions.can(project.id, 'audit.read') && (
-        <ActivityPanel key={`activity:${project.id}`} api={actions.collaboration} projectId={project.id} />
-      )}
     </div>
   );
 }
@@ -596,6 +607,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   const navigate = useNavigate();
   const location = useLocation();
   const financeView = location.pathname === '/finance' && Boolean(props.finance);
+  const appearance = useAppearance(props.currentUserId);
   const [searchParams, setSearchParams] = useSearchParams();
   const [mobileNav, setMobileNav] = useState(false);
   const [projectEditor, setProjectEditor] = useState<{ project?: Project } | null>(null);
@@ -659,9 +671,11 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
               ? 'Mi cuenta'
               : location.pathname === '/team'
                 ? 'Equipo'
-                : location.pathname === '/calendar'
-                  ? 'Calendario'
-                  : 'Inicio');
+                : location.pathname === '/activity'
+                  ? 'Actividad'
+                  : location.pathname === '/calendar'
+                    ? 'Calendario'
+                    : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -713,6 +727,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
     collaboration: props.collaboration,
     calendar: props.calendar,
     calendarWorkspaces: props.workspaces,
+    members: props.members,
     onOpenCalendar: openCalendarItem,
     scopeSearch,
     onEdit: project => {
@@ -723,12 +738,11 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
     onAccess: setAccessProject,
   };
   const openNewProject = () => setProjectEditor({});
-  const openNewTask = () => createTask(currentProject);
-  const navClass = ({ isActive }: { isActive: boolean }) => `sitem${isActive ? ' on' : ''}`;
+  const openNewTask = () => createTask(currentProject && creatableProjects.some(project => project.id === currentProject.id) ? currentProject : undefined);
 
   return (
     <div
-      className={`shell personal-workspace${mobileNav ? ' mnav' : ''}`}
+      className={`shell personal-workspace${mobileNav ? ' mnav' : ''}${appearance.preferences.sidebarCollapsed ? ' collapsed' : ''}`}
       onKeyDown={event => {
         if (event.key === 'Escape' && mobileNav) setMobileNav(false);
       }}
@@ -737,104 +751,17 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
         Ir al contenido
       </a>
       {mobileNav && <button className="side-scrim" aria-label="Cerrar navegación" onClick={() => setMobileNav(false)} />}
-      <aside className="side" aria-label="Navegación principal">
-        <div className="side-top">
-          <Link to={`/${scopeSearch}`} className="ws" aria-label="Inicio de TR8" onClick={() => setMobileNav(false)}>
-            <span className="ws-logo brand">
-              <img src="/favicon.svg" width="22" height="22" alt="" />
-            </span>
-            <span className="ws-name">TR8</span>
-            <span className="pw-personal-label">{props.workspace?.kind === 'team' ? 'Equipo' : 'Personal'}</span>
-          </Link>
-        </div>
-        {props.workspace && props.workspaces && (
-          <div className="pw-workspace-picker">
-            <label className="sr" htmlFor="workspace-select">
-              Espacio de trabajo
-            </label>
-            <select id="workspace-select" value={props.workspace.id} disabled={pending} onChange={event => props.onSelectWorkspace?.(event.target.value)}>
-              {props.workspaces.map(space => (
-                <option key={space.id} value={space.id}>
-                  {space.kind === 'personal' ? 'Mi espacio personal' : space.name}
-                </option>
-              ))}
-            </select>
-            {props.onCreateTeam && (
-              <button className="ibtn" aria-label="Crear equipo" disabled={pending} onClick={() => setCreatingTeam(true)}>
-                <Plus size={15} aria-hidden="true" />
-              </button>
-            )}
-          </div>
-        )}
-        <div className="side-scroll">
-          <nav onClick={() => setMobileNav(false)}>
-            <div className="sgroup">
-              <div className="sgroup-h">{workspaceName}</div>
-              <NavLink to={`/${scopeSearch}`} end className={navClass}>
-                <Home className="i" size={16} aria-hidden="true" />
-                <span>Inicio</span>
-              </NavLink>
-              <NavLink to={`/projects${scopeSearch}`} className={navClass}>
-                <LayoutGrid className="i" size={16} aria-hidden="true" />
-                <span>Proyectos</span>
-                <span className="ct">{activeProjects.length}</span>
-              </NavLink>
-              <NavLink to={`/tasks${scopeSearch}`} className={navClass}>
-                <ListTodo className="i" size={16} aria-hidden="true" />
-                <span>{props.workspace?.kind === 'team' ? 'Tareas del equipo' : 'Mis tareas'}</span>
-                <span className="ct">{activeTasks.filter(task => task.status !== 'done').length}</span>
-              </NavLink>
-              {props.calendar && (
-                <NavLink to={`/calendar${scopeSearch}`} className={navClass}>
-                  <CalendarDays className="i" size={16} aria-hidden="true" />
-                  <span>Calendario</span>
-                </NavLink>
-              )}
-              {props.workspace?.kind === 'personal' && props.finance && (
-                <NavLink to={`/finance${scopeSearch}`} className={navClass}>
-                  <Wallet className="i" size={16} aria-hidden="true" />
-                  <span>Finanzas</span>
-                </NavLink>
-              )}
-              {props.workspace?.kind === 'team' && (
-                <NavLink to={`/team${scopeSearch}`} className={navClass}>
-                  <Users className="i" size={16} aria-hidden="true" />
-                  <span>Equipo</span>
-                </NavLink>
-              )}
-            </div>
-            <div className="sgroup">
-              <div className="sgroup-h">
-                <span>Proyectos activos</span>
-                <span className="sp" />
-                <button className="ibtn ibtn-xs" aria-label="Crear proyecto" disabled={pending || props.loading || !canCreateProject} onClick={openNewProject}>
-                  <Plus size={13} aria-hidden="true" />
-                </button>
-              </div>
-              {activeProjects.slice(0, 10).map(project => (
-                <NavLink key={project.id} to={`/projects/${project.id}${scopeSearch}`} className={navClass}>
-                  <span className="pico" style={{ '--c': project.color } as CSSProperties}>
-                    <FolderClosed size={12} aria-hidden="true" />
-                  </span>
-                  <span className="trunc">{project.name}</span>
-                </NavLink>
-              ))}
-              {activeProjects.length === 0 && <p className="pw-side-empty">Tus proyectos aparecerán aquí.</p>}
-            </div>
-          </nav>
-        </div>
-        <div className="side-bot">
-          <NavLink to={`/settings${scopeSearch}`} className={navClass} onClick={() => setMobileNav(false)}>
-            <Settings2 className="i" size={16} aria-hidden="true" />
-            <span>Configuración</span>
-          </NavLink>
-          <NavLink to={`/account${scopeSearch}`} className={navClass} onClick={() => setMobileNav(false)}>
-            <span className="pw-avatar small">{props.email.charAt(0).toUpperCase()}</span>
-            <span className="trunc">{props.email}</span>
-            <UserRound size={13} className="faint" aria-hidden="true" />
-          </NavLink>
-        </div>
-      </aside>
+      <WorkspaceSidebar
+        key={`${props.currentUserId ?? 'session'}:${props.workspace?.id ?? 'workspace'}`}
+        data={props}
+        collapsed={appearance.preferences.sidebarCollapsed}
+        pending={pending}
+        showFinance={Boolean(props.finance)}
+        onToggle={() => appearance.update({ sidebarCollapsed: !appearance.preferences.sidebarCollapsed })}
+        onNavigate={() => setMobileNav(false)}
+        onCreateProject={openNewProject}
+        onCreateTeam={() => setCreatingTeam(true)}
+      />
       <div className="main">
         <header className="topbar">
           <button
@@ -848,6 +775,11 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           <div className="crumbs">
             <Link to={`/${scopeSearch}`}>{workspaceName}</Link>
             <ChevronRight size={12} className="faint" aria-hidden="true" />
+            {currentProject && (
+              <span className="pw-crumb-project" style={{ color: currentProject.color }}>
+                <ProjectGlyph icon={currentProject.icon} size={13} />
+              </span>
+            )}
             <span className="cur trunc">{pageName}</span>
           </div>
           <div className="sp" />
@@ -883,6 +815,19 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
               aria-hidden="true"
             />
           </button>
+          {!financeView && (
+            <WorkspaceCreateMenu
+              key={props.workspace?.id}
+              canProject={canCreateProject && !props.accessUnavailable}
+              canTask={creatableProjects.length > 0 && !props.accessUnavailable}
+              pending={pending}
+              onProject={openNewProject}
+              onTask={openNewTask}
+            />
+          )}
+          <Link className="pw-topbar-account" to={`/account${scopeSearch}`} aria-label="Mi cuenta" title="Mi cuenta">
+            <IdentityAvatar name={props.email} small decorative />
+          </Link>
         </header>
         {(props.error || actionError) && (
           <div className="pw-global-error">
@@ -963,6 +908,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                       <TasksView
                         tasks={activeTasks}
                         projects={props.projects}
+                        members={props.members}
                         pending={pending}
                         canCreate={creatableProjects.length > 0}
                         canEditTask={task => can(task.project_id, 'task.edit')}
@@ -986,6 +932,27 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                 }
               />
               <Route path="/team" element={<TeamAdministration {...props} />} />
+              <Route
+                path="/activity"
+                element={
+                  <div className="page pw-activity-page">
+                    <div className="ph">
+                      <div>
+                        <div className="eyebrow">{workspaceName}</div>
+                        <h1>
+                          <Activity size={21} aria-hidden="true" /> Actividad
+                        </h1>
+                        <p>Los cambios de tus proyectos, en un solo lugar.</p>
+                      </div>
+                    </div>
+                    {props.collaboration && !props.accessUnavailable && canInWorkspace(props, 'audit.read') ? (
+                      <ActivityPanel key={props.collaboration.scopeKey.join(':')} api={props.collaboration} />
+                    ) : (
+                      <EmptyState title="Actividad no disponible">No tienes acceso al historial de este espacio.</EmptyState>
+                    )}
+                  </div>
+                }
+              />
               <Route
                 path="/calendar"
                 element={
@@ -1016,7 +983,10 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                   )
                 }
               />
-              <Route path="/settings" element={<CalendarSettings api={props.calendar} integrations={props.integrations} processes={props.processes} />} />
+              <Route
+                path="/settings"
+                element={<CalendarSettings api={props.calendar} integrations={props.integrations} processes={props.processes} appearance={appearance} />}
+              />
               <Route
                 path="/account"
                 element={<AccountPage email={props.email} pending={pending} onSignOut={props.onSignOut} onPasswordReset={props.onPasswordReset} />}

@@ -44,6 +44,47 @@ function pagedClient(pages: Record<string, Response[]>) {
 }
 
 describe('repositorio de proyectos y tareas', () => {
+  it('guarda el icono en la misma creación idempotente y conserva el RPC de clientes antiguos', async () => {
+    const { rpc, repository } = rpcClient();
+    rpc.mockResolvedValue({ data: { id: 'request-icon', icon: 'rocket', version: 1 }, error: null });
+    const input = { ...projectInput, icon: 'rocket' as const };
+    await expect(repository.createProject('workspace-a', input, 'request-icon')).resolves.toMatchObject({ icon: 'rocket' });
+    await repository.createProject('workspace-a', input, 'request-icon');
+    expect(rpc.mock.calls[0]).toEqual(rpc.mock.calls[1]);
+    expect(rpc).toHaveBeenLastCalledWith('tr8_v2_create_project_with_icon', {
+      p_workspace_id: 'workspace-a',
+      p_id: 'request-icon',
+      p_name: 'Mi proyecto',
+      p_description: 'Descripción',
+      p_color: '#22aabb',
+      p_status: 'active',
+      p_icon: 'rocket',
+    });
+  });
+
+  it('incluye el icono en la actualización versionada y no lo inventa para clientes antiguos', async () => {
+    const { rpc, repository } = rpcClient();
+    rpc.mockResolvedValue({ data: { id: 'project-a', icon: 'globe', version: 5 }, error: null });
+    const project = { id: 'project-a', workspace_id: 'workspace-a', version: 4 } as Project;
+    await repository.updateProject(project, { ...projectInput, icon: 'globe' });
+    expect(rpc).toHaveBeenLastCalledWith('tr8_v2_update_project', {
+      p_workspace_id: 'workspace-a',
+      p_id: 'project-a',
+      p_version: 4,
+      p_patch: { name: 'Mi proyecto', description: 'Descripción', color: '#22aabb', status: 'active', icon: 'globe' },
+    });
+    await repository.updateProject(project, projectInput);
+    expect(rpc.mock.calls.at(-1)?.[1].p_patch).not.toHaveProperty('icon');
+  });
+
+  it('rechaza iconos fuera del vocabulario sin enviar peticiones', () => {
+    const { rpc, repository } = rpcClient();
+    const input = { ...projectInput, icon: 'https://example.test/icon.svg' } as unknown as ProjectInput;
+    expect(() => repository.createProject('workspace-a', input, 'request-icon')).toThrow('icono');
+    expect(() => repository.updateProject({} as Project, input)).toThrow('icono');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it('exige el contrato v2 y conserva la denegación del servidor para cuentas sin habilitar', async () => {
     const { rpc, repository } = rpcClient();
     rpc

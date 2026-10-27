@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react';
-import { AlertCircle, Check, Circle, FolderClosed, LoaderCircle, X } from 'lucide-react';
-import { STATUSES } from '../constants';
+import { AlertCircle, FolderClosed, LoaderCircle, X } from 'lucide-react';
 import type { TaskStatus } from '../types';
+import { ProjectGlyph, TaskStatusIcon } from './project-identity';
 
 export function ErrorNotice({ children }: { children: ReactNode }) {
   return (
@@ -21,21 +21,16 @@ export function Busy({ children = 'Cargando tu espacio…' }: { children?: React
   );
 }
 
-export function ProjectIcon({ color, large = false }: { color: string; large?: boolean }) {
+export function ProjectIcon({ color, icon, large = false }: { color: string; icon?: string; large?: boolean }) {
   return (
     <span className={`picon${large ? ' lg' : ''}`} style={{ '--c': color } as CSSProperties}>
-      <FolderClosed size={large ? 19 : 15} aria-hidden="true" />
+      <ProjectGlyph icon={icon} size={large ? 19 : 15} />
     </span>
   );
 }
 
 export function StatusDot({ status }: { status: TaskStatus }) {
-  const item = STATUSES.find(value => value.id === status)!;
-  return status === 'done' ? (
-    <Check size={14} style={{ color: item.color }} aria-hidden="true" />
-  ) : (
-    <Circle size={12} style={{ color: item.color }} aria-hidden="true" />
-  );
+  return <TaskStatusIcon status={status} />;
 }
 
 export function EmptyState({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {

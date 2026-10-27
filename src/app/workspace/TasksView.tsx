@@ -1,14 +1,16 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { CalendarDays, Check, Columns3, List, Plus, Search, RotateCcw } from 'lucide-react';
+import { Activity, CalendarDays, Check, SquareKanban, List, Plus, Search, RotateCcw } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { formatDate, PRIORITIES, STATUSES } from '../constants';
-import type { Priority, Project, Task, TaskStatus } from '../types';
+import type { Priority, Project, Task, TaskStatus, WorkspaceMember } from '../types';
 import { EmptyState, StatusDot } from './ui';
+import { IdentityAvatar, PriorityIcon, ProjectGlyph } from './project-identity';
 import { localDate } from './helpers';
 
 interface Props {
   tasks: Task[];
   projects: Project[];
+  members?: WorkspaceMember[];
   pending: boolean;
   readOnly?: boolean;
   canCreate?: boolean;
@@ -17,6 +19,7 @@ interface Props {
   onOpen: (task: Task) => void;
   onMove: (task: Task, status: TaskStatus) => Promise<void>;
   calendarContent?: ReactNode;
+  activityContent?: ReactNode;
 }
 
 function TaskStateSelect({ task, disabled, onMove }: { task: Task; disabled: boolean; onMove: Props['onMove'] }) {
@@ -42,6 +45,7 @@ function TaskStateSelect({ task, disabled, onMove }: { task: Task; disabled: boo
 export default function TasksView({
   tasks,
   projects,
+  members = [],
   pending,
   readOnly = false,
   canCreate = !readOnly,
@@ -50,15 +54,24 @@ export default function TasksView({
   onOpen,
   onMove,
   calendarContent,
+  activityContent,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const view = searchParams.get('view') === 'calendar' && calendarContent ? 'calendar' : searchParams.get('view') === 'board' ? 'board' : 'list';
+  const view =
+    searchParams.get('view') === 'activity' && activityContent
+      ? 'activity'
+      : searchParams.get('view') === 'calendar' && calendarContent
+        ? 'calendar'
+        : searchParams.get('view') === 'board'
+          ? 'board'
+          : 'list';
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<TaskStatus | ''>('');
   const [priority, setPriority] = useState<Priority | ''>('');
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<TaskStatus | null>(null);
   const projectMap = useMemo(() => new Map(projects.map(project => [project.id, project])), [projects]);
+  const memberMap = useMemo(() => new Map(members.map(member => [member.id, member.display_name])), [members]);
   const today = localDate();
   const normalizedQuery = query.trim().toLocaleLowerCase('es');
   const visible = useMemo(
@@ -79,7 +92,7 @@ export default function TasksView({
 
   function changeView(next: string) {
     const params = new URLSearchParams(searchParams);
-    if (next === 'board' || next === 'calendar') params.set('view', next);
+    if (next === 'board' || next === 'calendar' || next === 'activity') params.set('view', next);
     else params.delete('view');
     setSearchParams(params, { replace: true });
   }
@@ -98,7 +111,7 @@ export default function TasksView({
           Lista
         </button>
         <button className={`pw-view-tab${view === 'board' ? ' on' : ''}`} aria-pressed={view === 'board'} onClick={() => changeView('board')}>
-          <Columns3 size={15} aria-hidden="true" />
+          <SquareKanban size={15} aria-hidden="true" />
           Tablero
         </button>
         {calendarContent && (
@@ -107,8 +120,16 @@ export default function TasksView({
             Calendario
           </button>
         )}
+        {activityContent && (
+          <button className={`pw-view-tab${view === 'activity' ? ' on' : ''}`} aria-pressed={view === 'activity'} onClick={() => changeView('activity')}>
+            <Activity size={15} aria-hidden="true" />
+            Actividad
+          </button>
+        )}
       </div>
-      {view === 'calendar' ? (
+      {view === 'activity' ? (
+        activityContent
+      ) : view === 'calendar' ? (
         calendarContent
       ) : (
         <>
@@ -206,7 +227,10 @@ export default function TasksView({
                       <span className="mono">
                         {projectMap.get(task.project_id)?.code}-{task.task_number}
                       </span>
-                      <span>{projectMap.get(task.project_id)?.name}</span>
+                      <span className="pw-task-project-identity" style={{ color: projectMap.get(task.project_id)?.color }}>
+                        <ProjectGlyph icon={projectMap.get(task.project_id)?.icon} size={11} />
+                        {projectMap.get(task.project_id)?.name}
+                      </span>
                     </span>
                   </span>
                   <span role="cell" className="pw-state-cell">
@@ -214,6 +238,7 @@ export default function TasksView({
                     <TaskStateSelect task={task} disabled={pending || !mayEdit(task)} onMove={onMove} />
                   </span>
                   <span role="cell" className={`pw-priority pw-priority-${task.priority}`}>
+                    <PriorityIcon priority={task.priority} />
                     {PRIORITIES.find(item => item.id === task.priority)?.name}
                   </span>
                   <span role="cell" className={`pw-due${task.due_date && task.due_date < today && task.status !== 'done' ? ' overdue' : ''}`}>
@@ -292,7 +317,10 @@ export default function TasksView({
                               <span className="key">
                                 {projectMap.get(task.project_id)?.code}-{task.task_number}
                               </span>
-                              <span className={`pw-priority pw-priority-${task.priority}`}>{PRIORITIES.find(item => item.id === task.priority)?.name}</span>
+                              <span className={`pw-priority pw-priority-${task.priority}`}>
+                                <PriorityIcon priority={task.priority} />
+                                {PRIORITIES.find(item => item.id === task.priority)?.name}
+                              </span>
                             </div>
                             {task.due_date && (
                               <span className={`pw-card-date${task.due_date < today && task.status !== 'done' ? ' overdue' : ''}`}>
@@ -302,6 +330,11 @@ export default function TasksView({
                             )}
                             <div className="pw-card-bottom">
                               <TaskStateSelect task={task} disabled={pending || !mayEdit(task)} onMove={onMove} />
+                              {task.assignee_member_id && memberMap.has(task.assignee_member_id) && (
+                                <span className="pw-task-assignee">
+                                  <IdentityAvatar name={memberMap.get(task.assignee_member_id)!} small />
+                                </span>
+                              )}
                               <button
                                 className="ibtn ibtn-xs"
                                 disabled={pending || !mayEdit(task)}

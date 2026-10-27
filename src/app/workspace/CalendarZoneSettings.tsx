@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Activity, Check, CircleCheck, Globe2, LoaderCircle, Plug, Save, SlidersHorizontal, UserRound } from 'lucide-react';
+import { Activity, Check, CircleCheck, Globe2, LoaderCircle, Palette, Plug, Save, SlidersHorizontal, UserRound } from 'lucide-react';
 import type { CalendarApi } from '../types';
 import { validTimeZone } from './CalendarTime';
 import TimeZonePicker from './TimeZonePicker';
@@ -7,6 +7,8 @@ import useCalendarZonePreferences from './useCalendarZonePreferences';
 import { Busy, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
 import SettingsDisclosure from './SettingsDisclosure';
+import AppearanceSettings from './AppearanceSettings';
+import type { AppearanceController } from './useAppearance';
 import './settings.css';
 
 type ZoneState = ReturnType<typeof useCalendarZonePreferences>;
@@ -112,12 +114,23 @@ function SavedZoneSettings({ api }: { api: CalendarApi }) {
 
 const categories = [
   { id: 'general', label: 'General', icon: SlidersHorizontal, group: 'Personal' },
+  { id: 'appearance', label: 'Apariencia', icon: Palette, group: 'Personal' },
   { id: 'connections', label: 'Conexiones', icon: Plug, group: 'Integraciones' },
   { id: 'activity', label: 'Actividad', icon: Activity, group: 'Integraciones' },
 ] as const;
 type SettingsCategory = (typeof categories)[number]['id'];
 
-export default function CalendarSettings({ api, processes, integrations }: { api?: CalendarApi; processes?: ReactNode; integrations?: ReactNode }) {
+export default function CalendarSettings({
+  api,
+  processes,
+  integrations,
+  appearance,
+}: {
+  api?: CalendarApi;
+  processes?: ReactNode;
+  integrations?: ReactNode;
+  appearance?: AppearanceController;
+}) {
   const [category, setCategory] = useState<SettingsCategory>('general');
   return (
     <div className="page pw-settings">
@@ -164,6 +177,17 @@ export default function CalendarSettings({ api, processes, integrations }: { api
               <SavedZoneSettings key={api.scopeKey.join(':')} api={api} />
             ) : (
               <p className="faint">Las preferencias del calendario no están disponibles en este momento.</p>
+            )}
+          </section>
+          <section id="tr8-settings-appearance" className="pw-settings-category" aria-label="Configuración de apariencia" hidden={category !== 'appearance'}>
+            <header className="pw-settings-category-heading">
+              <h2>Apariencia</h2>
+              <p>Personaliza el aspecto de TR8 en este navegador.</p>
+            </header>
+            {appearance ? (
+              <AppearanceSettings appearance={appearance} />
+            ) : (
+              <p className="faint">Las preferencias de apariencia no están disponibles en este momento.</p>
             )}
           </section>
           <section id="tr8-settings-connections" className="pw-settings-category" aria-label="Conexiones de la cuenta" hidden={category !== 'connections'}>

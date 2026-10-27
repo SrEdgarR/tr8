@@ -188,13 +188,17 @@ describe('espacios y equipos', () => {
       </MemoryRouter>
     );
     const { container, rerender } = render(ui());
+    await user.click(screen.getByRole('button', { name: 'Actividad' }));
     const sidebar = screen.getByRole('complementary', { name: 'Navegación principal' });
     await user.click(within(sidebar).getByRole('link', { name: otherProject.name }));
     await user.click(screen.getByRole('button', { name: 'Tablero' }));
     expect(container.querySelectorAll('.kcard')).toHaveLength(1);
     await act(async () => delayedActivity.resolve(activityPage(project.id)));
     expect(screen.queryByText('Actividad de revista')).not.toBeInTheDocument();
-    expect(screen.getByText('Actividad de sitio')).toBeInTheDocument();
+    expect(screen.queryByText('Actividad de sitio')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Actividad' }));
+    expect(await screen.findByText('Actividad de sitio')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Tablero' }));
 
     props = {
       ...props,
@@ -216,7 +220,7 @@ describe('espacios y equipos', () => {
         expect(previousPage).not.toBeInTheDocument();
         expect(container.querySelectorAll('.pw-project-page')).toHaveLength(1);
         expect(container.querySelectorAll('.pw-tasks-area')).toHaveLength(1);
-        expect(container.querySelectorAll('.pw-activity')).toHaveLength(1);
+        expect(container.querySelectorAll('.pw-activity')).toHaveLength(0);
         expect(container.querySelectorAll('.pw-board')).toHaveLength(0);
         expect(screen.getByRole('table', { name: 'Lista de tareas' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: expectedTitle })).toBeInTheDocument();
@@ -398,7 +402,7 @@ describe('espacios y equipos', () => {
     await user.click(screen.getByRole('button', { name: 'Lista' }));
     expect(screen.getByRole('table', { name: 'Lista de tareas' })).toBeInTheDocument();
     expect(screen.getByText(task.title)).toBeInTheDocument();
-    await user.click(screen.getByRole('link', { name: 'Calendario' }));
+    await user.click(screen.getByTitle('Calendario'));
     expect(await screen.findByRole('heading', { name: 'Calendario', level: 1 })).toBeInTheDocument();
     await waitFor(() => expect(calendar.items).toHaveBeenCalledWith(expect.not.objectContaining({ project_ids: [project.id] }), expect.any(AbortSignal)));
   });

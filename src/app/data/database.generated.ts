@@ -13,6 +13,7 @@ export type Database = {
           archived_at: string | null;
           code: string | null;
           color: string;
+          icon: string;
           created_at: string;
           description: string;
           id: string;
@@ -27,6 +28,7 @@ export type Database = {
           archived_at?: string | null;
           code?: string | null;
           color?: string;
+          icon?: string;
           created_at?: string;
           description?: string;
           id?: string;
@@ -41,6 +43,7 @@ export type Database = {
           archived_at?: string | null;
           code?: string | null;
           color?: string;
+          icon?: string;
           created_at?: string;
           description?: string;
           id?: string;
@@ -196,6 +199,18 @@ export type Database = {
         Args: { p_email: string; p_id: string; p_workspace_id: string };
         Returns: Json;
       };
+      tr8_v2_create_project_with_icon: {
+        Args: {
+          p_color: string;
+          p_description: string;
+          p_id: string;
+          p_name: string;
+          p_status: string;
+          p_workspace_id: string;
+          p_icon: string;
+        };
+        Returns: Database['public']['Tables']['tr8_workspace_projects']['Row'];
+      };
       tr8_v2_create_project: {
         Args: {
           p_color: string;
@@ -209,6 +224,7 @@ export type Database = {
           archived_at: string | null;
           code: string | null;
           color: string;
+          icon: string;
           created_at: string;
           description: string;
           id: string;
@@ -467,6 +483,7 @@ export type Database = {
           archived_at: string | null;
           code: string | null;
           color: string;
+          icon: string;
           created_at: string;
           description: string;
           id: string;

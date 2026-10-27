@@ -1,0 +1,119 @@
+.pw-project-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+.pw-status-icon,
+.pw-priority-icon {
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.pw-status-icon.is-backlog {
+  color: var(--st-backlog);
+}
+.pw-status-icon.is-todo {
+  color: var(--st-todo);
+}
+.pw-status-icon.is-progress {
+  color: var(--st-progress);
+}
+.pw-status-icon.is-review {
+  color: var(--st-review);
+}
+.pw-status-icon.is-done {
+  color: var(--st-done);
+}
+.pw-project-status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.pw-identity-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--identity-color) 17%, transparent);
+  color: color-mix(in srgb, var(--identity-color) 78%, var(--text));
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.pw-identity-avatar.small {
+  width: 23px;
+  height: 23px;
+  font-size: 9px;
+}
+.pw-project-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.pw-project-name-row .picon {
+  flex-shrink: 0;
+}
+.pw-project-name-row input {
+  flex: 1;
+  min-width: 0;
+}
+.pw-project-identity-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.6fr);
+  align-items: start;
+  gap: 20px;
+}
+.pw-icon-options {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.pw-icon-options legend {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.pw-icon-options > div {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+}
+.pw-icon-option {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  width: 100%;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--text-3);
+  background: transparent;
+  transition:
+    color var(--dur) var(--ease),
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.pw-icon-option:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.pw-icon-option.selected {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.pw-project-identity-options .pw-colors > div {
+  flex-wrap: wrap;
+}
+.pw-project-identity-options .pw-color {
+  border-radius: 50%;
+}
+@media (max-width: 460px) {
+  .pw-project-identity-options {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}

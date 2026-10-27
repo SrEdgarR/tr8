@@ -1,0 +1,316 @@
+/* React shell using the original demo's navigation, spacing and semantic colors. */
+.personal-workspace {
+  transition: grid-template-columns 180ms var(--ease);
+}
+.pw-side-brand {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pw-side-brand .ws {
+  flex: 1;
+  min-width: 0;
+}
+.pw-sidebar-toggle {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+.pw-personal-navigation {
+  padding-top: 4px;
+}
+.pw-sidebar-project-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.pw-sidebar-project-row > .sitem {
+  padding-right: 29px;
+}
+.pw-sidebar-project-row .pw-project-status-dot {
+  margin-left: auto;
+}
+.pw-project-expand {
+  position: absolute;
+  right: 3px;
+  color: var(--text-3);
+  opacity: 0;
+}
+.pw-sidebar-project-row:hover .pw-project-expand,
+.pw-sidebar-project-row:focus-within .pw-project-expand {
+  opacity: 1;
+}
+.pw-sidebar-project-row:hover .pw-project-status-dot,
+.pw-sidebar-project-row:focus-within .pw-project-status-dot {
+  opacity: 0;
+}
+.pw-project-expand svg {
+  transition: transform 160ms var(--ease);
+}
+.pw-project-expand svg.is-open {
+  transform: rotate(90deg);
+}
+.pw-sidebar-subviews {
+  margin: 3px 0 5px 15px;
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+}
+.pw-sidebar-subviews[hidden] {
+  display: none;
+}
+.pw-sidebar-subviews .sitem {
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+}
+.pw-sidebar-subviews .sitem.on {
+  color: var(--text);
+}
+.pw-sidebar-subviews .sitem svg {
+  color: var(--text-3);
+}
+.pw-account-link {
+  min-height: 36px;
+}
+.pw-account-chevron {
+  margin-left: auto;
+  color: var(--text-3);
+}
+.pw-topbar-account {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.pw-topbar-account:hover {
+  box-shadow: 0 0 0 3px var(--surface-3);
+}
+.pw-crumb-project {
+  display: inline-flex;
+  align-items: center;
+}
+.pw-project-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pw-create-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.pw-create-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 205px;
+  padding: 5px;
+  z-index: 45;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  animation: pw-menu-appear 140ms var(--ease) both;
+}
+.pw-create-popover > button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.pw-create-popover > button svg {
+  color: var(--text-3);
+}
+.pw-create-popover > button:hover:not(:disabled),
+.pw-create-popover > button:focus-visible {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.pw-activity-page .ph h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pw-activity-page .ph h1 svg {
+  color: var(--text-3);
+}
+.pw-tasks-area > .pw-activity {
+  margin: 20px var(--gutter);
+}
+.pw-priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.personal-workspace .pw-priority:not(.pw-priority-urgent) {
+  color: var(--text-3);
+}
+.pw-task-subtitle > .pw-task-project-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.pw-task-assignee {
+  margin-left: auto;
+  display: inline-flex;
+}
+.pw-board .kcard {
+  transition:
+    border-color 140ms var(--ease),
+    background 140ms var(--ease),
+    box-shadow 140ms var(--ease),
+    transform 140ms var(--ease);
+}
+.pw-board .kcard:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+.pw-project-card {
+  transition:
+    border-color 140ms var(--ease),
+    box-shadow 140ms var(--ease),
+    transform 140ms var(--ease);
+}
+.pw-project-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-pop);
+}
+.pw-view-tab {
+  transition:
+    color 140ms var(--ease),
+    background 140ms var(--ease);
+}
+.pw-view-tab:hover {
+  background: var(--surface-2);
+}
+.pw-view-tab.on {
+  background: transparent;
+}
+@keyframes pw-menu-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (min-width: 901px) {
+  .personal-workspace.collapsed .pw-side-brand {
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 10px;
+  }
+  .personal-workspace.collapsed .pw-side-brand .ws {
+    justify-content: center;
+    padding: 0;
+  }
+  .personal-workspace.collapsed .pw-workspace-picker,
+  .personal-workspace.collapsed .pw-sidebar-subviews,
+  .personal-workspace.collapsed .pw-project-expand,
+  .personal-workspace.collapsed .side .pw-project-status-dot,
+  .personal-workspace.collapsed .pw-account-chevron,
+  .personal-workspace.collapsed .pw-side-empty {
+    display: none;
+  }
+  .personal-workspace.collapsed .pw-sidebar-project-row > .sitem {
+    padding: 0;
+  }
+  .personal-workspace.collapsed .pw-account-link .pw-identity-avatar {
+    display: inline-grid !important;
+  }
+  .personal-workspace.collapsed .sgroup {
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+}
+@media (max-width: 900px) {
+  .personal-workspace.collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .personal-workspace .pw-sidebar-toggle {
+    display: none;
+  }
+  .personal-workspace.collapsed .ws-name,
+  .personal-workspace.collapsed .sgroup-h {
+    display: flex !important;
+  }
+  .personal-workspace.collapsed .sitem > span:not(.pico):not(.pw-identity-avatar):not(.pw-project-status-dot),
+  .personal-workspace.collapsed .sitem .ct {
+    display: inline-flex !important;
+  }
+  .personal-workspace.collapsed .sitem .pico {
+    display: grid !important;
+  }
+  .personal-workspace.collapsed .sitem .pw-identity-avatar {
+    display: inline-grid !important;
+  }
+  .personal-workspace.collapsed .sgroup {
+    margin-top: 14px;
+  }
+  .personal-workspace.collapsed .ws {
+    justify-content: flex-start;
+  }
+  .personal-workspace .pw-project-expand {
+    opacity: 1;
+  }
+  .personal-workspace .pw-sidebar-project-row .pw-project-status-dot {
+    display: none;
+  }
+  .pw-create-menu > button {
+    min-height: 30px;
+  }
+}
+@media (max-width: 540px) {
+  .pw-create-menu > button > span {
+    display: none;
+  }
+  .pw-create-menu > button {
+    padding: 4px 7px;
+    gap: 2px;
+  }
+  .personal-workspace .topbar {
+    gap: 8px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .pw-create-popover {
+    width: 190px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .personal-workspace,
+  .pw-project-expand svg,
+  .pw-board .kcard,
+  .pw-project-card,
+  .pw-view-tab {
+    transition: none;
+  }
+  .pw-create-popover {
+    animation: none;
+  }
+  .pw-board .kcard:hover,
+  .pw-project-card:hover {
+    transform: none;
+  }
+}
+:root[data-motion='reduce'] .personal-workspace,
+:root[data-motion='reduce'] .pw-project-expand svg,
+:root[data-motion='reduce'] .pw-board .kcard,
+:root[data-motion='reduce'] .pw-project-card,
+:root[data-motion='reduce'] .pw-view-tab {
+  transition: none;
+}
+:root[data-motion='reduce'] .pw-create-popover {
+  animation: none;
+}
+:root[data-motion='reduce'] .pw-board .kcard:hover,
+:root[data-motion='reduce'] .pw-project-card:hover {
+  transform: none;
+}

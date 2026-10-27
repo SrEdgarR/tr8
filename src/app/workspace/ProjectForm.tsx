@@ -1,8 +1,10 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Check } from 'lucide-react';
 import { PROJECT_COLORS, PROJECT_STATUSES } from '../constants';
+import { PROJECT_ICONS, projectIconName, type ProjectIconName } from '../project-identity';
 import type { Project, ProjectInput, ProjectStatus, WorkspaceProps } from '../types';
-import { Dialog, ErrorNotice } from './ui';
+import { Dialog, ErrorNotice, ProjectIcon } from './ui';
+import { ProjectGlyph } from './project-identity';
 import { errorMessage } from './helpers';
 
 interface Props {
@@ -19,6 +21,7 @@ export default function ProjectForm({ project, pending, onCreate, onUpdate, onSa
   const [name, setName] = useState(project?.name ?? '');
   const [description, setDescription] = useState(project?.description ?? '');
   const [color, setColor] = useState(project?.color ?? PROJECT_COLORS[0]);
+  const [icon, setIcon] = useState<ProjectIconName>(projectIconName(project?.icon));
   const [status, setStatus] = useState<ProjectStatus>(project?.status ?? 'planning');
   const [requestId] = useState(() => crypto.randomUUID());
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +39,7 @@ export default function ProjectForm({ project, pending, onCreate, onUpdate, onSa
     lock.current = true;
     setSubmitting(true);
     setError(null);
-    const input: ProjectInput = { name: name.trim(), description: description.trim(), color, status };
+    const input: ProjectInput = { name: name.trim(), description: description.trim(), color, status, icon };
     try {
       const saved = project ? await onUpdate(project, input) : await onCreate(input, requestId);
       onSaved(saved);
@@ -49,7 +52,7 @@ export default function ProjectForm({ project, pending, onCreate, onUpdate, onSa
   }
 
   return (
-    <Dialog title={project ? 'Editar proyecto' : 'Nuevo proyecto'} busy={busy} onClose={onClose}>
+    <Dialog title={project ? 'Editar proyecto' : 'Nuevo proyecto'} busy={busy} onClose={onClose} className="pw-project-dialog">
       <form
         onSubmit={event => {
           void submit(event);
@@ -60,16 +63,19 @@ export default function ProjectForm({ project, pending, onCreate, onUpdate, onSa
           {error && <ErrorNotice>{error}</ErrorNotice>}
           <label className="pw-field" htmlFor={`${prefix}-name`}>
             Nombre del proyecto
-            <input
-              id={`${prefix}-name`}
-              data-initial-focus
-              required
-              maxLength={120}
-              value={name}
-              onChange={event => setName(event.target.value)}
-              disabled={busy}
-              placeholder="Por ejemplo: Mi próximo proyecto"
-            />
+            <span className="pw-project-name-row">
+              <ProjectIcon icon={icon} color={color} />
+              <input
+                id={`${prefix}-name`}
+                data-initial-focus
+                required
+                maxLength={120}
+                value={name}
+                onChange={event => setName(event.target.value)}
+                disabled={busy}
+                placeholder="Por ejemplo: Mi próximo proyecto"
+              />
+            </span>
           </label>
           <label className="pw-field" htmlFor={`${prefix}-description`}>
             Descripción <span className="faint">Opcional</span>
@@ -93,25 +99,45 @@ export default function ProjectForm({ project, pending, onCreate, onUpdate, onSa
               ))}
             </select>
           </label>
-          <fieldset className="pw-colors">
-            <legend>Color del proyecto</legend>
-            <div>
-              {PROJECT_COLORS.map((value, index) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`pw-color${color === value ? ' selected' : ''}`}
-                  style={{ background: value }}
-                  aria-label={`Color ${index + 1}`}
-                  aria-pressed={color === value}
-                  disabled={busy}
-                  onClick={() => setColor(value)}
-                >
-                  {color === value && <Check size={15} aria-hidden="true" />}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          <div className="pw-project-identity-options">
+            <fieldset className="pw-icon-options" disabled={busy}>
+              <legend>Icono del proyecto</legend>
+              <div>
+                {PROJECT_ICONS.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`pw-icon-option${icon === item.id ? ' selected' : ''}`}
+                    aria-label={`Icono ${item.label}`}
+                    aria-pressed={icon === item.id}
+                    title={item.label}
+                    onClick={() => setIcon(item.id)}
+                  >
+                    <ProjectGlyph icon={item.id} size={16} />
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset className="pw-colors">
+              <legend>Color del proyecto</legend>
+              <div>
+                {PROJECT_COLORS.map((value, index) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`pw-color${color === value ? ' selected' : ''}`}
+                    style={{ background: value }}
+                    aria-label={`Color ${index + 1}`}
+                    aria-pressed={color === value}
+                    disabled={busy}
+                    onClick={() => setColor(value)}
+                  >
+                    {color === value && <Check size={15} aria-hidden="true" />}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </div>
         </div>
         <div className="pw-form-footer">
           <button className="btn btn-secondary" type="button" onClick={onClose} disabled={busy}>

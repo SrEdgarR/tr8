@@ -16,6 +16,7 @@ import { createCollaborationRepository } from './collaboration';
 import { createCalendarRepository } from './calendar';
 import { createProcessesRepository } from './processes';
 import { createGoogleCalendarRepository } from './google-calendar';
+import { isProjectIcon } from '../project-identity';
 
 export interface WorkspaceData {
   projects: Project[];
@@ -47,6 +48,7 @@ function validateProject(input: ProjectInput): ProjectInput {
   const value = { ...input, name: input.name.trim(), description: input.description.trim() };
   if (!value.name || value.name.length > 120 || value.description.length > 10000 || !/^#[0-9a-f]{6}$/i.test(value.color))
     throw new DataError('Revisa el nombre y el color del proyecto.');
+  if (value.icon !== undefined && !isProjectIcon(value.icon)) throw new DataError('Selecciona un icono de proyecto válido.');
   return value;
 }
 
@@ -115,13 +117,14 @@ export function createRepository(client: SupabaseClient) {
     },
     createProject(workspaceId: string, input: ProjectInput, requestId: string): Promise<Project> {
       const value = validateProject(input);
-      return rpc(client, 'tr8_v2_create_project', {
+      return rpc(client, value.icon === undefined ? 'tr8_v2_create_project' : 'tr8_v2_create_project_with_icon', {
         p_workspace_id: workspaceId,
         p_id: requestId,
         p_name: value.name,
         p_description: value.description,
         p_color: value.color,
         p_status: value.status,
+        ...(value.icon === undefined ? {} : { p_icon: value.icon }),
       });
     },
     updateProject(project: Project, input: ProjectInput): Promise<Project> {

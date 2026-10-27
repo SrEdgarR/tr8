@@ -229,7 +229,8 @@ describe('zona horaria en Configuración', () => {
     const api = calendarApi({ profile: vi.fn().mockResolvedValue(savedProfile('America/La_Paz', 3)) });
     mountSettings(api);
     const navigation = screen.getByRole('navigation', { name: 'Categorías de configuración' });
-    expect(within(navigation).getAllByRole('button')).toHaveLength(3);
+    expect(within(navigation).getAllByRole('button')).toHaveLength(4);
+    expect(within(navigation).getByRole('button', { name: 'Apariencia' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Configuración', level: 1 })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Configuración general' })).toBeVisible();
     expect(screen.queryByRole('region', { name: 'Conexiones de la cuenta' })).not.toBeInTheDocument();

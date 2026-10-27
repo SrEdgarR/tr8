@@ -1,3 +1,5 @@
+import type { ProjectIconName } from './project-identity';
+
 export type TaskStatus = 'backlog' | 'todo' | 'progress' | 'review' | 'done';
 export type Priority = 'none' | 'low' | 'medium' | 'high' | 'urgent';
 export type ProjectStatus = 'planning' | 'active' | 'hold' | 'complete';
@@ -10,6 +12,7 @@ export interface Project {
   name: string;
   description: string;
   color: string;
+  icon?: ProjectIconName;
   status: ProjectStatus;
   archived_at: string | null;
   version: number;
@@ -43,6 +46,7 @@ export interface ProjectInput {
   name: string;
   description: string;
   color: string;
+  icon?: ProjectIconName;
   status: ProjectStatus;
 }
 
