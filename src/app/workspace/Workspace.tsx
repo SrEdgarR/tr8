@@ -2,13 +2,28 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { Activity, Archive, ChevronRight, LogOut, Menu, Pencil, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, Users, X } from 'lucide-react';
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PROJECT_STATUSES } from '../constants';
-import type { CalendarApi, CalendarItem, CollaborationApi, Project, Task, TaskStatus, WorkspaceMember, WorkspaceProps, WorkspaceSummary } from '../types';
+import type {
+  CalendarApi,
+  CalendarItem,
+  CollaborationApi,
+  Project,
+  Task,
+  TaskPatch,
+  TaskStatus,
+  WorkspaceMember,
+  WorkspaceProps,
+  WorkspaceSummary,
+} from '../types';
 import Calendar from './Calendar';
 import CalendarSettings from './CalendarZoneSettings';
 import ProjectForm from './ProjectForm';
 import ProjectDeleteDialog from './ProjectDeleteDialog';
 import TaskForm from './TaskForm';
-import TasksView from './TasksView';
+import TaskCollectionPage from './TaskCollectionPage';
+import ProductivityTasks from './ProductivityTasks';
+import useProductivity, { type ProductivityController } from './useProductivity';
+import FavoriteButton from './FavoriteButton';
+import FavoritesPage from './FavoritesPage';
 import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon } from './ui';
 import { errorMessage, localDate } from './helpers';
 import { ActivityPanel, ProjectAccessDialog, TeamAdministration } from './Collaboration';
@@ -25,6 +40,9 @@ import './workspace.css';
 import './visual-navigation.css';
 
 type ProjectActions = {
+  productivity: ProductivityController;
+  onPatch: (task: Task, patch: TaskPatch) => Promise<void>;
+  onReorder: (ordered: Task[]) => Promise<void>;
   onEdit: (project: Project) => void;
   onArchive: (project: Project) => void;
   onDelete: (project: Project) => void;
@@ -41,7 +59,17 @@ type ProjectActions = {
   scopeSearch?: string;
 };
 
-function ProjectCard({ project, tasks, pending, can, scopeSearch = '', onEdit, onArchive, onDelete }: ProjectActions & { project: Project; tasks: Task[] }) {
+function ProjectCard({
+  project,
+  tasks,
+  pending,
+  can,
+  scopeSearch = '',
+  onEdit,
+  onArchive,
+  onDelete,
+  productivity,
+}: ProjectActions & { project: Project; tasks: Task[] }) {
   const complete = tasks.filter(task => task.status === 'done').length;
   const progress = tasks.length ? Math.round((complete / tasks.length) * 100) : 0;
   return (
@@ -69,6 +97,16 @@ function ProjectCard({ project, tasks, pending, can, scopeSearch = '', onEdit, o
         </div>
       </Link>
       <div className="foot">
+        <FavoriteButton
+          name={project.name}
+          active={productivity.state.favorites.some(row => row.kind === 'project' && row.id === project.id)}
+          disabled={pending || !productivity.available || productivity.pending}
+          onClick={() => {
+            void productivity
+              .setFavorite('project', project.id, !productivity.state.favorites.some(row => row.kind === 'project' && row.id === project.id))
+              .catch(() => {});
+          }}
+        />
         <span>
           {complete}/{tasks.length} tareas
         </span>
@@ -214,6 +252,16 @@ function ProjectPage({
             <h1>{project.name}</h1>
             <p className="pw-project-description">{project.description || 'Organiza las tareas de este proyecto.'}</p>
           </div>
+          <FavoriteButton
+            name={project.name}
+            active={actions.productivity.state.favorites.some(row => row.kind === 'project' && row.id === project.id)}
+            disabled={actions.pending || !actions.productivity.available || actions.productivity.pending}
+            onClick={() => {
+              void actions.productivity
+                .setFavorite('project', project.id, !actions.productivity.state.favorites.some(row => row.kind === 'project' && row.id === project.id))
+                .catch(() => {});
+            }}
+          />
           {!project.archived_at && (
             <button className="btn btn-primary" disabled={actions.pending || !actions.can(project.id, 'task.create')} onClick={() => onNewTask(project)}>
               <Plus size={14} aria-hidden="true" />
@@ -296,18 +344,24 @@ function ProjectPage({
           </div>
         </Dialog>
       )}
-      <TasksView
+      <ProductivityTasks
         key={project.id}
+        data={data}
+        controller={actions.productivity}
+        context="project"
+        projectId={project.id}
         tasks={projectTasks}
         projects={projects}
         members={actions.members}
         pending={actions.pending}
-        readOnly={Boolean(project.archived_at)}
-        canCreate={actions.can(project.id, 'task.create') && !project.archived_at}
-        canEditTask={task => actions.can(task.project_id, 'task.edit') && !project.archived_at}
+        readOnly={Boolean(data.readOnly || project.archived_at)}
+        canCreate={!data.readOnly && actions.can(project.id, 'task.create') && !project.archived_at}
+        canEditTask={task => !data.readOnly && actions.can(task.project_id, 'task.edit') && !project.archived_at}
         onCreate={status => onNewTask(project, status)}
         onOpen={onOpen}
         onMove={onMove}
+        onPatch={actions.onPatch}
+        onReorder={actions.onReorder}
         summaryContent={<ProjectSummary project={project} data={data} onOpen={onOpen} />}
         activityContent={
           actions.collaboration && actions.can(project.id, 'audit.read') ? (
@@ -473,6 +527,7 @@ function AccountPage({ email, pending, onSignOut, onPasswordReset }: Pick<Worksp
 }
 
 export default function Workspace(props: WorkspaceProps & { processes?: ReactNode; integrations?: ReactNode; finance?: ReactNode }) {
+  const productivity = useProductivity(props.productivity, !props.loading && !props.accessUnavailable && canInWorkspace(props, 'project.read'));
   const navigate = useNavigate();
   const location = useLocation();
   const financeView = location.pathname === '/finance' && Boolean(props.finance);
@@ -498,32 +553,15 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   const [actionBusy, setActionBusy] = useState(false);
   const actionLock = useRef(false);
   const pending = props.pending || actionBusy;
-  const can = (projectId: string, permission: string) => canInProject(props, projectId, permission);
-  const canCreateProject = canInWorkspace(props, 'project.create');
+  const can = (projectId: string, permission: string) =>
+    !props.accessUnavailable && (!props.readOnly || permission.endsWith('.read')) && canInProject(props, projectId, permission);
+  const canCreateProject = !props.readOnly && !props.accessUnavailable && canInWorkspace(props, 'project.create');
   const workspaceName = props.workspace?.kind === 'personal' ? 'Mi espacio personal' : (props.workspace?.name ?? 'Mi espacio');
   const scopeSearch = props.workspace ? `?workspace=${props.workspace.id}` : '';
   const activeProjects = props.projects.filter(project => !project.archived_at);
   const creatableProjects = activeProjects.filter(project => can(project.id, 'task.create'));
   const dashboard = buildDashboardModel(props, localDate());
-  const taskFilter = searchParams.get('filter');
-  const filteredTasks =
-    taskFilter === 'mine'
-      ? dashboard.mine
-      : dashboard.tasks.filter(task =>
-          taskFilter === 'done'
-            ? task.status === 'done'
-            : taskFilter === 'open'
-              ? task.status !== 'done'
-              : taskFilter === 'overdue'
-                ? task.status !== 'done' && Boolean(task.due_date && task.due_date < localDate())
-                : true,
-        );
-  const taskFilterLabel = new Map([
-    ['mine', 'Asignadas a mí'],
-    ['done', 'Completadas'],
-    ['open', 'Por completar'],
-    ['overdue', 'Vencidas'],
-  ]).get(taskFilter ?? '');
+  const minePage = location.pathname === '/my-tasks';
   const taskId = searchParams.get('task');
   const selectedTask = props.tasks.find(task => task.id === taskId);
   const currentProject = props.projects.find(project => location.pathname === `/projects/${project.id}`);
@@ -550,21 +588,25 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
       ? 'Finanzas'
       : location.pathname === '/projects'
         ? 'Proyectos'
-        : location.pathname === '/tasks'
+        : location.pathname === '/my-tasks'
           ? 'Mis tareas'
-          : location.pathname === '/settings'
-            ? 'Configuración'
-            : location.pathname === '/account'
-              ? 'Mi cuenta'
-              : location.pathname === '/team'
-                ? 'Equipo'
-                : location.pathname === '/overview'
-                  ? 'Vista general'
-                  : location.pathname === '/activity'
-                    ? 'Actividad'
-                    : location.pathname === '/calendar'
-                      ? 'Calendario'
-                      : 'Inicio');
+          : location.pathname === '/tasks'
+            ? 'Tareas'
+            : location.pathname === '/favorites'
+              ? 'Favoritos'
+              : location.pathname === '/settings'
+                ? 'Configuración'
+                : location.pathname === '/account'
+                  ? 'Mi cuenta'
+                  : location.pathname === '/team'
+                    ? 'Equipo'
+                    : location.pathname === '/overview'
+                      ? 'Vista general'
+                      : location.pathname === '/activity'
+                        ? 'Actividad'
+                        : location.pathname === '/calendar'
+                          ? 'Calendario'
+                          : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -584,7 +626,14 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   }
 
   async function moveTask(task: Task, status: TaskStatus) {
-    if (!can(task.project_id, 'task.edit') || task.status === status) return;
+    if (
+      props.readOnly ||
+      props.accessUnavailable ||
+      !can(task.project_id, 'task.edit') ||
+      props.projects.find(project => project.id === task.project_id)?.archived_at ||
+      task.status === status
+    )
+      return;
     await action(() => props.onUpdateTask(task, { status, position: Date.now() }), 'Estado de la tarea guardado.');
   }
 
@@ -608,7 +657,50 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   function createTask(project?: Project, status?: TaskStatus) {
     setNewTask({ projectId: project?.id, status });
   }
+  async function patchTask(task: Task, patch: TaskPatch) {
+    const current = props.tasks.find(row => row.id === task.id && row.project_id === task.project_id);
+    if (
+      !current ||
+      current.version !== task.version ||
+      pending ||
+      props.readOnly ||
+      !can(task.project_id, 'task.edit') ||
+      props.projects.find(project => project.id === task.project_id)?.archived_at
+    )
+      throw new Error('La tarea cambió o no permite edición. Actualiza la vista antes de guardar.');
+    await props.onUpdateTask(task, patch);
+    setAnnouncement('Tarea guardada.');
+  }
+  async function reorderTasks(ordered: Task[]) {
+    if (!ordered.length || !props.productivity || !productivity.available || pending || props.readOnly)
+      throw new Error('Actualiza la vista antes de reordenar.');
+    const projectId = ordered[0].project_id;
+    if (
+      !can(projectId, 'task.edit') ||
+      props.projects.find(project => project.id === projectId)?.archived_at ||
+      ordered.some(task => task.project_id !== projectId) ||
+      new Set(ordered.map(task => task.id)).size !== ordered.length
+    )
+      throw new Error('Solo puedes reordenar tareas editables del mismo proyecto.');
+    const full = dashboard.tasks
+      .filter(task => task.project_id === projectId)
+      .sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+    if (full.length > 200) throw new Error('La reordenación manual admite hasta 200 tareas por proyecto.');
+    if (ordered.some(task => !full.some(row => row.id === task.id && row.version === task.version)))
+      throw new Error('Las tareas cambiaron. Actualiza la vista antes de reordenar.');
+    const ids = new Set(ordered.map(task => task.id));
+    let offset = 0;
+    const merged = full.map(task => (ids.has(task.id) ? ordered[offset++] : task));
+    await props.productivity.reorderTasks(
+      projectId,
+      merged.map((task, index) => ({ id: task.id, version: task.version, position: (index + 1) * 1024 })),
+    );
+    setAnnouncement('Orden de tareas guardado.');
+  }
   const projectActions: ProjectActions = {
+    productivity,
+    onPatch: patchTask,
+    onReorder: reorderTasks,
     pending,
     can,
     canCreateProject,
@@ -643,6 +735,14 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
       <WorkspaceSidebar
         key={`${props.currentUserId ?? 'session'}:${props.workspace?.id ?? 'workspace'}`}
         data={props}
+        favoriteProjectIds={productivity.state.favorites.filter(row => row.kind === 'project').map(row => row.id)}
+        favoriteCount={productivity.state.favorites.length}
+        favoritesBusy={!productivity.available || productivity.pending}
+        onFavoriteProject={project => {
+          void productivity
+            .setFavorite('project', project.id, !productivity.state.favorites.some(row => row.kind === 'project' && row.id === project.id))
+            .catch(() => {});
+        }}
         collapsed={appearance.preferences.sidebarCollapsed}
         pending={pending}
         showFinance={Boolean(props.finance)}
@@ -733,6 +833,14 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
             </button>
           </div>
         )}
+        {productivity.error && (
+          <div className="pw-productivity-error">
+            <ErrorNotice>{productivity.error}</ErrorNotice>
+            <button className="btn btn-secondary btn-sm" onClick={productivity.refresh}>
+              Actualizar favoritos y vistas
+            </button>
+          </div>
+        )}
         <main className={financeView ? 'content pw-content-finance' : 'content'} id="workspace-content" tabIndex={-1} aria-busy={props.loading}>
           {props.loading ? (
             <Busy />
@@ -780,55 +888,46 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
               <Route
                 path="/tasks"
                 element={
-                  <div className="page flush">
-                    <div className="ph">
-                      <div>
-                        <h1>Mis tareas</h1>
-                        <p>Todas tus tareas, una vista clara.</p>
-                      </div>
-                      <div className="acts">
-                        <button className="btn btn-primary" disabled={pending || !creatableProjects.length} onClick={openNewTask}>
-                          <Plus size={14} aria-hidden="true" />
-                          Nueva tarea
-                        </button>
-                      </div>
-                    </div>
-                    {taskFilterLabel && (
-                      <div className="pw-dashboard-filter">
-                        <span>Mostrando: {taskFilterLabel}</span>
-                        <Link to={`/tasks${scopeSearch}`} className="pw-text-link">
-                          Ver todas las tareas
-                        </Link>
-                      </div>
-                    )}
-                    {taskFilter === 'mine' && !dashboard.mineAvailable && (
-                      <p className="pw-info">Tu asignación no está disponible sin acceso al directorio de miembros.</p>
-                    )}
-                    {activeProjects.length ? (
-                      <TasksView
-                        tasks={filteredTasks}
-                        projects={props.projects}
-                        members={props.members}
-                        pending={pending}
-                        canCreate={creatableProjects.length > 0}
-                        canEditTask={task => can(task.project_id, 'task.edit')}
-                        onCreate={status => createTask(undefined, status)}
-                        onOpen={openTask}
-                        onMove={moveTask}
-                      />
-                    ) : (
-                      <EmptyState
-                        title="Primero, un proyecto"
-                        action={
-                          <button className="btn btn-primary" disabled={pending || !canCreateProject} onClick={openNewProject}>
-                            Crear proyecto
-                          </button>
-                        }
-                      >
-                        Crea un proyecto para empezar a organizar tus tareas.
-                      </EmptyState>
-                    )}
-                  </div>
+                  <TaskCollectionPage
+                    data={{ ...props, pending }}
+                    controller={productivity}
+                    mine={minePage}
+                    onNewTask={openNewTask}
+                    onNewProject={openNewProject}
+                    onOpen={openTask}
+                    onMove={moveTask}
+                    onPatch={patchTask}
+                    onReorder={reorderTasks}
+                  />
+                }
+              />
+              <Route
+                path="/my-tasks"
+                element={
+                  <TaskCollectionPage
+                    data={{ ...props, pending }}
+                    controller={productivity}
+                    mine={minePage}
+                    onNewTask={openNewTask}
+                    onNewProject={openNewProject}
+                    onOpen={openTask}
+                    onMove={moveTask}
+                    onPatch={patchTask}
+                    onReorder={reorderTasks}
+                  />
+                }
+              />
+              <Route
+                path="/favorites"
+                element={
+                  <FavoritesPage
+                    data={{ ...props, pending }}
+                    controller={productivity}
+                    onOpen={openTask}
+                    onMove={moveTask}
+                    onPatch={patchTask}
+                    onReorder={reorderTasks}
+                  />
                 }
               />
               <Route path="/team" element={<TeamAdministration {...props} />} />

@@ -1,13 +1,20 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { Activity, CalendarDays, Check, SquareKanban, LayoutDashboard, List, Plus, Search, RotateCcw } from 'lucide-react';
+import { useMemo, useRef, useState, type ReactNode, type DragEvent } from 'react';
+import { Activity, CalendarDays, ChevronRight, SquareKanban, LayoutDashboard, List, Plus, Search, Table2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { formatDate, PRIORITIES, STATUSES } from '../constants';
-import type { Priority, Project, Task, TaskStatus, WorkspaceMember } from '../types';
-import { EmptyState, StatusDot } from './ui';
-import { IdentityAvatar, PriorityIcon, ProjectGlyph } from './project-identity';
-import { localDate } from './helpers';
+import { PRIORITIES, STATUSES } from '../constants';
+import type { Priority, Project, Task, TaskPatch, TaskStatus, WorkspaceMember } from '../types';
+import type { TaskViewConfig } from '../productivity-types';
+import { EmptyState, ErrorNotice } from './ui';
+import { errorMessage, localDate } from './helpers';
+import TaskViewControls, { type SavedViewsProps } from './TaskViewControls';
+import TaskTable from './TaskTable';
+import TaskList from './TaskList';
+import TaskBoard from './TaskBoard';
+import { defaultTaskView, filterTaskView, groupTaskView, manualTaskOrder, reorderedProjectTasks } from './task-views';
+import './task-views.css';
 
-interface Props {
+interface Props extends SavedViewsProps {
+  scopeKey?: string;
   tasks: Task[];
   projects: Project[];
   members?: WorkspaceMember[];
@@ -21,32 +28,21 @@ interface Props {
   calendarContent?: ReactNode;
   activityContent?: ReactNode;
   summaryContent?: ReactNode;
+  onPatch?: (task: Task, patch: TaskPatch) => Promise<void>;
+  onReorder?: (tasks: Task[]) => Promise<void>;
+  favoriteTaskIds?: readonly string[];
+  onFavoriteTask?: (task: Task, favorite: boolean) => Promise<void>;
 }
 
-function TaskStateSelect({ task, disabled, onMove }: { task: Task; disabled: boolean; onMove: Props['onMove'] }) {
-  return (
-    <select
-      className="pw-status-select"
-      aria-label={`Estado de ${task.title}`}
-      value={task.status}
-      disabled={disabled}
-      onChange={event => {
-        void onMove(task, event.target.value as TaskStatus);
-      }}
-    >
-      {STATUSES.map(status => (
-        <option key={status.id} value={status.id}>
-          {status.name}
-        </option>
-      ))}
-    </select>
-  );
+export default function TasksView(props: Props) {
+  return <ScopedTasksView key={props.scopeKey ?? 'legacy'} {...props} />;
 }
 
-export default function TasksView({
+const NO_FAVORITES: readonly string[] = [];
+function ScopedTasksView({
   tasks,
   projects,
-  members = [],
+  members: receivedMembers = [],
   pending,
   readOnly = false,
   canCreate = !readOnly,
@@ -57,8 +53,19 @@ export default function TasksView({
   calendarContent,
   activityContent,
   summaryContent,
+  onPatch,
+  onReorder,
+  favoriteTaskIds = NO_FAVORITES,
+  onFavoriteTask,
+  savedViews,
+  onCreateView,
+  onUpdateView,
+  onDeleteView,
+  productivityLoading,
+  productivityError,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const members = useMemo(() => receivedMembers.filter(member => member.status === 'active'), [receivedMembers]);
   const view =
     searchParams.get('view') === 'overview' && summaryContent
       ? 'overview'
@@ -68,43 +75,175 @@ export default function TasksView({
           ? 'calendar'
           : searchParams.get('view') === 'board'
             ? 'board'
-            : 'list';
-  const [query, setQuery] = useState('');
-  const [status, setStatus] = useState<TaskStatus | ''>('');
-  const [priority, setPriority] = useState<Priority | ''>('');
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [over, setOver] = useState<TaskStatus | null>(null);
-  const projectMap = useMemo(() => new Map(projects.map(project => [project.id, project])), [projects]);
-  const memberMap = useMemo(() => new Map(members.map(member => [member.id, member.display_name])), [members]);
+            : searchParams.get('view') === 'table'
+              ? 'table'
+              : 'list';
+  const [config, setConfig] = useState<TaskViewConfig>(() => ({
+    ...defaultTaskView(),
+    view: searchParams.get('view') === 'board' ? 'board' : searchParams.get('view') === 'table' ? 'table' : 'list',
+  }));
+  const [selectedView, setSelectedView] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [localBusy, setLocalBusy] = useState(false);
+  const actionLock = useRef(false);
+  const query = config.query;
+  const status = config.statuses.length === 1 ? config.statuses[0] : '';
+  const priority = config.priorities.length === 1 ? config.priorities[0] : '';
+  const setQuery = (value: string) => setConfig(previous => ({ ...previous, query: value }));
+  const setStatus = (value: TaskStatus | '') => setConfig(previous => ({ ...previous, statuses: value ? [value] : [] }));
+  const setPriority = (value: Priority | '') => setConfig(previous => ({ ...previous, priorities: value ? [value] : [] }));
   const today = localDate();
-  const normalizedQuery = query.trim().toLocaleLowerCase('es');
-  const visible = useMemo(
-    () =>
-      tasks
-        .filter(
-          task =>
-            (!status || task.status === status) &&
-            (!priority || task.priority === priority) &&
-            (!normalizedQuery ||
-              `${task.title} ${task.description} ${projectMap.get(task.project_id)?.name ?? ''}`.toLocaleLowerCase('es').includes(normalizedQuery)),
-        )
-        .sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at)),
-    [tasks, status, priority, normalizedQuery, projectMap],
+  const visible = useMemo(() => filterTaskView(tasks, projects, config, favoriteTaskIds, today), [tasks, projects, config, favoriteTaskIds, today]);
+  const groups = useMemo(
+    () => groupTaskView(visible, view === 'board' && config.group === 'status' ? { ...config, group: 'none' } : config, projects, members),
+    [visible, view, config, projects, members],
   );
-  const hasFilters = Boolean(query || status || priority);
+  const hasFilters = Boolean(
+    query ||
+    config.statuses.length ||
+    config.priorities.length ||
+    config.projectIds.length ||
+    config.assigneeIds.length ||
+    config.due !== 'all' ||
+    config.favoritesOnly,
+  );
   const mayEdit = (task: Task) => !readOnly && (canEditTask?.(task) ?? true);
+  const busy = pending || localBusy;
+  const reorderEnabled = Boolean(onReorder && config.sort === 'manual' && config.direction === 'asc' && !readOnly);
+
+  async function run(operation: () => Promise<void>) {
+    if (pending || actionLock.current) return;
+    actionLock.current = true;
+    setLocalBusy(true);
+    setActionError(null);
+    try {
+      await operation();
+    } catch (cause) {
+      setActionError(errorMessage(cause));
+    } finally {
+      actionLock.current = false;
+      setLocalBusy(false);
+    }
+  }
+  const move = (task: Task, next: TaskStatus) => run(() => onMove(task, next));
+  function toggleFavorite(task: Task, favorite: boolean) {
+    if (onFavoriteTask) void run(() => onFavoriteTask(task, favorite));
+  }
+  function reordered(ordered: Task[]) {
+    if (!onReorder || !reorderEnabled || ordered.some(task => !mayEdit(task))) return;
+    if (ordered.length > 200) {
+      setActionError('El orden manual admite hasta 200 tareas del mismo proyecto por operación.');
+      return;
+    }
+    void run(() => onReorder(ordered));
+  }
+  function moveBy(task: Task, direction: -1 | 1) {
+    const order = manualTaskOrder(tasks.filter(item => item.project_id === task.project_id && item.workspace_id === task.workspace_id));
+    const index = order.findIndex(item => item.id === task.id);
+    if (index < 0 || index + direction < 0 || index + direction >= order.length) return;
+    order.splice(index, 1);
+    order.splice(index + direction, 0, task);
+    reordered(order);
+  }
+  function beginDrag(id: string, event: DragEvent) {
+    event.dataTransfer.setData('text/plain', id);
+    event.dataTransfer.effectAllowed = 'move';
+  }
+  function dropBefore(target: Task, event: DragEvent) {
+    if (!reorderEnabled || busy) return;
+    const draggedId = event.dataTransfer.getData('text/plain');
+    const dragged = tasks.find(task => task.id === draggedId);
+    if (!dragged || !mayEdit(dragged) || !mayEdit(target)) return;
+    if (view === 'board' && dragged.status !== target.status) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const order = reorderedProjectTasks(tasks, draggedId, target.id);
+    if (order) reordered(order);
+    else if (dragged.project_id !== target.project_id) setActionError('El orden manual solo mueve tareas dentro del mismo proyecto.');
+  }
+
+  function selectSavedView(id: string) {
+    setSelectedView(id);
+    const saved = savedViews?.find(item => item.id === id);
+    if (saved) {
+      setConfig({ ...saved.config });
+      setCollapsedGroups({});
+      changeView(saved.config.view);
+    }
+  }
 
   function changeView(next: string) {
     const params = new URLSearchParams(searchParams);
-    if (next === 'board' || next === 'calendar' || next === 'activity' || next === 'overview') params.set('view', next);
+    if (next === 'board' || next === 'table' || next === 'calendar' || next === 'activity' || next === 'overview') params.set('view', next);
     else params.delete('view');
+    if (next === 'board' || next === 'table' || next === 'list') setConfig(previous => ({ ...previous, view: next }));
     setSearchParams(params, { replace: true });
   }
 
   function resetFilters() {
-    setQuery('');
-    setStatus('');
-    setPriority('');
+    setConfig(previous => ({
+      ...defaultTaskView(),
+      view: previous.view,
+      sort: previous.sort,
+      direction: previous.direction,
+      group: previous.group,
+      columns: previous.columns,
+    }));
+    setSelectedView('');
+  }
+
+  function renderContent(items: Task[]) {
+    const rowProps = {
+      tasks: items,
+      projects,
+      members,
+      columns: config.columns,
+      pending: busy,
+      today,
+      mayEdit,
+      onOpen,
+      onMove: move,
+      onPatch,
+      favoriteIds: favoriteTaskIds,
+      onFavorite: onFavoriteTask ? toggleFavorite : undefined,
+      onReorder: reorderEnabled ? moveBy : undefined,
+      onDragStart: reorderEnabled ? beginDrag : undefined,
+      onDrop: reorderEnabled ? dropBefore : undefined,
+    };
+    return view === 'table' ? (
+      <TaskTable {...rowProps} />
+    ) : view === 'board' ? (
+      <TaskBoard {...rowProps} readOnly={readOnly} canCreate={canCreate} onCreate={onCreate} />
+    ) : (
+      <TaskList {...rowProps} />
+    );
+  }
+  function renderGroups() {
+    const grouped = config.group !== 'none' && !(view === 'board' && config.group === 'status');
+    return (
+      <>
+        {groups.map(group =>
+          grouped ? (
+            <section className="tv-task-group" key={`${config.group}:${group.id}`} aria-label={group.label}>
+              <button
+                className="tv-group-heading"
+                aria-label={`${group.label}: ${group.tasks.length} tareas`}
+                aria-expanded={!collapsedGroups[`${config.group}:${group.id}`]}
+                onClick={() => setCollapsedGroups(previous => ({ ...previous, [`${config.group}:${group.id}`]: !previous[`${config.group}:${group.id}`] }))}
+              >
+                <ChevronRight size={13} className={collapsedGroups[`${config.group}:${group.id}`] ? '' : 'is-open'} aria-hidden="true" />
+                <strong>{group.label}</strong>
+                <span>{group.tasks.length}</span>
+              </button>
+              {!collapsedGroups[`${config.group}:${group.id}`] && renderContent(group.tasks)}
+            </section>
+          ) : (
+            <div key="all">{renderContent(group.tasks)}</div>
+          ),
+        )}
+      </>
+    );
   }
 
   return (
@@ -123,6 +262,10 @@ export default function TasksView({
         <button className={`pw-view-tab${view === 'board' ? ' on' : ''}`} aria-pressed={view === 'board'} onClick={() => changeView('board')}>
           <SquareKanban size={15} aria-hidden="true" />
           Tablero
+        </button>
+        <button className={`pw-view-tab${view === 'table' ? ' on' : ''}`} aria-pressed={view === 'table'} onClick={() => changeView('table')}>
+          <Table2 size={15} aria-hidden="true" />
+          Tabla
         </button>
         {calendarContent && (
           <button className={`pw-view-tab${view === 'calendar' ? ' on' : ''}`} aria-pressed={view === 'calendar'} onClick={() => changeView('calendar')}>
@@ -145,11 +288,12 @@ export default function TasksView({
         calendarContent
       ) : (
         <>
+          {actionError && <ErrorNotice>{actionError}</ErrorNotice>}
           <div className="toolbar pw-toolbar">
             <label className="pw-search">
               <Search size={14} aria-hidden="true" />
               <span className="sr">Buscar tareas</span>
-              <input type="search" placeholder="Buscar tareas…" value={query} onChange={event => setQuery(event.target.value)} />
+              <input type="search" placeholder="Buscar tareas…" maxLength={500} value={query} onChange={event => setQuery(event.target.value)} />
             </label>
             <label className="pw-filter">
               <span className="sr">Filtrar por estado</span>
@@ -182,7 +326,31 @@ export default function TasksView({
               {visible.length} {visible.length === 1 ? 'tarea' : 'tareas'}
             </span>
           </div>
-          {visible.length === 0 && (view === 'list' || hasFilters) ? (
+          <TaskViewControls
+            config={{ ...config, view: view === 'table' ? 'table' : view === 'board' ? 'board' : 'list' }}
+            onChange={setConfig}
+            projects={projects}
+            members={members}
+            pending={busy}
+            selected={selectedView}
+            onSelect={selectSavedView}
+            savedViews={savedViews}
+            onCreateView={onCreateView}
+            onUpdateView={onUpdateView}
+            onDeleteView={onDeleteView}
+            productivityLoading={productivityLoading}
+            productivityError={productivityError}
+          />
+          {onReorder && (
+            <p className="tv-order-note">
+              {readOnly
+                ? 'El orden de las tareas se conserva en esta vista de solo lectura.'
+                : reorderEnabled
+                  ? 'Orden manual: arrastra una tarea sobre otra o usa las flechas para cambiar su posición dentro del mismo proyecto.'
+                  : 'Selecciona orden manual ascendente para reordenar las tareas.'}
+            </p>
+          )}
+          {visible.length === 0 && (view === 'list' || view === 'table' || hasFilters) ? (
             <EmptyState
               title={hasFilters ? 'No hay coincidencias' : 'Tu siguiente paso empieza aquí'}
               action={
@@ -192,7 +360,7 @@ export default function TasksView({
                   </button>
                 ) : (
                   canCreate && (
-                    <button className="btn btn-primary" disabled={pending} onClick={() => onCreate()}>
+                    <button className="btn btn-primary" disabled={busy} onClick={() => onCreate()}>
                       <Plus size={14} aria-hidden="true" />
                       Nueva tarea
                     </button>
@@ -206,173 +374,8 @@ export default function TasksView({
                   ? 'Este proyecto no tiene tareas.'
                   : 'Crea una tarea y organiza su estado, prioridad y fecha.'}
             </EmptyState>
-          ) : view === 'list' ? (
-            <div className="pw-task-list" role="table" aria-label="Lista de tareas">
-              <div className="pw-task-row pw-task-list-head" role="row">
-                <span role="columnheader" className="sr">
-                  Completar
-                </span>
-                <span role="columnheader">Tarea</span>
-                <span role="columnheader">Estado</span>
-                <span role="columnheader">Prioridad</span>
-                <span role="columnheader">Vencimiento</span>
-              </div>
-              {visible.map(task => (
-                <div key={task.id} className={`pw-task-row${task.status === 'done' ? ' pw-done' : ''}`} role="row">
-                  <span role="cell">
-                    <button
-                      className={`pw-complete${task.status === 'done' ? ' checked' : ''}`}
-                      disabled={pending || !mayEdit(task)}
-                      aria-label={task.status === 'done' ? `Reabrir ${task.title}` : `Completar ${task.title}`}
-                      onClick={() => {
-                        void onMove(task, task.status === 'done' ? 'todo' : 'done');
-                      }}
-                    >
-                      {task.status === 'done' && <Check size={12} aria-hidden="true" />}
-                    </button>
-                  </span>
-                  <span className="pw-task-title-cell" role="cell">
-                    <button className="pw-task-title" onClick={() => onOpen(task)}>
-                      {task.title}
-                    </button>
-                    <span className="pw-task-subtitle">
-                      <span className="mono">
-                        {projectMap.get(task.project_id)?.code}-{task.task_number}
-                      </span>
-                      <span className="pw-task-project-identity" style={{ color: projectMap.get(task.project_id)?.color }}>
-                        <ProjectGlyph icon={projectMap.get(task.project_id)?.icon} size={11} />
-                        {projectMap.get(task.project_id)?.name}
-                      </span>
-                    </span>
-                  </span>
-                  <span role="cell" className="pw-state-cell">
-                    <StatusDot status={task.status} />
-                    <TaskStateSelect task={task} disabled={pending || !mayEdit(task)} onMove={onMove} />
-                  </span>
-                  <span role="cell" className={`pw-priority pw-priority-${task.priority}`}>
-                    <PriorityIcon priority={task.priority} />
-                    {PRIORITIES.find(item => item.id === task.priority)?.name}
-                  </span>
-                  <span role="cell" className={`pw-due${task.due_date && task.due_date < today && task.status !== 'done' ? ' overdue' : ''}`}>
-                    {formatDate(task.due_date)}
-                  </span>
-                </div>
-              ))}
-            </div>
           ) : (
-            <>
-              <p className="pw-board-help">
-                {readOnly
-                  ? 'Vista de solo lectura: puedes consultar las tareas de este proyecto.'
-                  : 'Arrastra las tarjetas entre columnas o utiliza el selector de estado de cada tarea.'}
-              </p>
-              <div className="board pw-board">
-                {STATUSES.map(column => {
-                  const items = visible.filter(task => task.status === column.id);
-                  return (
-                    <section
-                      key={column.id}
-                      className={`bcol${over === column.id ? ' over' : ''}`}
-                      aria-label={`${column.name}: ${items.length} ${items.length === 1 ? 'tarea' : 'tareas'}`}
-                      onDragOver={event => {
-                        if (dragging && !pending && !readOnly) {
-                          event.preventDefault();
-                          event.dataTransfer.dropEffect = 'move';
-                          setOver(column.id);
-                        }
-                      }}
-                      onDragLeave={event => {
-                        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver(null);
-                      }}
-                      onDrop={event => {
-                        event.preventDefault();
-                        setOver(null);
-                        setDragging(null);
-                        if (pending || readOnly) return;
-                        const task = tasks.find(item => item.id === event.dataTransfer.getData('text/plain'));
-                        if (task && mayEdit(task) && task.status !== column.id) void onMove(task, column.id);
-                      }}
-                    >
-                      <div className="bcol-h">
-                        <StatusDot status={column.id} />
-                        <span>{column.name}</span>
-                        <span className="cnt">{items.length}</span>
-                        {canCreate && (
-                          <span className="acts">
-                            <button className="ibtn ibtn-xs" aria-label={`Añadir tarea: ${column.name}`} disabled={pending} onClick={() => onCreate(column.id)}>
-                              <Plus size={15} aria-hidden="true" />
-                            </button>
-                          </span>
-                        )}
-                      </div>
-                      <div className="bcol-b">
-                        {items.map(task => (
-                          <article
-                            key={task.id}
-                            className={`kcard${task.status === 'done' ? ' done' : ''}${dragging === task.id ? ' dragging' : ''}`}
-                            draggable={!pending && mayEdit(task)}
-                            onDragStart={event => {
-                              event.dataTransfer.setData('text/plain', task.id);
-                              event.dataTransfer.effectAllowed = 'move';
-                              setDragging(task.id);
-                            }}
-                            onDragEnd={() => {
-                              setDragging(null);
-                              setOver(null);
-                            }}
-                          >
-                            <button className="title pw-card-title" onClick={() => onOpen(task)}>
-                              {task.title}
-                            </button>
-                            {task.description && <p className="pw-card-description">{task.description}</p>}
-                            <div className="meta">
-                              <span className="key">
-                                {projectMap.get(task.project_id)?.code}-{task.task_number}
-                              </span>
-                              <span className={`pw-priority pw-priority-${task.priority}`}>
-                                <PriorityIcon priority={task.priority} />
-                                {PRIORITIES.find(item => item.id === task.priority)?.name}
-                              </span>
-                            </div>
-                            {task.due_date && (
-                              <span className={`pw-card-date${task.due_date < today && task.status !== 'done' ? ' overdue' : ''}`}>
-                                <CalendarDays size={12} aria-hidden="true" />
-                                {formatDate(task.due_date)}
-                              </span>
-                            )}
-                            <div className="pw-card-bottom">
-                              <TaskStateSelect task={task} disabled={pending || !mayEdit(task)} onMove={onMove} />
-                              {task.assignee_member_id && memberMap.has(task.assignee_member_id) && (
-                                <span className="pw-task-assignee">
-                                  <IdentityAvatar name={memberMap.get(task.assignee_member_id)!} small />
-                                </span>
-                              )}
-                              <button
-                                className="ibtn ibtn-xs"
-                                disabled={pending || !mayEdit(task)}
-                                aria-label={task.status === 'done' ? `Reabrir ${task.title}` : `Completar ${task.title}`}
-                                onClick={() => {
-                                  void onMove(task, task.status === 'done' ? 'todo' : 'done');
-                                }}
-                              >
-                                {task.status === 'done' ? <RotateCcw size={13} aria-hidden="true" /> : <Check size={14} aria-hidden="true" />}
-                              </button>
-                            </div>
-                          </article>
-                        ))}
-                        {canCreate && (
-                          <button className="addcard" disabled={pending} onClick={() => onCreate(column.id)}>
-                            <Plus size={14} aria-hidden="true" />
-                            Añadir tarea
-                          </button>
-                        )}
-                        {readOnly && items.length === 0 && <span className="pw-column-empty">Sin tareas</span>}
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
-            </>
+            renderGroups()
           )}
         </>
       )}

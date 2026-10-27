@@ -200,7 +200,7 @@ function HomeTasks({ model, data, onOpen, onMove }: Pick<DashboardProps, 'data' 
         </p>
       )}
       {model.mineAvailable && (
-        <Link className="dp-panel-footer" to={scoped(data, '/tasks', { filter: 'mine' })}>
+        <Link className="dp-panel-footer" to={scoped(data, '/my-tasks')}>
           Ver todas mis tareas
           <ArrowRight size={13} aria-hidden="true" />
         </Link>

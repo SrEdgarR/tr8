@@ -14,6 +14,8 @@ import type { ProcessesApi } from './data/processes';
 import type { GoogleCalendarApi } from './data/google-calendar';
 import { createGoogleTasksRepository, type GoogleTasksApi } from './data/google-tasks';
 import { createMcpRepository } from './data/mcp';
+import { createProductivityRepository } from './data/productivity';
+import type { ProductivityApi } from './productivity-types';
 import { createAccountDataClient } from './data/account-client';
 import { callbackRequestedRecovery, configuration, supabase } from './data/client';
 import { createRepository, type WorkspaceData } from './data/repository';
@@ -359,6 +361,7 @@ function ScopedWorkspace({
   const queryClient = useQueryClient();
   const repository = useMemo(() => createRepository(dataClient), [dataClient]);
   const scopeRevision = [...selected.permissions].sort().join('|');
+  const productivityRepository = useMemo(() => createProductivityRepository(dataClient, selected.id), [dataClient, selected.id]);
   const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
   const locked = useRef(false);
@@ -560,6 +563,22 @@ function ScopedWorkspace({
       throw error;
     }
   }
+  const productivity: ProductivityApi = {
+    scopeKey: [...collaborationScope, 'productivity'],
+    load: signal => readCollaboration(() => productivityRepository.load(signal)),
+    setFavorite: (kind, id, favorite) => write(() => productivityRepository.setFavorite(kind, id, favorite)),
+    createView: (id, name, context, projectId, config) => write(() => productivityRepository.createView(id, name, context, projectId, config)),
+    updateView: (view, name, config) => write(() => productivityRepository.updateView(view, name, config)),
+    deleteView: view => write(() => productivityRepository.deleteView(view)),
+    reorderTasks: (projectId, items, requestId) =>
+      write(
+        () => productivityRepository.reorderTasks(projectId, items, requestId),
+        (data, rows) => {
+          const replaced = new Map(rows.map(task => [task.id, task]));
+          return { ...data, tasks: data.tasks.map(task => replaced.get(task.id) ?? task) };
+        },
+      ),
+  };
   const collaboration: CollaborationApi = {
     scopeKey: collaborationScope,
     roles: () => readCollaboration(() => repository.roles(selected.id)),
@@ -624,6 +643,7 @@ function ScopedWorkspace({
       currentUserId={session.user.id}
       capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
       collaboration={collaboration}
+      productivity={productivity}
       calendar={calendar}
       financeSyncState={financeSyncState}
       onRefreshFinance={financeRefresh ?? undefined}

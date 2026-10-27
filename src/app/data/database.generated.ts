@@ -395,6 +395,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      tr8_v2_productivity: {
+        Args: { p_workspace_id: string; p_action: string; p_input?: Json };
+        Returns: Json;
+      };
       tr8_v2_remove_member: {
         Args: { p_member_id: string; p_version: number; p_workspace_id: string };
         Returns: Json;

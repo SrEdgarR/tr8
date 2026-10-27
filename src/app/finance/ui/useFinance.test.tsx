@@ -159,6 +159,44 @@ describe('Financial React disclosure leases', () => {
 });
 
 describe('Financial forms and domain commands', () => {
+  it('edits and deletes a movement from the encrypted dashboard through guarded Worker writes', async () => {
+    const a = api();
+    render(<FinancePage api={a.value} />);
+    await screen.findByRole('button', { name: 'Crear bóveda' });
+    fireEvent.change(screen.getByLabelText('Contraseña privada', { exact: true }), { target: { value: testPassword } });
+    fireEvent.change(screen.getByLabelText('Repite la contraseña privada'), { target: { value: testPassword } });
+    fireEvent.click(screen.getByRole('button', { name: 'Crear bóveda' }));
+    await screen.findByRole('heading', { name: 'Guarda tu código de recuperación' });
+    fireEvent.change(screen.getByLabelText('Contraseña privada elegida'), { target: { value: testPassword } });
+    fireEvent.change(screen.getByLabelText('Reescribe el código completo'), { target: { value: testRecovery } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar custodia y guardar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Nueva cuenta' }));
+    fireEvent.change(screen.getByLabelText('Nombre de la cuenta'), { target: { value: 'Cuenta cifrada QA' } });
+    fireEvent.change(screen.getByLabelText('Saldo inicial'), { target: { value: '100,00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('heading', { name: 'Cuenta cifrada QA' });
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo movimiento' }));
+    fireEvent.change(screen.getByLabelText('Descripción'), { target: { value: 'Gasto cifrado QA' } });
+    fireEvent.change(screen.getByLabelText(/Importe/), { target: { value: '5,00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Movimientos' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Editar movimiento Gasto cifrado QA' }));
+    fireEvent.change(screen.getByLabelText('Importe · DOP'), { target: { value: '7,00' } });
+    fireEvent.change(screen.getByLabelText('Descripción'), { target: { value: 'Gasto cifrado corregido' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Movimientos' }));
+    expect(screen.getByText('Gasto cifrado corregido')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar movimiento Gasto cifrado corregido' }));
+    fireEvent.change(screen.getByLabelText('Escribe ELIMINAR para confirmar'), { target: { value: 'ELIMINAR' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar movimiento definitivamente' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByText('Gasto cifrado corregido')).not.toBeInTheDocument();
+    expect(a.bodies).toHaveLength(5);
+    expect(a.bodies.map(body => parseOpaquePut(body).expectedRevision)).toEqual(['0', '1', '2', '3', '4']);
+    expect(a.bodies.every(body => !body.includes('Gasto cifrado'))).toBe(true);
+  });
   it('requires the exact reset phrase and clears the account password after the request', async () => {
     const a = api();
     const reset = vi.fn(async () => {});

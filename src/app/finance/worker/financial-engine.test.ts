@@ -5,7 +5,8 @@ import { assertOpaqueTransition, validateEnvelope, type VaultEnvelope } from '..
 import { createVault } from '../crypto/credentials';
 import { validatePlaintext } from '../crypto/plaintext';
 import { validateFinancialSnapshot } from '../domain/snapshot';
-import { emptyFinancialSnapshot } from '../domain/workspace';
+import { addAccount, addEntry, emptyFinancialSnapshot } from '../domain/workspace';
+import { updateFinancialOperation, deleteFinancialOperation } from '../domain/operation-edit';
 import { serializeEncryptedBackup, parseEncryptedBackup } from '../import/format';
 import { financialVaultPolicy } from './financial-policy';
 import { VaultWorkerEngine } from './engine';
@@ -55,6 +56,51 @@ function fixture(ownerId = 'synthetic-financial-destination') {
 }
 
 describe('financial Worker policy with actual Argon2id and Web Crypto', () => {
+  it('encrypts movement corrections and removals through the same guarded snapshot path, preserving unrelated data and recovery read-only', async () => {
+    let snapshot = addAccount(emptyFinancialSnapshot(), {
+      id: 'edit-account',
+      name: 'Cuenta QA',
+      type: 'cash',
+      currency: 'DOP',
+      openingBalanceMinor: 10000,
+      openingDate: '2026-01-01',
+    });
+    for (const id of ['edit-operation', 'keep-operation'])
+      snapshot = addEntry(snapshot, {
+        id,
+        kind: 'expense',
+        accountId: 'edit-account',
+        amountMinor: 500,
+        date: '2026-01-02',
+        description: id,
+        category: 'other',
+        note: '',
+      });
+    const raw = await createVault({
+      ownerId: 'synthetic-financial-destination',
+      vaultId: envelope().vaultId,
+      password,
+      plaintext: validatePlaintext(snapshot),
+    });
+    const f = fixture();
+    await f.call('unlock', { envelope: raw.envelope, credential: { kind: 'password', value: password } });
+    const original = snapshot.financialSpace.operations[0];
+    const edited = updateFinancialOperation(snapshot, original, { ...original, amountMinor: 1200, description: 'Corregido QA' });
+    const write = await f.call<{ envelope: VaultEnvelope; expectedRevision: string }>('write', validatePlaintext(edited));
+    expect(write.expectedRevision).toBe('1');
+    await f.call('ack', { operationId: write.envelope.operationId, revision: write.envelope.revision });
+    expect(validateFinancialSnapshot(await f.call('read', null))).toEqual(edited);
+    const removed = deleteFinancialOperation(edited, edited.financialSpace.operations[0], '2026-01-03');
+    const second = await f.call<{ envelope: VaultEnvelope; expectedRevision: string }>('write', validatePlaintext(removed));
+    expect(second.expectedRevision).toBe('2');
+    await f.call('ack', { operationId: second.envelope.operationId, revision: second.envelope.revision });
+    expect(validateFinancialSnapshot(await f.call('read', null)).financialSpace.operations).toEqual([snapshot.financialSpace.operations[1]]);
+    f.engine.close();
+    const recovered = fixture();
+    await recovered.call('unlock', { envelope: second.envelope, credential: { kind: 'recovery', value: raw.recoveryCode } });
+    expect(await recovered.request('write', validatePlaintext(edited))).toMatchObject({ error: 'INVALID_STATE' });
+    recovered.engine.close();
+  });
   it('imports only after preview and custody, with a new owner/context and no source key or plaintext in the preview', async () => {
     const f = fixture();
     const preview = await f.preview();

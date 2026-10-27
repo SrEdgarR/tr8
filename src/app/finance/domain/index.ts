@@ -11,3 +11,4 @@ export { calculateFinancialBalances, aggregateFinancialActivityByCurrency, summa
 export * from './connected-operations';
 export * from './plans';
 export * from './projection';
+export * from './operation-edit';

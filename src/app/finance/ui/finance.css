@@ -227,6 +227,13 @@
   font-size: 13px;
   white-space: nowrap;
 }
+.tf-movement-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
 .tf-operation-icon {
   display: grid;
   place-items: center;

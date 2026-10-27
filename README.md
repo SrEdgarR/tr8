@@ -17,7 +17,8 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 - Proyectos privados con acceso explícito de lectura o escritura y controles de interfaz por capacidad efectiva.
 - Proyectos: crear, editar, archivar, restaurar y eliminar con confirmación por nombre exacto y permiso propio. La eliminación incluye sus tareas y actividad; los demás proyectos quedan fuera de la operación.
 - Tareas: crear, editar, eliminar, completar y cambiar de estado; descripción, prioridad, fechas y un responsable opcional. Asignar y editar son permisos separados.
-- Lista y tablero sobre los mismos datos, con búsqueda y filtros. El tablero permite arrastrar tareas entre estados; el selector ofrece una alternativa con teclado.
+- Mis tareas, Tareas y Favoritos; lista, tabla editable y tablero sobre los mismos datos. Filtros combinables, orden, grupos colapsables, columnas configurables y vistas guardadas por usuario y espacio. El tablero permite arrastrar tareas entre estados; las flechas ofrecen una alternativa para el orden manual.
+- Finanzas personales con DOP por defecto, cuentas y tarjetas con saldos por moneda; ingresos, gastos, transferencias, pagos y planes. Los movimientos se pueden editar o eliminar con confirmación y validación de saldos. El acceso usa la cuenta TR8; la bóveda con contraseña privada es opcional.
 - Calendario general y por proyecto, mes y agenda, filtros, vencimientos de día completo y bloques horarios independientes. Zona IANA detectada al primer acceso, búsqueda por país o ciudad con hora en directo, edición posterior en Configuración y reprogramación con versión esperada. Transiciones y foco accesible con movimiento reducido.
 - Procesos internos durables: registro transaccional de cambios, reservas, reintentos, presupuesto compartido y consulta de procesos propios en Configuración. Un trabajo «Preparado» confirma su revisión interna; no una entrega externa.
 - Conexión Google opcional por usuario, con Calendar y Tasks en una sola configuración. Calendar recibe eventos desde TR8 en un calendario secundario; Google Tasks sincroniza en ambos sentidos títulos, día planificado, finalización y eliminación de las tareas vinculadas. El envío de nuevas tareas de TR8 se activa por usuario y lista, sin exportar de golpe el historial.
@@ -26,7 +27,7 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 - Actividad de equipos y proyectos, filtrada por el acceso vigente. Retirar un miembro o su acceso conserva el trabajo y elimina responsabilidades que dejen de ser válidas.
 - [Conector MCP para agentes](docs/mcp/README.md): proyectos, tareas y calendario mediante Streamable HTTP o un adaptador stdio para clientes como Claude Desktop y Cursor. Claves revocables por espacio, lectura o escritura y caducidad; sin acceso a Finanzas ni administración de miembros.
 
-Las altas e invitaciones externas permanecen desactivadas, por decisión del propietario, hasta disponer de correo y provisión de cuentas adecuados. Se pueden administrar miembros existentes y preparar roles y proyectos. El correo opcional de etapa 4B sigue pendiente de proveedor y remitente verificado. Se mantienen Supabase Free y Vercel Hobby. Pulso dispone de un contrato y prototipo de compatibilidad con datos sintéticos; las finanzas reales aún no están habilitadas.
+Las altas e invitaciones externas permanecen desactivadas, por decisión del propietario, hasta disponer de correo y provisión de cuentas adecuados. Se pueden administrar miembros existentes y preparar roles y proyectos. El correo opcional de etapa 4B sigue pendiente de proveedor y remitente verificado. Se mantienen Supabase Free y Vercel Hobby.
 
 ## Especificación y evolución
 
@@ -38,6 +39,10 @@ Conserva los datos, permisos y planes actuales.
 La [etapa 2 de recuperación de la demo](docs/demo-parity/stage-2.md) reconstruye
 Inicio, Vista general y los resúmenes de proyecto y equipo con datos autorizados,
 sin migraciones ni servicios adicionales.
+
+La [etapa 3 de recuperación de la demo](docs/demo-parity/stage-3.md) incorpora
+productividad, favoritos y vistas persistentes, además de editar y eliminar
+movimientos financieros conservando sus efectos y las versiones de los datos.
 
 Google está autorizado en producción. La [etapa 5](docs/stage-5/README.md) documenta Calendar y su publicación inicial; la [ampliación Google Tasks](docs/stage-6/README.md) y el [envío de tareas nuevas](docs/stage-6/outbound-tasks.md) registran el contrato y las verificaciones posteriores. Se comprobaron creación, cambios, finalización y eliminación con tareas de prueba, conservando las demás tareas. Los eventos de Calendar mantienen la dirección TR8 → Google; no se importan eventos de Google en esta versión.
 

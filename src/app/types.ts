@@ -1,4 +1,5 @@
 import type { ProjectIconName } from './project-identity';
+import type { ProductivityApi } from './productivity-types';
 
 export type TaskStatus = 'backlog' | 'todo' | 'progress' | 'review' | 'done';
 export type Priority = 'none' | 'low' | 'medium' | 'high' | 'urgent';
@@ -236,6 +237,7 @@ export interface WorkspaceInvitation {
 export type DataSyncState = 'checking' | 'saving' | 'synced' | 'pending' | 'error' | 'locked';
 
 export interface WorkspaceProps {
+  productivity?: ProductivityApi;
   financeSyncState?: DataSyncState;
   onRefreshFinance?: () => void;
   workspace?: WorkspaceSummary;

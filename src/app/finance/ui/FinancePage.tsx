@@ -18,11 +18,13 @@ import {
   LayoutGrid,
   List,
   Tag,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { Busy, Dialog, ErrorNotice } from '../../workspace/ui';
 import { useFinance } from './useFinance';
 import type { FinanceApi } from './api';
-import type { FinancialSnapshot } from '../domain/workspace-types';
+import type { FinancialSnapshot, WorkspaceOperation } from '../domain/workspace-types';
 import type { FinancialOperation, FinancialAccount } from '../domain/types';
 import { addAccount, updateAccount, accountHasActivity, addEntry, prepareEntryOperation } from '../domain/workspace';
 import { addPairedOperation, addRefund, preparePairedOperation, refundableExpenses } from '../domain/connected-operations';
@@ -37,6 +39,8 @@ import AccountDeleteDialog from './AccountDeleteDialog';
 import CreditCardTile from './CreditCardTile';
 import PaymentAvailabilitySummary from './PaymentAvailabilitySummary';
 import FinancialProjection from './FinancialProjection';
+import MovementEditor from './MovementEditor';
+import MovementDeleteDialog from './MovementDeleteDialog';
 import { creditCardGroups } from '../domain/credit-card-grouping';
 import type { DataSyncState } from '../../types';
 import './finance.css';
@@ -423,6 +427,8 @@ export function FinancialDashboard({
   const [editor, setEditor] = useState<'account' | 'movement' | null>(null);
   const [editingAccount, setEditingAccount] = useState<FinancialAccount | null>(null);
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
+  const [editingMovement, setEditingMovement] = useState<WorkspaceOperation | null>(null);
+  const [deletingMovement, setDeletingMovement] = useState<WorkspaceOperation | null>(null);
   return (
     <>
       {readOnly && (
@@ -488,7 +494,7 @@ export function FinancialDashboard({
             }}
           />
         )}
-        {tab === 'Movimientos' && <History snapshot={snapshot} />}
+        {tab === 'Movimientos' && <History snapshot={snapshot} disabled={f.busy || readOnly} onEdit={setEditingMovement} onDelete={setDeletingMovement} />}
         {tab === 'Planes' && (
           <div className="tf-plans-page">
             <Plans snapshot={snapshot} finance={f} readOnly={readOnly} />
@@ -523,6 +529,26 @@ export function FinancialDashboard({
           accountId={deleteAccountId}
           busy={f.busy || readOnly}
           onClose={() => setDeleteAccountId(null)}
+          onSave={s => f.save(s)}
+        />
+      )}
+      {editingMovement && (
+        <MovementEditor
+          key={editingMovement.id}
+          operation={editingMovement}
+          snapshot={snapshot}
+          busy={f.busy || readOnly}
+          onClose={() => setEditingMovement(null)}
+          onSave={s => f.save(s)}
+        />
+      )}
+      {deletingMovement && (
+        <MovementDeleteDialog
+          key={deletingMovement.id}
+          operation={deletingMovement}
+          snapshot={snapshot}
+          busy={f.busy || readOnly}
+          onClose={() => setDeletingMovement(null)}
           onSave={s => f.save(s)}
         />
       )}
@@ -638,7 +664,17 @@ function Overview({
   );
 }
 
-function History({ snapshot }: { snapshot: FinancialSnapshot }) {
+function History({
+  snapshot,
+  disabled,
+  onEdit,
+  onDelete,
+}: {
+  snapshot: FinancialSnapshot;
+  disabled: boolean;
+  onEdit: (operation: WorkspaceOperation) => void;
+  onDelete: (operation: WorkspaceOperation) => void;
+}) {
   const s = snapshot.financialSpace;
   const [account, setAccount] = useState('');
   const [currency, setCurrency] = useState('');
@@ -686,7 +722,35 @@ function History({ snapshot }: { snapshot: FinancialSnapshot }) {
       {invalid && <ErrorNotice>La fecha inicial debe ser anterior a la final.</ErrorNotice>}
       <div className="tf-ledger">
         {rows.slice(0, visible).map(op => (
-          <OperationRow key={op.id} operation={op} snapshot={snapshot} />
+          <OperationRow
+            key={op.id}
+            operation={op}
+            snapshot={snapshot}
+            actions={
+              <div className="tf-movement-actions">
+                <button
+                  type="button"
+                  className="ibtn"
+                  title="Editar movimiento"
+                  aria-label={`Editar movimiento ${op.description}`}
+                  disabled={disabled}
+                  onClick={() => onEdit(op)}
+                >
+                  <Pencil size={15} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="ibtn btn-danger-ghost"
+                  title="Eliminar movimiento"
+                  aria-label={`Eliminar movimiento ${op.description}`}
+                  disabled={disabled}
+                  onClick={() => onDelete(op)}
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                </button>
+              </div>
+            }
+          />
         ))}
         {!rows.length && !invalid && <p className="muted">No hay movimientos para estos filtros.</p>}
         {rows.length > visible && (
@@ -698,7 +762,15 @@ function History({ snapshot }: { snapshot: FinancialSnapshot }) {
     </div>
   );
 }
-function OperationRow({ operation: o, snapshot }: { operation: FinancialOperation & { description: string; note: string }; snapshot: FinancialSnapshot }) {
+function OperationRow({
+  operation: o,
+  snapshot,
+  actions,
+}: {
+  operation: FinancialOperation & { description: string; note: string };
+  snapshot: FinancialSnapshot;
+  actions?: ReactNode;
+}) {
   const s = snapshot.financialSpace;
   const names = ('accountId' in o ? [o.accountId] : o.kind === 'refund' ? [o.destinationAccountId] : [o.fromAccountId, o.toAccountId])
     .map(id => s.accounts.find(a => a.id === id)?.name)
@@ -727,6 +799,7 @@ function OperationRow({ operation: o, snapshot }: { operation: FinancialOperatio
           s.currencyDefinitions.find(c => c.code === o.currency)!,
         )}
       </strong>
+      {actions}
     </div>
   );
 }

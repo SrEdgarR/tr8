@@ -13,6 +13,8 @@ import {
   PanelLeftOpen,
   Plus,
   Settings2,
+  Star,
+  Table2,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -20,8 +22,15 @@ import { Link, NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import type { Project, WorkspaceProps } from '../types';
 import { IdentityAvatar, ProjectGlyph, ProjectStatusDot } from './project-identity';
 import { canInProject, canInWorkspace } from './permissions';
+import { buildDashboardModel } from './dashboard-model';
+import { localDate } from './helpers';
+import FavoriteButton from './FavoriteButton';
 
 interface Props {
+  favoriteProjectIds?: readonly string[];
+  favoriteCount?: number;
+  favoritesBusy?: boolean;
+  onFavoriteProject?: (project: Project) => void;
   data: WorkspaceProps;
   collapsed: boolean;
   pending: boolean;
@@ -32,18 +41,32 @@ interface Props {
   onCreateTeam: () => void;
 }
 
-export default function WorkspaceSidebar({ data, collapsed, pending, showFinance, onToggle, onNavigate, onCreateProject, onCreateTeam }: Props) {
+export default function WorkspaceSidebar({
+  data,
+  collapsed,
+  pending,
+  showFinance,
+  onToggle,
+  onNavigate,
+  onCreateProject,
+  onCreateTeam,
+  favoriteProjectIds = [],
+  favoriteCount = 0,
+  favoritesBusy = false,
+  onFavoriteProject,
+}: Props) {
   const location = useLocation();
   const [params] = useSearchParams();
   const prefix = useId();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const projects = data.accessUnavailable ? [] : data.projects.filter(project => !project.archived_at);
-  const activeIds = new Set(projects.map(project => project.id));
-  const count = data.tasks.filter(task => activeIds.has(task.project_id) && task.status !== 'done').length;
+  const mine = buildDashboardModel(data, localDate());
+  const projects = mine.projects;
+  const count = mine.totals.open;
+  const mineCount = mine.mineAvailable ? mine.mine.filter(task => task.status !== 'done').length : '—';
   const scope = data.workspace ? `?workspace=${data.workspace.id}` : '';
   const workspaceName = data.workspace?.kind === 'team' ? data.workspace.name : 'Mi espacio personal';
   const navClass = ({ isActive }: { isActive: boolean }) => `sitem${isActive ? ' on' : ''}`;
-  const view = ['overview', 'board', 'calendar', 'activity'].includes(params.get('view') ?? '') ? params.get('view') : 'list';
+  const view = ['overview', 'table', 'board', 'calendar', 'activity'].includes(params.get('view') ?? '') ? params.get('view') : 'list';
 
   function href(project: Project, nextView: string) {
     const search = new URLSearchParams();
@@ -99,16 +122,15 @@ export default function WorkspaceSidebar({ data, collapsed, pending, showFinance
               <Home className="i" size={16} aria-hidden="true" />
               <span>Inicio</span>
             </NavLink>
-            <NavLink
-              to={`/tasks${scope}`}
-              className={navClass}
-              aria-label={`${data.workspace?.kind === 'team' ? 'Tareas del equipo' : 'Mis tareas'} ${count}`}
-              title={data.workspace?.kind === 'team' ? 'Tareas del equipo' : 'Mis tareas'}
-              onClick={onNavigate}
-            >
+            <NavLink to={`/my-tasks${scope}`} className={navClass} aria-label={`Mis tareas ${mineCount}`} title="Mis tareas" onClick={onNavigate}>
               <ListTodo className="i" size={16} aria-hidden="true" />
-              <span>{data.workspace?.kind === 'team' ? 'Tareas del equipo' : 'Mis tareas'}</span>
-              <span className="ct">{count}</span>
+              <span>Mis tareas</span>
+              <span className="ct">{mineCount}</span>
+            </NavLink>
+            <NavLink to={`/favorites${scope}`} className={navClass} aria-label={`Favoritos ${favoriteCount}`} title="Favoritos" onClick={onNavigate}>
+              <Star className="i" size={16} aria-hidden="true" />
+              <span>Favoritos</span>
+              <span className="ct">{favoriteCount}</span>
             </NavLink>
           </div>
           <div className="sgroup">
@@ -116,6 +138,11 @@ export default function WorkspaceSidebar({ data, collapsed, pending, showFinance
             <NavLink to={`/overview${scope}`} className={navClass} aria-label="Vista general" title="Vista general" onClick={onNavigate}>
               <LayoutDashboard className="i" size={16} aria-hidden="true" />
               <span>Vista general</span>
+            </NavLink>
+            <NavLink to={`/tasks${scope}`} className={navClass} aria-label={`Tareas ${count}`} title="Tareas" onClick={onNavigate}>
+              <ListTodo className="i" size={16} aria-hidden="true" />
+              <span>Tareas</span>
+              <span className="ct">{count}</span>
             </NavLink>
             <NavLink to={`/projects${scope}`} className={navClass} aria-label={`Proyectos ${projects.length}`} title="Proyectos" onClick={onNavigate}>
               <LayoutGrid className="i" size={16} aria-hidden="true" />
@@ -154,7 +181,7 @@ export default function WorkspaceSidebar({ data, collapsed, pending, showFinance
               <button
                 className="ibtn ibtn-xs"
                 aria-label="Crear proyecto"
-                disabled={pending || data.loading || !canInWorkspace(data, 'project.create')}
+                disabled={pending || data.loading || data.readOnly || !canInWorkspace(data, 'project.create')}
                 onClick={onCreateProject}
               >
                 <Plus size={13} aria-hidden="true" />
@@ -168,6 +195,7 @@ export default function WorkspaceSidebar({ data, collapsed, pending, showFinance
                 { id: 'overview', label: 'Resumen', icon: LayoutDashboard },
                 { id: 'list', label: 'Lista', icon: List },
                 { id: 'board', label: 'Tablero', icon: SquareKanban },
+                { id: 'table', label: 'Tabla', icon: Table2 },
                 ...(data.calendar ? [{ id: 'calendar', label: 'Calendario', icon: CalendarDays }] : []),
                 ...(data.collaboration && canInProject(data, project.id, 'audit.read') ? [{ id: 'activity', label: 'Actividad', icon: Activity }] : []),
               ];
@@ -181,6 +209,14 @@ export default function WorkspaceSidebar({ data, collapsed, pending, showFinance
                       <span className="trunc">{project.name}</span>
                       <ProjectStatusDot status={project.status} />
                     </NavLink>
+                    {data.productivity && onFavoriteProject && (
+                      <FavoriteButton
+                        name={project.name}
+                        active={favoriteProjectIds.includes(project.id)}
+                        disabled={pending || favoritesBusy}
+                        onClick={() => onFavoriteProject(project)}
+                      />
+                    )}
                     <button
                       type="button"
                       className="ibtn ibtn-xs pw-project-expand"
