@@ -5,6 +5,7 @@ import type { CollaborationApi, Project, WorkspaceMember, WorkspaceProps, Worksp
 import { Busy, Dialog, EmptyState, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
 import { canInWorkspace, PERMISSIONS } from './permissions';
+import TeamSummary from './TeamSummary';
 
 const ACTION_NAMES: Record<string, string> = {
   'role.created': 'Creó un rol',
@@ -25,7 +26,17 @@ const ACTION_NAMES: Record<string, string> = {
   'task.deleted': 'Eliminó una tarea',
 };
 
-export function ActivityPanel({ api, projectId = null }: { api: CollaborationApi; projectId?: string | null }) {
+export function ActivityPanel({
+  api,
+  projectId = null,
+  compact = false,
+  title = 'Actividad',
+}: {
+  api: CollaborationApi;
+  projectId?: string | null;
+  compact?: boolean;
+  title?: string;
+}) {
   const query = useInfiniteQuery({
     queryKey: [...api.scopeKey, 'activity', projectId],
     queryFn: ({ pageParam }) => api.activity(projectId, pageParam),
@@ -34,10 +45,11 @@ export function ActivityPanel({ api, projectId = null }: { api: CollaborationApi
     refetchInterval: 30000,
     retry: false,
   });
-  const items = query.error ? [] : (query.data?.pages.flatMap(page => page.items) ?? []);
+  const available = query.error ? [] : (query.data?.pages.flatMap(page => page.items) ?? []);
+  const items = compact ? available.slice(0, 6) : available;
   return (
-    <section className="pw-account-card pw-activity" aria-label="Actividad">
-      <h2>Actividad</h2>
+    <section className={`pw-account-card pw-activity${compact ? ' pw-activity-compact' : ''}`} aria-label={title}>
+      <h2>{title}</h2>
       <p className="faint">Solo se muestra la actividad que puedes consultar actualmente.</p>
       {query.error ? (
         <ErrorNotice>{errorMessage(query.error)}</ErrorNotice>
@@ -59,7 +71,7 @@ export function ActivityPanel({ api, projectId = null }: { api: CollaborationApi
       ) : (
         <p className="faint">Todavía no hay actividad disponible.</p>
       )}
-      {query.hasNextPage && !query.error && (
+      {!compact && query.hasNextPage && !query.error && (
         <button className="btn btn-secondary btn-sm" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
           Cargar más actividad
         </button>
@@ -343,6 +355,7 @@ export function TeamAdministration(props: WorkspaceProps) {
           <p>Los proyectos son privados y requieren acceso explícito. El propietario puede consultar todos los proyectos de su equipo.</p>
         </div>
       </div>
+      <TeamSummary data={props} />
       <section className="pw-account-card" aria-labelledby="team-members-title">
         <h2 id="team-members-title">Miembros</h2>
         {directoryError ? (

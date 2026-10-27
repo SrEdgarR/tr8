@@ -1,27 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import {
-  Activity,
-  Archive,
-  ArrowRight,
-  CheckCheck,
-  ChevronRight,
-  Clock3,
-  FolderClosed,
-  ListTodo,
-  LogOut,
-  Menu,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Search,
-  Settings2,
-  ShieldCheck,
-  Trash2,
-  Users,
-  X,
-} from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Activity, Archive, ChevronRight, LogOut, Menu, Pencil, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, Users, X } from 'lucide-react';
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { formatDate, PROJECT_STATUSES } from '../constants';
+import { PROJECT_STATUSES } from '../constants';
 import type { CalendarApi, CalendarItem, CollaborationApi, Project, Task, TaskStatus, WorkspaceMember, WorkspaceProps, WorkspaceSummary } from '../types';
 import Calendar from './Calendar';
 import CalendarSettings from './CalendarZoneSettings';
@@ -29,7 +9,7 @@ import ProjectForm from './ProjectForm';
 import ProjectDeleteDialog from './ProjectDeleteDialog';
 import TaskForm from './TaskForm';
 import TasksView from './TasksView';
-import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon, StatusDot } from './ui';
+import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon } from './ui';
 import { errorMessage, localDate } from './helpers';
 import { ActivityPanel, ProjectAccessDialog, TeamAdministration } from './Collaboration';
 import { canInProject, canInWorkspace } from './permissions';
@@ -38,6 +18,9 @@ import WorkspaceSidebar from './WorkspaceSidebar';
 import WorkspaceCreateMenu from './WorkspaceCreateMenu';
 import { IdentityAvatar, ProjectGlyph, ProjectStatusDot } from './project-identity';
 import useAppearance from './useAppearance';
+import { HomeDashboard, OverviewDashboard } from './DashboardPages';
+import ProjectSummary from './ProjectSummary';
+import { buildDashboardModel } from './dashboard-model';
 import './workspace.css';
 import './visual-navigation.css';
 
@@ -116,123 +99,6 @@ function ProjectCard({ project, tasks, pending, can, scopeSearch = '', onEdit, o
   );
 }
 
-function HomePage({
-  projects,
-  tasks,
-  onNewProject,
-  onNewTask,
-  onOpen,
-  ...actions
-}: ProjectActions & { projects: Project[]; tasks: Task[]; onNewProject: () => void; onNewTask: () => void; onOpen: (task: Task) => void }) {
-  const activeProjects = projects.filter(project => !project.archived_at);
-  const activeIds = new Set(activeProjects.map(project => project.id));
-  const activeTasks = tasks.filter(task => activeIds.has(task.project_id));
-  const outstanding = activeTasks.filter(task => task.status !== 'done');
-  const today = localDate();
-  const overdue = outstanding.filter(task => task.due_date && task.due_date < today).length;
-  const upcoming = outstanding
-    .filter(task => task.due_date)
-    .sort((a, b) => a.due_date!.localeCompare(b.due_date!))
-    .slice(0, 6);
-  const projectMap = new Map(projects.map(project => [project.id, project]));
-  return (
-    <div className="page pw-home">
-      <div className="ph">
-        <div>
-          <div className="eyebrow">Tu espacio de trabajo</div>
-          <h1>Todo en su lugar.</h1>
-          <p>Una vista clara de tus proyectos y de lo que sigue.</p>
-        </div>
-        <div className="acts">
-          <button className="btn btn-secondary" disabled={actions.pending || !actions.canCreateProject} onClick={onNewProject}>
-            <Plus size={14} aria-hidden="true" />
-            Nuevo proyecto
-          </button>
-          <button className="btn btn-primary" disabled={actions.pending || !actions.canCreateTask} onClick={onNewTask}>
-            <Plus size={14} aria-hidden="true" />
-            Nueva tarea
-          </button>
-        </div>
-      </div>
-      <div className="pw-stats">
-        <Summary title="Proyectos" value={activeProjects.length} icon={<FolderClosed size={17} />} />
-        <Summary title="Por completar" value={outstanding.length} icon={<ListTodo size={17} />} />
-        <Summary title="Completadas" value={activeTasks.length - outstanding.length} icon={<CheckCheck size={17} />} />
-        <Summary title="Vencidas" value={overdue} icon={<Clock3 size={17} />} />
-      </div>
-      <section className="pw-home-section">
-        <div className="pw-section-head">
-          <h2 className="sec">Tus proyectos</h2>
-          <Link to={`/projects${actions.scopeSearch ?? ''}`} className="pw-text-link">
-            Ver todos
-            <ArrowRight size={13} aria-hidden="true" />
-          </Link>
-        </div>
-        {activeProjects.length ? (
-          <div className="pgrid">
-            {activeProjects.slice(0, 3).map(project => (
-              <ProjectCard key={project.id} project={project} tasks={tasks.filter(task => task.project_id === project.id)} {...actions} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title="Dale espacio a tu primer proyecto"
-            action={
-              <button className="btn btn-primary" disabled={actions.pending || !actions.canCreateProject} onClick={onNewProject}>
-                <Plus size={14} aria-hidden="true" />
-                Crear proyecto
-              </button>
-            }
-          >
-            Agrupa tus tareas en un proyecto. Los cambios se guardarán en tu cuenta.
-          </EmptyState>
-        )}
-      </section>
-      <section className="pw-home-section">
-        <div className="pw-section-head">
-          <h2 className="sec">Próximos vencimientos</h2>
-          <Link to={`/tasks${actions.scopeSearch ?? ''}`} className="pw-text-link">
-            Ver tareas
-            <ArrowRight size={13} aria-hidden="true" />
-          </Link>
-        </div>
-        {upcoming.length ? (
-          <div className="pw-upcoming">
-            {upcoming.map(task => (
-              <button key={task.id} className="pw-upcoming-row" onClick={() => onOpen(task)}>
-                <StatusDot status={task.status} />
-                <span className="grow">
-                  <strong>{task.title}</strong>
-                  <small>{projectMap.get(task.project_id)?.name}</small>
-                </span>
-                <span className={task.due_date! < today ? 'overdue' : 'faint'}>{formatDate(task.due_date)}</span>
-                <ChevronRight size={14} className="faint" aria-hidden="true" />
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="pw-quiet">
-            <CheckCheck size={19} aria-hidden="true" />
-            <p>No tienes tareas pendientes con fecha de vencimiento.</p>
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function Summary({ title, value, icon }: { title: string; value: number; icon: ReactNode }) {
-  return (
-    <div className="pw-stat">
-      <span className="pw-stat-label">
-        {title}
-        {icon}
-      </span>
-      <strong className="num">{value}</strong>
-    </div>
-  );
-}
-
 function ProjectsPage({ projects, tasks, onNew, ...actions }: ProjectActions & { projects: Project[]; tasks: Task[]; onNew: () => void }) {
   const [query, setQuery] = useState('');
   const [archived, setArchived] = useState(false);
@@ -305,6 +171,7 @@ function ProjectsPage({ projects, tasks, onNew, ...actions }: ProjectActions & {
 }
 
 function ProjectPage({
+  data,
   projects,
   tasks,
   onNewTask,
@@ -312,6 +179,7 @@ function ProjectPage({
   onMove,
   ...actions
 }: ProjectActions & {
+  data: WorkspaceProps;
   projects: Project[];
   tasks: Task[];
   onNewTask: (project: Project, status?: TaskStatus) => void;
@@ -440,6 +308,7 @@ function ProjectPage({
         onCreate={status => onNewTask(project, status)}
         onOpen={onOpen}
         onMove={onMove}
+        summaryContent={<ProjectSummary project={project} data={data} onOpen={onOpen} />}
         activityContent={
           actions.collaboration && actions.can(project.id, 'audit.read') ? (
             <ActivityPanel key={`activity:${project.id}`} api={actions.collaboration} projectId={project.id} />
@@ -635,8 +504,26 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   const scopeSearch = props.workspace ? `?workspace=${props.workspace.id}` : '';
   const activeProjects = props.projects.filter(project => !project.archived_at);
   const creatableProjects = activeProjects.filter(project => can(project.id, 'task.create'));
-  const activeProjectIds = useMemo(() => new Set(props.projects.filter(project => !project.archived_at).map(project => project.id)), [props.projects]);
-  const activeTasks = props.tasks.filter(task => activeProjectIds.has(task.project_id));
+  const dashboard = buildDashboardModel(props, localDate());
+  const taskFilter = searchParams.get('filter');
+  const filteredTasks =
+    taskFilter === 'mine'
+      ? dashboard.mine
+      : dashboard.tasks.filter(task =>
+          taskFilter === 'done'
+            ? task.status === 'done'
+            : taskFilter === 'open'
+              ? task.status !== 'done'
+              : taskFilter === 'overdue'
+                ? task.status !== 'done' && Boolean(task.due_date && task.due_date < localDate())
+                : true,
+        );
+  const taskFilterLabel = new Map([
+    ['mine', 'Asignadas a mí'],
+    ['done', 'Completadas'],
+    ['open', 'Por completar'],
+    ['overdue', 'Vencidas'],
+  ]).get(taskFilter ?? '');
   const taskId = searchParams.get('task');
   const selectedTask = props.tasks.find(task => task.id === taskId);
   const currentProject = props.projects.find(project => location.pathname === `/projects/${project.id}`);
@@ -671,11 +558,13 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
               ? 'Mi cuenta'
               : location.pathname === '/team'
                 ? 'Equipo'
-                : location.pathname === '/activity'
-                  ? 'Actividad'
-                  : location.pathname === '/calendar'
-                    ? 'Calendario'
-                    : 'Inicio');
+                : location.pathname === '/overview'
+                  ? 'Vista general'
+                  : location.pathname === '/activity'
+                    ? 'Actividad'
+                    : location.pathname === '/calendar'
+                      ? 'Calendario'
+                      : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -863,14 +752,13 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
               <Route
                 path="/"
                 element={
-                  <HomePage
-                    projects={props.projects}
-                    tasks={props.tasks}
-                    onNewProject={openNewProject}
-                    onNewTask={openNewTask}
-                    onOpen={openTask}
-                    {...projectActions}
-                  />
+                  <HomeDashboard data={{ ...props, pending }} onNewProject={openNewProject} onNewTask={openNewTask} onOpen={openTask} onMove={moveTask} />
+                }
+              />
+              <Route
+                path="/overview"
+                element={
+                  <OverviewDashboard data={{ ...props, pending }} onNewProject={openNewProject} onNewTask={openNewTask} onOpen={openTask} onMove={moveTask} />
                 }
               />
               <Route path="/projects" element={<ProjectsPage projects={props.projects} tasks={props.tasks} onNew={openNewProject} {...projectActions} />} />
@@ -878,6 +766,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                 path="/projects/:id"
                 element={
                   <ProjectPage
+                    data={{ ...props, pending }}
                     key={`${props.workspace?.id ?? ''}:${currentProject?.id ?? location.pathname}`}
                     projects={props.projects}
                     tasks={props.tasks}
@@ -904,9 +793,20 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                         </button>
                       </div>
                     </div>
+                    {taskFilterLabel && (
+                      <div className="pw-dashboard-filter">
+                        <span>Mostrando: {taskFilterLabel}</span>
+                        <Link to={`/tasks${scopeSearch}`} className="pw-text-link">
+                          Ver todas las tareas
+                        </Link>
+                      </div>
+                    )}
+                    {taskFilter === 'mine' && !dashboard.mineAvailable && (
+                      <p className="pw-info">Tu asignación no está disponible sin acceso al directorio de miembros.</p>
+                    )}
                     {activeProjects.length ? (
                       <TasksView
-                        tasks={activeTasks}
+                        tasks={filteredTasks}
                         projects={props.projects}
                         members={props.members}
                         pending={pending}

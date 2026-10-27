@@ -6,6 +6,7 @@ import {
   SquareKanban,
   Home,
   LayoutGrid,
+  LayoutDashboard,
   List,
   ListTodo,
   PanelLeftClose,
@@ -42,7 +43,7 @@ export default function WorkspaceSidebar({ data, collapsed, pending, showFinance
   const scope = data.workspace ? `?workspace=${data.workspace.id}` : '';
   const workspaceName = data.workspace?.kind === 'team' ? data.workspace.name : 'Mi espacio personal';
   const navClass = ({ isActive }: { isActive: boolean }) => `sitem${isActive ? ' on' : ''}`;
-  const view = ['board', 'calendar', 'activity'].includes(params.get('view') ?? '') ? params.get('view') : 'list';
+  const view = ['overview', 'board', 'calendar', 'activity'].includes(params.get('view') ?? '') ? params.get('view') : 'list';
 
   function href(project: Project, nextView: string) {
     const search = new URLSearchParams();
@@ -112,6 +113,10 @@ export default function WorkspaceSidebar({ data, collapsed, pending, showFinance
           </div>
           <div className="sgroup">
             <div className="sgroup-h">{workspaceName}</div>
+            <NavLink to={`/overview${scope}`} className={navClass} aria-label="Vista general" title="Vista general" onClick={onNavigate}>
+              <LayoutDashboard className="i" size={16} aria-hidden="true" />
+              <span>Vista general</span>
+            </NavLink>
             <NavLink to={`/projects${scope}`} className={navClass} aria-label={`Proyectos ${projects.length}`} title="Proyectos" onClick={onNavigate}>
               <LayoutGrid className="i" size={16} aria-hidden="true" />
               <span>Proyectos</span>
@@ -160,6 +165,7 @@ export default function WorkspaceSidebar({ data, collapsed, pending, showFinance
               const open = expanded[project.id] ?? current;
               const regionId = `${prefix}-${project.id}`;
               const views = [
+                { id: 'overview', label: 'Resumen', icon: LayoutDashboard },
                 { id: 'list', label: 'Lista', icon: List },
                 { id: 'board', label: 'Tablero', icon: SquareKanban },
                 ...(data.calendar ? [{ id: 'calendar', label: 'Calendario', icon: CalendarDays }] : []),

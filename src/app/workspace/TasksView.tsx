@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Activity, CalendarDays, Check, SquareKanban, List, Plus, Search, RotateCcw } from 'lucide-react';
+import { Activity, CalendarDays, Check, SquareKanban, LayoutDashboard, List, Plus, Search, RotateCcw } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { formatDate, PRIORITIES, STATUSES } from '../constants';
 import type { Priority, Project, Task, TaskStatus, WorkspaceMember } from '../types';
@@ -20,6 +20,7 @@ interface Props {
   onMove: (task: Task, status: TaskStatus) => Promise<void>;
   calendarContent?: ReactNode;
   activityContent?: ReactNode;
+  summaryContent?: ReactNode;
 }
 
 function TaskStateSelect({ task, disabled, onMove }: { task: Task; disabled: boolean; onMove: Props['onMove'] }) {
@@ -55,16 +56,19 @@ export default function TasksView({
   onMove,
   calendarContent,
   activityContent,
+  summaryContent,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const view =
-    searchParams.get('view') === 'activity' && activityContent
-      ? 'activity'
-      : searchParams.get('view') === 'calendar' && calendarContent
-        ? 'calendar'
-        : searchParams.get('view') === 'board'
-          ? 'board'
-          : 'list';
+    searchParams.get('view') === 'overview' && summaryContent
+      ? 'overview'
+      : searchParams.get('view') === 'activity' && activityContent
+        ? 'activity'
+        : searchParams.get('view') === 'calendar' && calendarContent
+          ? 'calendar'
+          : searchParams.get('view') === 'board'
+            ? 'board'
+            : 'list';
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<TaskStatus | ''>('');
   const [priority, setPriority] = useState<Priority | ''>('');
@@ -92,7 +96,7 @@ export default function TasksView({
 
   function changeView(next: string) {
     const params = new URLSearchParams(searchParams);
-    if (next === 'board' || next === 'calendar' || next === 'activity') params.set('view', next);
+    if (next === 'board' || next === 'calendar' || next === 'activity' || next === 'overview') params.set('view', next);
     else params.delete('view');
     setSearchParams(params, { replace: true });
   }
@@ -106,6 +110,12 @@ export default function TasksView({
   return (
     <div className="pw-tasks-area">
       <div className="pw-view-tabs" aria-label="Vista de tareas">
+        {summaryContent && (
+          <button className={`pw-view-tab${view === 'overview' ? ' on' : ''}`} aria-pressed={view === 'overview'} onClick={() => changeView('overview')}>
+            <LayoutDashboard size={15} aria-hidden="true" />
+            Resumen
+          </button>
+        )}
         <button className={`pw-view-tab${view === 'list' ? ' on' : ''}`} aria-pressed={view === 'list'} onClick={() => changeView('list')}>
           <List size={15} aria-hidden="true" />
           Lista
@@ -127,7 +137,9 @@ export default function TasksView({
           </button>
         )}
       </div>
-      {view === 'activity' ? (
+      {view === 'overview' ? (
+        summaryContent
+      ) : view === 'activity' ? (
         activityContent
       ) : view === 'calendar' ? (
         calendarContent

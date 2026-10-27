@@ -35,6 +35,10 @@ iconos de proyecto persistentes, sidebar colapsable y submenús, estados y avata
 menú de creación y preferencias de apariencia por cuenta en este navegador.
 Conserva los datos, permisos y planes actuales.
 
+La [etapa 2 de recuperación de la demo](docs/demo-parity/stage-2.md) reconstruye
+Inicio, Vista general y los resúmenes de proyecto y equipo con datos autorizados,
+sin migraciones ni servicios adicionales.
+
 Google está autorizado en producción. La [etapa 5](docs/stage-5/README.md) documenta Calendar y su publicación inicial; la [ampliación Google Tasks](docs/stage-6/README.md) y el [envío de tareas nuevas](docs/stage-6/outbound-tasks.md) registran el contrato y las verificaciones posteriores. Se comprobaron creación, cambios, finalización y eliminación con tareas de prueba, conservando las demás tareas. Los eventos de Calendar mantienen la dirección TR8 → Google; no se importan eventos de Google en esta versión.
 
 La integración utiliza el proyecto Google Cloud `tr8-sredgar`. El entorno Supabase de prueba mantiene Google desactivado, sin credenciales activas del cliente OAuth. En producción las integraciones comparten el presupuesto de solicitudes y tratan por separado los conflictos y los resultados remotos ambiguos; pedir una sincronización no significa que el proveedor ya la haya confirmado.

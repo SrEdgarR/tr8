@@ -1,0 +1,90 @@
+import { vi } from 'vitest';
+import type { CollaborationApi, Project, Task, WorkspaceMember, WorkspaceProps } from '../types';
+
+export const summaryProject: Project = {
+  id: 'project-summary-a',
+  workspace_id: 'team-summary-a',
+  owner_id: 'owner-summary-a',
+  code: 'P-A',
+  name: 'Revista',
+  description: 'Una publicación con datos reales.',
+  color: '#5A67D8',
+  icon: 'globe',
+  status: 'active',
+  archived_at: null,
+  version: 1,
+  created_at: '2026-10-22T12:00:00Z',
+  updated_at: '2026-10-25T12:00:00Z',
+};
+export const summaryTask: Task = {
+  id: 'task-summary-a',
+  workspace_id: summaryProject.workspace_id,
+  owner_id: summaryProject.owner_id,
+  project_id: summaryProject.id,
+  assignee_member_id: 'member-summary-a',
+  task_number: 1,
+  title: 'Editar portada',
+  description: '',
+  status: 'todo',
+  priority: 'urgent',
+  start_date: null,
+  due_date: '2026-10-30',
+  position: 1,
+  version: 1,
+  created_at: summaryProject.created_at,
+  updated_at: summaryProject.updated_at,
+};
+export const summaryMember: WorkspaceMember = {
+  id: 'member-summary-a',
+  user_id: 'reader-summary-a',
+  display_name: 'Edición colaborativa',
+  status: 'active',
+  version: 1,
+  is_owner: false,
+  roles: [],
+  permissions: ['project.read', 'task.read'],
+  can_manage_roles: false,
+  can_remove: false,
+};
+export function summaryApi(): CollaborationApi {
+  return {
+    scopeKey: ['collaboration', 'owner-summary-a', 'team-summary-a'],
+    roles: vi.fn().mockResolvedValue([]),
+    createRole: vi.fn(),
+    updateRole: vi.fn(),
+    deleteRole: vi.fn(),
+    setMemberRoles: vi.fn(),
+    removeMember: vi.fn(),
+    projectAccess: vi.fn(),
+    setProjectAccess: vi.fn(),
+    removeProjectAccess: vi.fn(),
+    assignableMembers: vi.fn(),
+    assignTask: vi.fn(),
+    activity: vi.fn().mockResolvedValue({ items: [], next_before_id: null }),
+  };
+}
+export function summaryProps(overrides: Partial<WorkspaceProps> = {}): WorkspaceProps {
+  return {
+    workspace: { id: summaryProject.workspace_id, kind: 'team', name: 'Editorial', owner_id: summaryProject.owner_id, version: 1, permissions: [] },
+    currentUserId: summaryProject.owner_id,
+    projects: [summaryProject],
+    tasks: [summaryTask],
+    members: [summaryMember],
+    email: 'test@example.com',
+    loading: false,
+    refreshing: false,
+    pending: false,
+    error: null,
+    onRetry: vi.fn(),
+    onCreateProject: vi.fn(),
+    onUpdateProject: vi.fn(),
+    onArchiveProject: vi.fn(),
+    onDeleteProject: vi.fn(),
+    onCreateTask: vi.fn(),
+    onUpdateTask: vi.fn(),
+    onDeleteTask: vi.fn(),
+    onSignOut: vi.fn(),
+    onPasswordReset: vi.fn(),
+    ...overrides,
+  };
+}
