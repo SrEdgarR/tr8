@@ -44,6 +44,28 @@ describe('resumen real del proyecto', () => {
     );
   });
 
+  it('distingue las fechas propias del proyecto del siguiente vencimiento de tarea', () => {
+    const planned = { ...summaryProject, start_date: '2026-10-28', due_date: '2026-12-20', lead_member_id: summaryMember.id };
+    mount(summaryProps({ projects: [planned] }), planned);
+    const target = screen.getByText('Fecha objetivo').closest('div')!;
+    const nextTask = screen.getByText('Próxima tarea con vencimiento').closest('div')!;
+    expect(target.querySelector('time')).toHaveAttribute('dateTime', '2026-12-20');
+    expect(nextTask.querySelector('time')).toHaveAttribute('dateTime', summaryTask.due_date!);
+    expect(within(screen.getByText('Responsable del proyecto').closest('div')!).getByText(summaryMember.display_name)).toBeInTheDocument();
+  });
+
+  it('retira la identidad del responsable cuando falla o se revoca el directorio', () => {
+    const planned = { ...summaryProject, lead_member_id: summaryMember.id };
+    const data = summaryProps({ projects: [planned] });
+    const { rerender, view } = mount(data, planned);
+    expect(within(screen.getByText('Responsable del proyecto').closest('div')!).getByText(summaryMember.display_name)).toBeInTheDocument();
+    rerender(view({ ...data, directoryError: 'Acceso retirado' }, planned));
+    expect(screen.queryByText(summaryMember.display_name)).not.toBeInTheDocument();
+    expect(screen.getByText('Responsable no disponible')).toBeInTheDocument();
+    rerender(view({ ...data, workspace: { ...data.workspace!, permissions: [] }, currentUserId: 'not-owner' }, planned));
+    expect(screen.queryByText(summaryMember.display_name)).not.toBeInTheDocument();
+  });
+
   it('no interpreta la falta de permiso de tareas como un proyecto vacío ni revela títulos', () => {
     mount(summaryProps({ capabilities: { [summaryProject.id]: { project_id: summaryProject.id, access_level: 'read', permissions: ['project.read'] } } }));
     expect(screen.getByText('No tienes acceso a las tareas de este proyecto.')).toBeInTheDocument();

@@ -1,0 +1,203 @@
+.pw-dialog.pw-project-dialog {
+  width: min(820px, calc(100vw - 32px));
+}
+.pw-project-dialog .pw-project-planning-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+}
+.pw-project-form-name,
+.pw-project-planning-body > .pw-error,
+.pw-project-planning-body > .pw-project-templates,
+.pw-project-planning-body > .pw-project-identity-options {
+  grid-column: 1 / -1;
+}
+.pw-project-form-description {
+  grid-column: 1;
+  grid-row: span 2;
+  align-self: stretch;
+}
+.pw-project-form-description > textarea {
+  flex: 1;
+  min-height: 115px;
+  resize: vertical;
+}
+.pw-project-form-status,
+.pw-project-planning-body > .pw-project-dates,
+.pw-project-planning-body > .pw-project-lead-field {
+  grid-column: 2;
+}
+.pw-project-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.pw-planning-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.pw-planning-control > svg {
+  position: absolute;
+  left: 10px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+.pw-planning-control > input,
+.pw-planning-control > select {
+  width: 100%;
+  min-width: 0;
+  padding-left: 33px;
+}
+.pw-planning-help {
+  margin: 7px 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.55;
+  color: var(--text-3);
+}
+.pw-project-templates {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.pw-project-templates legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 9px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.pw-template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 7px;
+}
+.pw-template-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 10px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.pw-template-option:hover {
+  background: var(--surface-2);
+}
+.pw-template-option.selected {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.pw-template-option > span {
+  flex: 1;
+  min-width: 0;
+}
+.pw-template-option strong,
+.pw-template-option small {
+  display: block;
+}
+.pw-template-option strong {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.pw-template-option small {
+  color: var(--text-3);
+  line-height: 1.45;
+  margin-top: 4px;
+  font-size: 11px;
+}
+.pw-template-option > input,
+.pw-project-copy-tasks input {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+.pw-template-option > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+  margin-top: 1px;
+}
+.pw-project-copy-intro {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+.pw-project-copy-intro .picon {
+  flex-shrink: 0;
+}
+.pw-project-copy-intro p {
+  margin: 0;
+}
+.pw-project-copy-tasks {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.pw-project-copy-tasks > span {
+  min-width: 0;
+}
+.pw-project-copy-tasks strong {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.pw-project-copy-tasks small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-3);
+  margin-top: 5px;
+}
+.pw-project-copy-privacy {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  line-height: 1.55;
+}
+.pw-project-copy-privacy > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+@media (max-width: 540px) {
+  .pw-template-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 680px) {
+  .pw-project-dialog .pw-project-planning-body {
+    grid-template-columns: 1fr;
+  }
+  .pw-project-dialog .pw-project-planning-body > * {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .pw-project-form-description > textarea {
+    min-height: 80px;
+  }
+}
+@media (max-width: 380px) {
+  .pw-project-dates {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pw-template-option {
+    transition: none;
+  }
+}

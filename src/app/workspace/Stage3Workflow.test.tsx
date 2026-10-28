@@ -295,6 +295,23 @@ describe('stage 3 integrated workflows', () => {
     expect(data.onUpdateTask).not.toHaveBeenCalled();
   });
 
+  it('keeps archived tasks out of the active ordering operation without deleting them', async () => {
+    const user = userEvent.setup();
+    const { api } = productivity();
+    const archived = { ...someoneElse, archived_at: '2026-10-28T10:00:00Z' };
+    const data = fixture({ productivity: api, tasks: [first, archived, last] });
+    mount(data, `/my-tasks?workspace=${workspaceId}`);
+    await loaded();
+    await user.click(screen.getByRole('button', { name: `Bajar ${first.title}` }));
+    await waitFor(() =>
+      expect(api.reorderTasks).toHaveBeenCalledWith(project.id, [
+        { id: last.id, version: last.version, position: 1024 },
+        { id: first.id, version: first.version, position: 2048 },
+      ]),
+    );
+    expect(data.onDeleteTask).not.toHaveBeenCalled();
+  });
+
   it('rejects a reorder exceeding the full project limit even when My Tasks shows a small subset', async () => {
     const user = userEvent.setup();
     const { api } = productivity();

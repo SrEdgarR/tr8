@@ -43,6 +43,7 @@ export default function ProjectSummary({ project, data, onOpen }: { project: Pro
   const unavailableAssignees = assigned.filter(task => !model.memberMap.has(task.assignee_member_id!)).length;
   const listHref = `/projects/${project.id}?${new URLSearchParams({ workspace: project.workspace_id, view: 'list' })}`;
   const activityHref = `/projects/${project.id}?${new URLSearchParams({ workspace: project.workspace_id, view: 'activity' })}`;
+  const lead = project.lead_member_id ? model.memberMap.get(project.lead_member_id) : undefined;
   return (
     <div className="pw-project-summary pw-summary-grid" aria-label={`Resumen de ${project.name}`}>
       <div className="pw-summary-stack">
@@ -164,6 +165,41 @@ export default function ProjectSummary({ project, data, onOpen }: { project: Pro
               <dt>Espacio</dt>
               <dd>{data.workspace?.kind === 'personal' ? 'Mi espacio personal' : (data.workspace?.name ?? 'Espacio actual')}</dd>
             </div>
+            {project.start_date && (
+              <div>
+                <dt>Inicio del proyecto</dt>
+                <dd>
+                  <time dateTime={project.start_date}>{formatDate(project.start_date)}</time>
+                </dd>
+              </div>
+            )}
+            {project.due_date && (
+              <div>
+                <dt>Fecha objetivo</dt>
+                <dd>
+                  <time dateTime={project.due_date}>{formatDate(project.due_date)}</time>
+                </dd>
+              </div>
+            )}
+            {project.lead_member_id !== undefined && (
+              <div>
+                <dt>Responsable del proyecto</dt>
+                <dd>
+                  {lead ? (
+                    <>
+                      <IdentityAvatar name={lead.display_name} small decorative />
+                      {lead.display_name}
+                    </>
+                  ) : !project.lead_member_id ? (
+                    'Sin responsable'
+                  ) : data.workspace?.kind === 'personal' && project.owner_id === data.currentUserId ? (
+                    'Tu cuenta'
+                  ) : (
+                    'Responsable no disponible'
+                  )}
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Creado</dt>
               <dd>

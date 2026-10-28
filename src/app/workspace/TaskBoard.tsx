@@ -5,6 +5,7 @@ import type { Task, TaskStatus } from '../types';
 import type { TaskTableProps } from './TaskTable';
 import { IdentityAvatar, PriorityIcon } from './project-identity';
 import { StatusDot } from './ui';
+import TaskMetadata from './TaskMetadata';
 
 type Props = TaskTableProps & { readOnly: boolean; canCreate: boolean; onCreate: (status?: TaskStatus) => void };
 export default function TaskBoard({
@@ -138,6 +139,7 @@ export default function TaskBoard({
                         )}
                       </div>
                       {task.description && <p className="pw-card-description">{task.description}</p>}
+                      <TaskMetadata task={task} />
                       <div className="meta">
                         <span className="key">
                           {projectMap.get(task.project_id)?.code}-{task.task_number}

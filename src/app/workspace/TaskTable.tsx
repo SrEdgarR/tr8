@@ -6,6 +6,7 @@ import { PRIORITIES, STATUSES, formatDate } from '../constants';
 import { errorMessage } from './helpers';
 import { IdentityAvatar, PriorityIcon } from './project-identity';
 import { ErrorNotice, StatusDot } from './ui';
+import TaskMetadata from './TaskMetadata';
 
 type Column = TaskViewConfig['columns'][number];
 export interface TaskTableProps {
@@ -226,6 +227,7 @@ export default function TaskTable({
                 <button className="ibtn ibtn-xs" aria-label={`Abrir ${task.title}`} onClick={() => onOpen(task)}>
                   <ArrowUpRight size={13} aria-hidden="true" />
                 </button>
+                <TaskMetadata task={task} />
                 {onReorder && (
                   <span className="tv-reorder-actions">
                     <button

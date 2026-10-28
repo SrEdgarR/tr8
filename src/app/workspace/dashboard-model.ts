@@ -14,7 +14,7 @@ export interface ProjectSummaryModel {
 }
 
 export function summarizeProject(project: Project, tasks: Task[], taskReadable: boolean, today: string): ProjectSummaryModel {
-  const visible = taskReadable ? tasks.filter(task => task.workspace_id === project.workspace_id && task.project_id === project.id) : [];
+  const visible = taskReadable ? tasks.filter(task => !task.archived_at && task.workspace_id === project.workspace_id && task.project_id === project.id) : [];
   const open = visible.filter(task => task.status !== 'done');
   const done = visible.length - open.length;
   return {
@@ -49,7 +49,9 @@ export function buildDashboardModel(data: WorkspaceProps, today: string) {
     ? []
     : data.tasks.filter(task => {
         const project = projectMap.get(task.project_id);
-        return project && task.workspace_id === project.workspace_id && (!data.capabilities || canInProject(data, project.id, 'task.read'));
+        return (
+          !task.archived_at && project && task.workspace_id === project.workspace_id && (!data.capabilities || canInProject(data, project.id, 'task.read'))
+        );
       });
   const projectSummaries = projects.map(project => summarizeProject(project, tasks, !data.capabilities || canInProject(data, project.id, 'task.read'), today));
   const directoryState =

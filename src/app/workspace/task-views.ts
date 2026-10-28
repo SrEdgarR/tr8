@@ -44,7 +44,13 @@ export function filterTaskView(
     if (config.projectIds.length && !config.projectIds.includes(task.project_id)) return false;
     if (config.assigneeIds.length && !config.assigneeIds.includes(task.assignee_member_id ?? 'none')) return false;
     if (config.favoritesOnly && !favorites.has(task.id)) return false;
-    if (query && !`${task.title} ${task.description} ${project.name} ${project.code}-${task.task_number}`.toLocaleLowerCase('es').includes(query)) return false;
+    if (
+      query &&
+      !`${task.title} ${task.description} ${project.name} ${project.code}-${task.task_number} ${(task.labels ?? []).join(' ')} ${(task.subtasks ?? []).map(item => item.title).join(' ')}`
+        .toLocaleLowerCase('es')
+        .includes(query)
+    )
+      return false;
     if (config.due === 'undated') return !task.due_date;
     if (config.due === 'overdue') return task.status !== 'done' && Boolean(task.due_date && task.due_date < today);
     if (config.due === 'today') return task.due_date === today;

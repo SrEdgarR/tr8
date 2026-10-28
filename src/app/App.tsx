@@ -15,7 +15,9 @@ import type { GoogleCalendarApi } from './data/google-calendar';
 import { createGoogleTasksRepository, type GoogleTasksApi } from './data/google-tasks';
 import { createMcpRepository } from './data/mcp';
 import { createProductivityRepository } from './data/productivity';
+import { createWorkManagementRepository } from './data/work-management';
 import type { ProductivityApi } from './productivity-types';
+import type { WorkManagementApi } from './work-management-types';
 import { createAccountDataClient } from './data/account-client';
 import { callbackRequestedRecovery, configuration, supabase } from './data/client';
 import { createRepository, type WorkspaceData } from './data/repository';
@@ -362,6 +364,7 @@ function ScopedWorkspace({
   const repository = useMemo(() => createRepository(dataClient), [dataClient]);
   const scopeRevision = [...selected.permissions].sort().join('|');
   const productivityRepository = useMemo(() => createProductivityRepository(dataClient, selected.id), [dataClient, selected.id]);
+  const workRepository = useMemo(() => createWorkManagementRepository(dataClient, selected.id), [dataClient, selected.id]);
   const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
   const locked = useRef(false);
@@ -563,6 +566,16 @@ function ScopedWorkspace({
       throw error;
     }
   }
+  const workManagement: WorkManagementApi = {
+    scopeKey: [...collaborationScope, 'work-management'],
+    createProject: (input, id) => write(() => workRepository.createProject(input, id), acceptProject),
+    updateProject: (project, input) => write(() => workRepository.updateProject(project, input), acceptProject),
+    duplicateProject: (project, input, id) => write(() => workRepository.duplicateProject(project, input, id), acceptProject),
+    updateTaskDetails: (task, details) => write(() => workRepository.updateTaskDetails(task, details), acceptTask),
+    duplicateTask: (task, targetId, id) => write(() => workRepository.duplicateTask(task, targetId, id), acceptTask),
+    moveTask: (task, targetId, id, clearAssignee) => write(() => workRepository.moveTask(task, targetId, id, clearAssignee), acceptTask),
+    archiveTask: (task, archived, id) => write(() => workRepository.archiveTask(task, archived, id), acceptTask),
+  };
   const productivity: ProductivityApi = {
     scopeKey: [...collaborationScope, 'productivity'],
     load: signal => readCollaboration(() => productivityRepository.load(signal)),
@@ -644,6 +657,7 @@ function ScopedWorkspace({
       capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
       collaboration={collaboration}
       productivity={productivity}
+      workManagement={workManagement}
       calendar={calendar}
       financeSyncState={financeSyncState}
       onRefreshFinance={financeRefresh ?? undefined}
@@ -699,8 +713,8 @@ function ScopedWorkspace({
         setAccessError(null);
         void query.refetch();
       }}
-      onCreateProject={(input, id) => write(() => repository.createProject(selected.id, input, id), acceptProject)}
-      onUpdateProject={(project, input) => write(() => repository.updateProject(project, input), acceptProject)}
+      onCreateProject={workManagement.createProject}
+      onUpdateProject={workManagement.updateProject}
       onArchiveProject={(project, archived) => write(() => repository.archiveProject(project, archived), acceptProject)}
       onDeleteProject={async (project, confirmationName) => {
         await write(

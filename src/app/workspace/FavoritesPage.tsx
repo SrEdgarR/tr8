@@ -106,7 +106,9 @@ export default function FavoritesPage({
             onMove={onMove}
             onPatch={onPatch}
             onReorder={onReorder}
-            canEditTask={task => !data.readOnly && !projectMap.get(task.project_id)?.archived_at && canInProject(data, task.project_id, 'task.edit')}
+            canEditTask={task =>
+              !task.archived_at && !data.readOnly && !projectMap.get(task.project_id)?.archived_at && canInProject(data, task.project_id, 'task.edit')
+            }
             favoriteTaskIds={favoriteTaskIds}
             onFavoriteTask={
               controller.available

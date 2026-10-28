@@ -1,5 +1,6 @@
 import { useId, useState, type CSSProperties } from 'react';
 import {
+  Archive,
   Activity,
   CalendarDays,
   ChevronRight,
@@ -66,7 +67,7 @@ export default function WorkspaceSidebar({
   const scope = data.workspace ? `?workspace=${data.workspace.id}` : '';
   const workspaceName = data.workspace?.kind === 'team' ? data.workspace.name : 'Mi espacio personal';
   const navClass = ({ isActive }: { isActive: boolean }) => `sitem${isActive ? ' on' : ''}`;
-  const view = ['overview', 'table', 'board', 'calendar', 'activity'].includes(params.get('view') ?? '') ? params.get('view') : 'list';
+  const view = ['overview', 'table', 'board', 'calendar', 'activity', 'archived'].includes(params.get('view') ?? '') ? params.get('view') : 'list';
 
   function href(project: Project, nextView: string) {
     const search = new URLSearchParams();
@@ -196,6 +197,7 @@ export default function WorkspaceSidebar({
                 { id: 'list', label: 'Lista', icon: List },
                 { id: 'board', label: 'Tablero', icon: SquareKanban },
                 { id: 'table', label: 'Tabla', icon: Table2 },
+                ...(data.workManagement ? [{ id: 'archived', label: 'Archivadas', icon: Archive }] : []),
                 ...(data.calendar ? [{ id: 'calendar', label: 'Calendario', icon: CalendarDays }] : []),
                 ...(data.collaboration && canInProject(data, project.id, 'audit.read') ? [{ id: 'activity', label: 'Actividad', icon: Activity }] : []),
               ];

@@ -10,6 +10,9 @@ export type Database = {
     Tables: {
       tr8_workspace_projects: {
         Row: {
+          start_date: string | null;
+          due_date: string | null;
+          lead_member_id: string | null;
           archived_at: string | null;
           code: string | null;
           color: string;
@@ -25,6 +28,9 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          start_date?: string | null;
+          due_date?: string | null;
+          lead_member_id?: string | null;
           archived_at?: string | null;
           code?: string | null;
           color?: string;
@@ -40,6 +46,9 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          start_date?: string | null;
+          due_date?: string | null;
+          lead_member_id?: string | null;
           archived_at?: string | null;
           code?: string | null;
           color?: string;
@@ -58,6 +67,10 @@ export type Database = {
       };
       tr8_workspace_tasks: {
         Row: {
+          archived_at: string | null;
+          labels: Json;
+          estimate_minutes: number | null;
+          subtasks: Json;
           assignee_member_id: string | null;
           created_at: string;
           description: string;
@@ -79,6 +92,10 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          archived_at?: string | null;
+          labels?: Json;
+          estimate_minutes?: number | null;
+          subtasks?: Json;
           assignee_member_id?: string | null;
           created_at?: string;
           description?: string;
@@ -101,6 +118,10 @@ export type Database = {
         };
         Update: {
           assignee_member_id?: string | null;
+          archived_at?: string | null;
+          labels?: Json;
+          estimate_minutes?: number | null;
+          subtasks?: Json;
           created_at?: string;
           description?: string;
           due_date?: string | null;
@@ -396,6 +417,10 @@ export type Database = {
         Returns: Json;
       };
       tr8_v2_productivity: {
+        Args: { p_workspace_id: string; p_action: string; p_input?: Json };
+        Returns: Json;
+      };
+      tr8_v2_work_management: {
         Args: { p_workspace_id: string; p_action: string; p_input?: Json };
         Returns: Json;
       };

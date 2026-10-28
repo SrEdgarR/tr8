@@ -16,6 +16,13 @@ import type { GoogleCalendarStatus } from './data/google-calendar';
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
   unsubscribe: vi.fn(),
+  work: {
+    duplicateProject: vi.fn(),
+    updateTaskDetails: vi.fn(),
+    duplicateTask: vi.fn(),
+    moveTask: vi.fn(),
+    archiveTask: vi.fn(),
+  },
   repository: {
     context: vi.fn(),
     resolveProject: vi.fn(),
@@ -57,6 +64,13 @@ vi.mock('./data/client', () => ({
   callbackRequestedRecovery: false,
 }));
 vi.mock('./data/repository', () => ({ createRepository: () => mocks.repository }));
+vi.mock('./data/work-management', () => ({
+  createWorkManagementRepository: (_client: unknown, workspaceId: string) => ({
+    ...mocks.work,
+    createProject: (input: unknown, id: string) => mocks.repository.createProject(workspaceId, input, id),
+    updateProject: (project: Project, input: unknown) => mocks.repository.updateProject(project, input),
+  }),
+}));
 vi.mock('./auth/AuthScreen', () => ({
   default: ({ recovery }: { recovery: boolean }) => <h1>{recovery ? 'Recuperación' : 'Inicio de sesión'}</h1>,
 }));
@@ -864,6 +878,48 @@ describe('sesiones y datos del espacio personal', () => {
     expect(await screen.findByText('Cambio desde otro dispositivo')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('El registro cambió en otra sesión.');
     expect(screen.queryByText('Mi edición')).not.toBeInTheDocument();
+  });
+
+  it('acepta los metadatos confirmados sin retirar otras tareas del snapshot', async () => {
+    const kept = { ...task('Trabajo conservado'), id: 'kept-task' };
+    const saved = { ...task(), version: 2, labels: ['Diseño'], estimate_minutes: 60, subtasks: [] };
+    mocks.repository.load.mockResolvedValue({ projects: [project()], tasks: [task(), kept] });
+    mocks.work.updateTaskDetails.mockImplementation(async () => {
+      mocks.repository.load.mockResolvedValue({ projects: [project()], tasks: [saved, kept] });
+      return saved;
+    });
+    show();
+    await screen.findByText('Tarea privada');
+    await act(async () => {
+      await workspace().workManagement!.updateTaskDetails(task(), { labels: ['Diseño'], estimate_minutes: 60, subtasks: [] });
+    });
+    await waitFor(() => expect(workspace().tasks).toEqual(expect.arrayContaining([saved, kept])));
+    expect(mocks.work.updateTaskDetails).toHaveBeenCalledExactlyOnceWith(task(), { labels: ['Diseño'], estimate_minutes: 60, subtasks: [] });
+  });
+
+  it('rechaza el resultado tardío de detalle después de cambiar de espacio', async () => {
+    const waiting = deferred<Task>();
+    mocks.work.updateTaskDetails.mockReturnValue(waiting.promise);
+    mocks.repository.load.mockImplementation(async (id: string) =>
+      id === 'team-a' ? { projects: [], tasks: [] } : { projects: [project()], tasks: [task()] },
+    );
+    show();
+    await screen.findByText('Tarea privada');
+    let save!: Promise<Task>;
+    act(() => {
+      save = workspace().workManagement!.updateTaskDetails(task(), { labels: ['Privada'], estimate_minutes: null, subtasks: [] });
+    });
+    const rejected = expect(save).rejects.toThrow('espacio cambió');
+    await act(async () => {
+      screen.getByRole('button', { name: 'Abrir equipo' }).click();
+    });
+    await waitFor(() => expect(workspace().workspace?.id).toBe('team-a'));
+    await act(async () => {
+      waiting.resolve({ ...task(), version: 2, labels: ['Privada'] });
+      await rejected;
+    });
+    expect(workspace().tasks).toEqual([]);
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
   });
 
   it('rechaza un segundo guardado simultáneo para evitar escrituras con la misma versión', async () => {

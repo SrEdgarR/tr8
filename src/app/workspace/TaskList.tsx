@@ -3,6 +3,7 @@ import { formatDate, PRIORITIES, STATUSES } from '../constants';
 import type { TaskTableProps } from './TaskTable';
 import { PriorityIcon, ProjectGlyph } from './project-identity';
 import { StatusDot } from './ui';
+import TaskMetadata from './TaskMetadata';
 
 export default function TaskList({
   tasks,
@@ -89,6 +90,7 @@ export default function TaskList({
                 {projectMap.get(task.project_id)?.name}
               </span>
             </span>
+            <TaskMetadata task={task} />
           </span>
           <span role="cell" className="pw-state-cell">
             <StatusDot status={task.status} />

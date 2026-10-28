@@ -29,6 +29,11 @@ describe('task view derivation', () => {
     },
     { ...summaryTask, id: 'd', title: 'Textos', due_date: '2026-11-03', position: 300 },
   ];
+  it('finds authorized work through labels and subtask titles without including another project', () => {
+    const detailed = { ...tasks[0], labels: ['Accesibilidad'], subtasks: [{ id: 'subtask-a', title: 'Validar teclado', done: false }] };
+    expect(filterTaskView([detailed, tasks[2]], [summaryProject], { ...defaultTaskView(), query: 'accesibilidad' }, [], today)).toEqual([detailed]);
+    expect(filterTaskView([detailed], [summaryProject], { ...defaultTaskView(), query: 'validar teclado' }, [], today)).toEqual([detailed]);
+  });
   it('combines search, status, project, assignee, priority and favorites without mutating the snapshot', () => {
     const before = JSON.stringify(tasks);
     const config = {

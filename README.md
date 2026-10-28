@@ -44,6 +44,10 @@ La [etapa 3 de recuperación de la demo](docs/demo-parity/stage-3.md) incorpora
 productividad, favoritos y vistas persistentes, además de editar y eliminar
 movimientos financieros conservando sus efectos y las versiones de los datos.
 
+La [etapa 4 de recuperación de la demo](docs/demo-parity/stage-4.md) añade fechas
+propias y responsable de proyecto, plantillas, duplicación y el panel de detalle
+de tareas con etiquetas, estimación, subtareas, traslado y archivo reversible.
+
 Google está autorizado en producción. La [etapa 5](docs/stage-5/README.md) documenta Calendar y su publicación inicial; la [ampliación Google Tasks](docs/stage-6/README.md) y el [envío de tareas nuevas](docs/stage-6/outbound-tasks.md) registran el contrato y las verificaciones posteriores. Se comprobaron creación, cambios, finalización y eliminación con tareas de prueba, conservando las demás tareas. Los eventos de Calendar mantienen la dirección TR8 → Google; no se importan eventos de Google en esta versión.
 
 La integración utiliza el proyecto Google Cloud `tr8-sredgar`. El entorno Supabase de prueba mantiene Google desactivado, sin credenciales activas del cliente OAuth. En producción las integraciones comparten el presupuesto de solicitudes y tratan por separado los conflictos y los resultados remotos ambiguos; pedir una sincronización no significa que el proveedor ya la haya confirmado.

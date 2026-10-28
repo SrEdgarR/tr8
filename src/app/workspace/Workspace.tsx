@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Activity, Archive, ChevronRight, LogOut, Menu, Pencil, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, Users, X } from 'lucide-react';
+import { Activity, Archive, ChevronRight, Copy, LogOut, Menu, Pencil, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, Users, X } from 'lucide-react';
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PROJECT_STATUSES } from '../constants';
 import type {
@@ -18,7 +18,10 @@ import Calendar from './Calendar';
 import CalendarSettings from './CalendarZoneSettings';
 import ProjectForm from './ProjectForm';
 import ProjectDeleteDialog from './ProjectDeleteDialog';
+import ProjectDuplicateDialog from './ProjectDuplicateDialog';
 import TaskForm from './TaskForm';
+import TaskDetail from './TaskDetail';
+import ArchivedTasks from './ArchivedTasks';
 import TaskCollectionPage from './TaskCollectionPage';
 import ProductivityTasks from './ProductivityTasks';
 import useProductivity, { type ProductivityController } from './useProductivity';
@@ -46,6 +49,7 @@ type ProjectActions = {
   onEdit: (project: Project) => void;
   onArchive: (project: Project) => void;
   onDelete: (project: Project) => void;
+  onDuplicate?: (project: Project) => void;
   onAccess: (project: Project) => void;
   pending: boolean;
   can: (projectId: string, permission: string) => boolean;
@@ -68,6 +72,7 @@ function ProjectCard({
   onEdit,
   onArchive,
   onDelete,
+  onDuplicate,
   productivity,
 }: ProjectActions & { project: Project; tasks: Task[] }) {
   const complete = tasks.filter(task => task.status === 'done').length;
@@ -111,6 +116,11 @@ function ProjectCard({
           {complete}/{tasks.length} tareas
         </span>
         <div className="sp" />
+        {onDuplicate && !project.archived_at && (
+          <button className="ibtn ibtn-xs" aria-label={`Duplicar ${project.name}`} disabled={pending} onClick={() => onDuplicate(project)}>
+            <Copy size={13} aria-hidden="true" />
+          </button>
+        )}
         <button
           className="ibtn ibtn-xs"
           aria-label={`Editar ${project.name}`}
@@ -177,7 +187,7 @@ function ProjectsPage({ projects, tasks, onNew, ...actions }: ProjectActions & {
       {visible.length ? (
         <div className="pgrid">
           {visible.map(project => (
-            <ProjectCard key={project.id} project={project} tasks={tasks.filter(task => task.project_id === project.id)} {...actions} />
+            <ProjectCard key={project.id} project={project} tasks={tasks.filter(task => !task.archived_at && task.project_id === project.id)} {...actions} />
           ))}
         </div>
       ) : (
@@ -242,7 +252,8 @@ function ProjectPage({
         </EmptyState>
       </div>
     );
-  const projectTasks = tasks.filter(task => task.project_id === project.id);
+  const projectTasks = tasks.filter(task => !task.archived_at && task.project_id === project.id);
+  const archivedTasks = tasks.filter(task => task.archived_at && task.project_id === project.id);
   return (
     <div className="page flush pw-project-page">
       <div className="proj-h">
@@ -363,6 +374,7 @@ function ProjectPage({
         onPatch={actions.onPatch}
         onReorder={actions.onReorder}
         summaryContent={<ProjectSummary project={project} data={data} onOpen={onOpen} />}
+        archivedContent={data.workManagement ? <ArchivedTasks tasks={archivedTasks} onOpen={onOpen} /> : undefined}
         activityContent={
           actions.collaboration && actions.can(project.id, 'audit.read') ? (
             <ActivityPanel key={`activity:${project.id}`} api={actions.collaboration} projectId={project.id} />
@@ -538,6 +550,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   const [newTask, setNewTask] = useState<{ projectId?: string; status?: TaskStatus } | null>(null);
   const [accessProject, setAccessProject] = useState<Project | null>(null);
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
+  const [duplicateProjectId, setDuplicateProjectId] = useState<string | null>(null);
   const [creatingTeam, setCreatingTeam] = useState(false);
   useEffect(() => {
     if (props.accessUnavailable) {
@@ -546,6 +559,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
       setCreatingTeam(false);
       setAccessProject(null);
       setDeleteProjectId(null);
+      setDuplicateProjectId(null);
     }
   }, [props.accessUnavailable]);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -566,6 +580,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   const selectedTask = props.tasks.find(task => task.id === taskId);
   const currentProject = props.projects.find(project => location.pathname === `/projects/${project.id}`);
   const deleteProject = props.projects.find(project => project.id === deleteProjectId);
+  const duplicateProject = props.projects.find(project => project.id === duplicateProjectId);
   const deleteAllowed = Boolean(deleteProject && can(deleteProject.id, 'project.delete'));
   const editorAllowed = Boolean(
     projectEditor &&
@@ -628,6 +643,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   async function moveTask(task: Task, status: TaskStatus) {
     if (
       props.readOnly ||
+      task.archived_at ||
       props.accessUnavailable ||
       !can(task.project_id, 'task.edit') ||
       props.projects.find(project => project.id === task.project_id)?.archived_at ||
@@ -661,6 +677,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
     const current = props.tasks.find(row => row.id === task.id && row.project_id === task.project_id);
     if (
       !current ||
+      current.archived_at ||
       current.version !== task.version ||
       pending ||
       props.readOnly ||
@@ -682,8 +699,8 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
       new Set(ordered.map(task => task.id)).size !== ordered.length
     )
       throw new Error('Solo puedes reordenar tareas editables del mismo proyecto.');
-    const full = dashboard.tasks
-      .filter(task => task.project_id === projectId)
+    const full = props.tasks
+      .filter(task => !task.archived_at && task.project_id === projectId)
       .sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
     if (full.length > 200) throw new Error('La reordenación manual admite hasta 200 tareas por proyecto.');
     if (ordered.some(task => !full.some(row => row.id === task.id && row.version === task.version)))
@@ -716,6 +733,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
     },
     onArchive: archiveProject,
     onDelete: project => setDeleteProjectId(project.id),
+    onDuplicate: props.workManagement && canCreateProject ? project => setDuplicateProjectId(project.id) : undefined,
     onAccess: setAccessProject,
   };
   const openNewProject = () => setProjectEditor({});
@@ -1037,6 +1055,8 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           key={projectEditor.project?.id ?? 'new-project'}
           project={projectEditor.project}
           pending={pending}
+          collaboration={props.collaboration}
+          canAssignLead={Boolean(projectEditor.project && can(projectEditor.project.id, 'task.assign'))}
           onCreate={props.onCreateProject}
           onUpdate={props.onUpdateProject}
           onClose={() => setProjectEditor(null)}
@@ -1048,7 +1068,52 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           }}
         />
       )}
-      {(newTask || selectedTask) && !props.loading && !props.accessUnavailable && (
+      {duplicateProject && props.workManagement && canCreateProject && can(duplicateProject.id, 'project.read') && !props.accessUnavailable && (
+        <ProjectDuplicateDialog
+          key={duplicateProject.id}
+          project={duplicateProject}
+          pending={pending}
+          taskCount={props.tasks.filter(task => !task.archived_at && task.project_id === duplicateProject.id).length}
+          includeTasksAllowed={can(duplicateProject.id, 'task.read')}
+          onDuplicate={(name, includeTasks, id) => props.workManagement!.duplicateProject(duplicateProject, { name, includeTasks }, id)}
+          onClose={() => setDuplicateProjectId(null)}
+          onSaved={saved => {
+            setDuplicateProjectId(null);
+            navigate(`/projects/${saved.id}${scopeSearch}`);
+            setAnnouncement('Proyecto duplicado.');
+          }}
+        />
+      )}
+      {selectedTask && !newTask && props.workManagement && !props.loading && !props.accessUnavailable && (
+        <TaskDetail
+          key={`${props.currentUserId}:${props.workspace?.id}:${selectedTask.id}:${props.workManagement.scopeKey.join(':')}:${can(selectedTask.project_id, 'task.edit')}:${can(selectedTask.project_id, 'task.assign')}:${can(selectedTask.project_id, 'task.delete')}`}
+          task={selectedTask}
+          projects={props.projects}
+          pending={pending}
+          readOnly={props.readOnly || Boolean(props.projects.find(project => project.id === selectedTask.project_id)?.archived_at)}
+          canEdit={can(selectedTask.project_id, 'task.edit')}
+          canDelete={can(selectedTask.project_id, 'task.delete')}
+          canAssign={can(selectedTask.project_id, 'task.assign')}
+          canCreateInProject={id => can(id, 'task.create') && !props.projects.find(project => project.id === id)?.archived_at}
+          assigneeName={dashboard.memberMap.get(selectedTask.assignee_member_id ?? '')?.display_name}
+          collaboration={props.collaboration}
+          calendar={props.calendar}
+          api={props.workManagement}
+          onUpdate={props.onUpdateTask}
+          onDelete={props.onDeleteTask}
+          onClose={closeTask}
+          onTaskSaved={saved => {
+            setAnnouncement('Tarea guardada.');
+            if (saved.id !== selectedTask.id)
+              navigate(`/projects/${saved.project_id}?${new URLSearchParams({ workspace: saved.workspace_id, task: saved.id })}`);
+          }}
+          onTaskMoved={saved => {
+            navigate(`/projects/${saved.project_id}?${new URLSearchParams({ workspace: saved.workspace_id, task: saved.id })}`);
+            setAnnouncement('Tarea trasladada.');
+          }}
+        />
+      )}
+      {(newTask || (selectedTask && !props.workManagement)) && !props.loading && !props.accessUnavailable && (
         <TaskForm
           key={
             selectedTask

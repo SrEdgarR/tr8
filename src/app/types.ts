@@ -1,11 +1,15 @@
 import type { ProjectIconName } from './project-identity';
 import type { ProductivityApi } from './productivity-types';
+import type { WorkManagementApi } from './work-management-types';
 
 export type TaskStatus = 'backlog' | 'todo' | 'progress' | 'review' | 'done';
 export type Priority = 'none' | 'low' | 'medium' | 'high' | 'urgent';
 export type ProjectStatus = 'planning' | 'active' | 'hold' | 'complete';
 
 export interface Project {
+  start_date?: string | null;
+  due_date?: string | null;
+  lead_member_id?: string | null;
   id: string;
   workspace_id: string;
   owner_id: string;
@@ -21,7 +25,17 @@ export interface Project {
   updated_at: string;
 }
 
+export interface TaskSubtask {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
 export interface Task {
+  archived_at?: string | null;
+  labels?: string[];
+  estimate_minutes?: number | null;
+  subtasks?: TaskSubtask[];
   id: string;
   workspace_id: string;
   owner_id: string;
@@ -44,6 +58,10 @@ export interface Task {
 }
 
 export interface ProjectInput {
+  start_date?: string | null;
+  due_date?: string | null;
+  lead_member_id?: string | null;
+  template_key?: 'website' | 'launch' | 'sprint' | null;
   name: string;
   description: string;
   color: string;
@@ -237,6 +255,7 @@ export interface WorkspaceInvitation {
 export type DataSyncState = 'checking' | 'saving' | 'synced' | 'pending' | 'error' | 'locked';
 
 export interface WorkspaceProps {
+  workManagement?: WorkManagementApi;
   productivity?: ProductivityApi;
   financeSyncState?: DataSyncState;
   onRefreshFinance?: () => void;
