@@ -75,6 +75,31 @@ function deferred<T>() {
 }
 
 describe('conversación real de tareas', () => {
+  it('abre un comentario anterior desde búsqueda cargando solo las páginas necesarias', async () => {
+    const target = { ...comment, id: 'searched-comment', sequence: 50, body: 'Comentario encontrado en una página anterior' };
+    const api = source();
+    vi.mocked(api.thread).mockImplementation(async (_task, before) =>
+      before === null
+        ? {
+            items: Array.from({ length: 50 }, (_, index) => ({ ...comment, id: `recent-${index}`, sequence: 100 - index })),
+            next_before_id: 51,
+            participants: [],
+          }
+        : { items: [target], next_before_id: null, participants: [] },
+    );
+    await mount(api, { focusCommentId: target.id });
+    await screen.findByText(target.body);
+    await waitFor(() => expect(screen.getByText(target.body).closest('article')).toHaveFocus());
+    expect(api.thread).toHaveBeenCalledTimes(2);
+    expect(api.create).not.toHaveBeenCalled();
+  });
+  it('avisa si el comentario de un enlace ya no existe sin mostrar contenido ajeno', async () => {
+    const api = source([]);
+    await mount(api, { focusCommentId: 'removed-comment' });
+    await screen.findByText('El comentario ya no está disponible. Actualiza la búsqueda para comprobarlo.');
+    expect(api.thread).toHaveBeenCalledTimes(1);
+    expect(api.create).not.toHaveBeenCalled();
+  });
   it.each([
     { version: 1, updated_at: '2026-10-28T12:00:00.001Z', edited: false },
     { version: 2, updated_at: comment.created_at, edited: true },

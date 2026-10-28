@@ -4,6 +4,7 @@ import type { WorkManagementApi } from './work-management-types';
 import type { PlanningApi } from './planning-types';
 import type { ProjectFilesApi } from './project-files-types';
 import type { CommunicationApi } from './communication-types';
+import type { GlobalSearchApi } from './search-types';
 
 export type TaskStatus = 'backlog' | 'todo' | 'progress' | 'review' | 'done';
 export type Priority = 'none' | 'low' | 'medium' | 'high' | 'urgent';
@@ -258,6 +259,7 @@ export interface WorkspaceInvitation {
 export type DataSyncState = 'checking' | 'saving' | 'synced' | 'pending' | 'error' | 'locked';
 
 export interface WorkspaceProps {
+  globalSearch?: GlobalSearchApi;
   communication?: CommunicationApi;
   workManagement?: WorkManagementApi;
   productivity?: ProductivityApi;

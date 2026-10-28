@@ -76,6 +76,15 @@ afterEach(() => {
 });
 
 describe('archivos privados del proyecto', () => {
+  it('abre los detalles solicitados desde búsqueda sin descargar el contenido', async () => {
+    const source = api();
+    const { wrapper } = provider();
+    render(<ProjectFiles data={summaryProps()} project={summaryProject} api={source} focusFileId={row.id} />, { wrapper });
+    await screen.findByRole('dialog');
+    expect(screen.getByRole('dialog')).toHaveTextContent(row.name);
+    expect(source.download).not.toHaveBeenCalled();
+    expect(source.remove).not.toHaveBeenCalled();
+  });
   it('ofrece cuadrícula/lista, filtros y metadatos con colores sin descargar para previsualizar', async () => {
     const source = api([row, { ...row, id: 'text', name: 'Notas.txt', content_type: 'text/plain' }]);
     await mount(source);

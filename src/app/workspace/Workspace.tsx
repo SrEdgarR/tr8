@@ -50,6 +50,7 @@ import MilestonePanel from './MilestonePanel';
 import ProjectFiles from './ProjectFiles';
 import TaskComments from './TaskComments';
 import InboxPage from './InboxPage';
+import useWorkspaceSearch from './useWorkspaceSearch';
 import FavoriteButton from './FavoriteButton';
 import FavoritesPage from './FavoritesPage';
 import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon } from './ui';
@@ -261,6 +262,7 @@ function ProjectPage({
   onMove: (task: Task, status: TaskStatus) => Promise<void>;
 }) {
   const { id } = useParams();
+  const [projectSearchParams] = useSearchParams();
   const [settingsProject, setSettingsProject] = useState<string | null>(null);
   const project = projects.find(item => item.id === id);
   if (!project)
@@ -401,7 +403,9 @@ function ProjectPage({
         onReorder={actions.onReorder}
         summaryContent={<ProjectSummary project={project} data={data} onOpen={onOpen} />}
         archivedContent={data.workManagement ? <ArchivedTasks tasks={archivedTasks} onOpen={onOpen} /> : undefined}
-        filesContent={data.projectFiles ? <ProjectFiles data={data} project={project} api={data.projectFiles} /> : undefined}
+        filesContent={
+          data.projectFiles ? <ProjectFiles data={data} project={project} api={data.projectFiles} focusFileId={projectSearchParams.get('file')} /> : undefined
+        }
         timelineContent={
           data.planning ? (
             <Timeline
@@ -653,35 +657,37 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   }, [projectEditor, editorAllowed, accessProject, accessAllowed, deleteProjectId, deleteAllowed, newTask, creatableProjects]);
   const pageName =
     currentProject?.name ??
-    (location.pathname === '/inbox'
-      ? 'Bandeja de entrada'
-      : location.pathname === '/notifications'
-        ? 'Notificaciones'
-        : location.pathname === '/finance'
-          ? 'Finanzas'
-          : location.pathname === '/projects'
-            ? 'Proyectos'
-            : location.pathname === '/my-tasks'
-              ? 'Mis tareas'
-              : location.pathname === '/tasks'
-                ? 'Tareas'
-                : location.pathname === '/favorites'
-                  ? 'Favoritos'
-                  : location.pathname === '/settings'
-                    ? 'Configuración'
-                    : location.pathname === '/account'
-                      ? 'Mi cuenta'
-                      : location.pathname === '/team'
-                        ? 'Equipo'
-                        : location.pathname === '/overview'
-                          ? 'Vista general'
-                          : location.pathname === '/activity'
-                            ? 'Actividad'
-                            : location.pathname === '/calendar'
-                              ? 'Calendario'
-                              : location.pathname === '/timeline'
-                                ? 'Timeline'
-                                : 'Inicio');
+    (location.pathname === '/search'
+      ? 'Búsqueda'
+      : location.pathname === '/inbox'
+        ? 'Bandeja de entrada'
+        : location.pathname === '/notifications'
+          ? 'Notificaciones'
+          : location.pathname === '/finance'
+            ? 'Finanzas'
+            : location.pathname === '/projects'
+              ? 'Proyectos'
+              : location.pathname === '/my-tasks'
+                ? 'Mis tareas'
+                : location.pathname === '/tasks'
+                  ? 'Tareas'
+                  : location.pathname === '/favorites'
+                    ? 'Favoritos'
+                    : location.pathname === '/settings'
+                      ? 'Configuración'
+                      : location.pathname === '/account'
+                        ? 'Mi cuenta'
+                        : location.pathname === '/team'
+                          ? 'Equipo'
+                          : location.pathname === '/overview'
+                            ? 'Vista general'
+                            : location.pathname === '/activity'
+                              ? 'Actividad'
+                              : location.pathname === '/calendar'
+                                ? 'Calendario'
+                                : location.pathname === '/timeline'
+                                  ? 'Timeline'
+                                  : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -718,6 +724,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   }
   function openTask(task: Task) {
     const params = new URLSearchParams(searchParams);
+    params.delete('comment');
     params.set('task', task.id);
     setSearchParams(params);
   }
@@ -725,6 +732,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
     setNewTask(null);
     const params = new URLSearchParams(searchParams);
     params.delete('task');
+    params.delete('comment');
     setSearchParams(params, { replace: true });
   }
   function openCalendarItem(item: CalendarItem) {
@@ -799,6 +807,15 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   };
   const openNewProject = () => setProjectEditor({});
   const openNewTask = () => createTask(currentProject && creatableProjects.some(project => project.id === currentProject.id) ? currentProject : undefined);
+  const search = useWorkspaceSearch({
+    data: { ...props, pending },
+    showFinance: Boolean(props.finance),
+    canCreateProject: canCreateProject && !pending,
+    canCreateTask: creatableProjects.length > 0 && !pending,
+    onCreateProject: openNewProject,
+    onCreateTask: openNewTask,
+    onToggleSidebar: () => appearance.update({ sidebarCollapsed: !appearance.preferences.sidebarCollapsed }),
+  });
 
   return (
     <div
@@ -818,6 +835,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
         favoriteCount={productivity.state.favorites.length}
         favoritesBusy={!productivity.available || productivity.pending}
         unreadCount={unreadCount}
+        onShortcuts={search.openGuide}
         onFavoriteProject={project => {
           void productivity
             .setFavorite('project', project.id, !productivity.state.favorites.some(row => row.kind === 'project' && row.id === project.id))
@@ -852,6 +870,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
             <span className="cur trunc">{pageName}</span>
           </div>
           <div className="sp" />
+          {search.trigger}
           <SyncStatus
             scope={financeView ? 'Finanzas' : 'Proyectos y tareas'}
             state={
@@ -955,6 +974,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
             </EmptyState>
           ) : (
             <Routes>
+              <Route path="/search" element={search.page} />
               {communicationEnabled && props.communication && (
                 <>
                   <Route
@@ -1160,6 +1180,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           {announcement}
         </span>
       </div>
+      {search.overlays}
       {deleteProject && deleteAllowed && !props.accessUnavailable && (
         <ProjectDeleteDialog
           key={deleteProject.id}
@@ -1250,6 +1271,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
               <TaskComments
                 key={`${selectedTask.id}:${selectedTask.project_id}:${props.communication.scopeKey.join(':')}`}
                 task={selectedTask}
+                focusCommentId={searchParams.get('comment')}
                 api={props.communication}
                 canComment={can(selectedTask.project_id, 'task.edit')}
                 pending={pending}

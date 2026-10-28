@@ -33,6 +33,7 @@ import { FILE_KINDS, fileSize, projectFileKind, visibleProjectFiles, type FileKi
 import './project-files.css';
 
 interface Props {
+  focusFileId?: string | null;
   data: WorkspaceProps;
   project: Project;
   api: ProjectFilesApi;
@@ -55,7 +56,7 @@ export default function ProjectFiles(props: Props) {
   return <ScopedProjectFiles key={scope} {...props} readable={readable} writable={writable} />;
 }
 
-function ScopedProjectFiles({ data, project, api, readable, writable }: Props & { readable: boolean; writable: boolean }) {
+function ScopedProjectFiles({ data, project, api, readable, writable, focusFileId }: Props & { readable: boolean; writable: boolean }) {
   const client = useQueryClient();
   const queryKey = [...api.scopeKey, 'project-files', data.currentUserId ?? 'legacy', project.workspace_id, project.id];
   const [search, setSearch] = useState('');
@@ -77,6 +78,7 @@ function ScopedProjectFiles({ data, project, api, readable, writable }: Props & 
   const trigger = useRef<HTMLButtonElement | null>(null);
   const urls = useRef(new Set<string>());
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const openedSearchFile = useRef<string | null>(null);
   useEffect(() => {
     active.current = true;
     const createdUrls = urls.current;
@@ -112,6 +114,7 @@ function ScopedProjectFiles({ data, project, api, readable, writable }: Props & 
     },
     enabled: readable,
     staleTime: 15000,
+    refetchOnMount: focusFileId ? 'always' : true,
     retry: false,
   });
   const available = readable && !!query.data && !query.error;
@@ -119,6 +122,13 @@ function ScopedProjectFiles({ data, project, api, readable, writable }: Props & 
   const rows = visibleProjectFiles(all, search, kind, sort);
   const blocked = busy || data.pending;
   const failed = attempts.filter(attempt => attempt.state === 'failed' && attempt.file);
+  useEffect(() => {
+    if (!focusFileId || !available || query.isFetching || openedSearchFile.current === focusFileId) return;
+    openedSearchFile.current = focusFileId;
+    const target = query.data!.items.find(row => row.id === focusFileId && row.project_id === project.id && row.workspace_id === project.workspace_id);
+    if (target?.status === 'ready') setAction({ type: 'detail', row: target });
+    else setNotice('El archivo ya no está disponible. Actualiza la búsqueda para comprobarlo.');
+  }, [focusFileId, available, query.isFetching, query.data, project.id, project.workspace_id]);
   function assertActive() {
     if (!active.current) throw new Error('El espacio o tus permisos cambiaron. Comprueba el resultado al volver.');
   }

@@ -21,6 +21,8 @@ import { createProjectFilesRepository } from './data/project-files';
 import type { ProjectFilesApi } from './project-files-types';
 import { createCommunicationRepository } from './data/communication';
 import type { CommunicationApi } from './communication-types';
+import { createGlobalSearchRepository } from './data/search';
+import type { GlobalSearchApi } from './search-types';
 import { createWorkManagementRepository } from './data/work-management';
 import type { ProductivityApi } from './productivity-types';
 import type { WorkManagementApi } from './work-management-types';
@@ -373,6 +375,7 @@ function ScopedWorkspace({
   const planningRepository = useMemo(() => createPlanningRepository(dataClient, selected.id), [dataClient, selected.id]);
   const filesRepository = useMemo(() => createProjectFilesRepository(dataClient, selected.id), [dataClient, selected.id]);
   const communicationRepository = useMemo(() => createCommunicationRepository(dataClient, selected.id), [dataClient, selected.id]);
+  const searchRepository = useMemo(() => createGlobalSearchRepository(dataClient, selected.id), [dataClient, selected.id]);
   const workRepository = useMemo(() => createWorkManagementRepository(dataClient, selected.id), [dataClient, selected.id]);
   const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
@@ -605,6 +608,10 @@ function ScopedWorkspace({
     readAll: () => write(() => communicationRepository.readAll()),
     dismiss: id => write(() => communicationRepository.dismiss(id)),
   };
+  const globalSearch: GlobalSearchApi = {
+    scopeKey: [...collaborationScope, 'global-search'],
+    search: (input, signal) => readCollaboration(() => searchRepository.search(input, signal)),
+  };
   const planning: PlanningApi = {
     scopeKey: [...collaborationScope, 'planning'],
     load: signal => readCollaboration(() => planningRepository.load(signal)),
@@ -698,6 +705,7 @@ function ScopedWorkspace({
       planning={planning}
       projectFiles={projectFiles}
       communication={communication}
+      globalSearch={globalSearch}
       workManagement={workManagement}
       calendar={calendar}
       financeSyncState={financeSyncState}

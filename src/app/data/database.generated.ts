@@ -490,6 +490,10 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      tr8_v2_search: {
+        Args: { p_input: Json; p_workspace_id: string };
+        Returns: Json;
+      };
       tr8_v2_set_calendar_preferences: {
         Args: { p_time_zone: string; p_version: number };
         Returns: Json;

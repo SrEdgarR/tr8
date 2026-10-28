@@ -14,11 +14,13 @@ import { googleFixture } from './test/google-calendar';
 import type { GoogleCalendarStatus } from './data/google-calendar';
 import type { PlanningState, ProjectMilestone } from './planning-types';
 import type { InboxState, TaskComment } from './communication-types';
+import type { GlobalSearchPage, GlobalSearchQuery } from './search-types';
 
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
   unsubscribe: vi.fn(),
   files: { list: vi.fn(), upload: vi.fn(), download: vi.fn(), rename: vi.fn(), remove: vi.fn() },
+  search: { search: vi.fn() },
   communication: {
     thread: vi.fn(),
     create: vi.fn(),
@@ -89,6 +91,7 @@ vi.mock('./data/repository', () => ({ createRepository: () => mocks.repository }
 vi.mock('./data/planning', () => ({ createPlanningRepository: () => mocks.planning }));
 vi.mock('./data/project-files', () => ({ createProjectFilesRepository: () => mocks.files }));
 vi.mock('./data/communication', () => ({ createCommunicationRepository: () => mocks.communication }));
+vi.mock('./data/search', () => ({ createGlobalSearchRepository: () => mocks.search }));
 vi.mock('./data/work-management', () => ({
   createWorkManagementRepository: (_client: unknown, workspaceId: string) => ({
     ...mocks.work,
@@ -1042,6 +1045,53 @@ describe('sesiones y datos del espacio personal', () => {
       await rejected;
     });
     expect(workspace().tasks).toEqual([]);
+  });
+
+  it('descarta resultados de búsqueda que llegan después de abandonar el espacio', async () => {
+    const waiting = deferred<GlobalSearchPage>();
+    const input: GlobalSearchQuery = { query: 'Proyecto', kind: 'all', include_archived: false, offset: 0, limit: 5 };
+    mocks.search.search.mockReturnValue(waiting.promise);
+    mocks.repository.load.mockImplementation(async (id: string) =>
+      id === 'team-a' ? { projects: [], tasks: [] } : { projects: [project()], tasks: [task()] },
+    );
+    show();
+    await screen.findByText('Tarea privada');
+    const oldApi = workspace().globalSearch!;
+    const rejected = expect(oldApi.search(input)).rejects.toThrow('espacio cambió');
+    await act(async () => {
+      screen.getByRole('button', { name: 'Abrir equipo' }).click();
+    });
+    await waitFor(() => expect(workspace().workspace?.id).toBe('team-a'));
+    expect(workspace().globalSearch!.scopeKey).not.toEqual(oldApi.scopeKey);
+    await act(async () => {
+      waiting.resolve({
+        workspace_id: 'personal-a',
+        query: 'Proyecto',
+        kind: 'all',
+        include_archived: false,
+        items: [],
+        counts: { project: 0, task: 0, member: 0, file: 0, comment: 0 },
+        next_offset: null,
+      });
+      await rejected;
+    });
+    expect(workspace().projects).toEqual([]);
+  });
+
+  it('retira la caché de búsqueda y el contenido cuando su lectura pierde autorización', async () => {
+    mocks.search.search.mockRejectedValue(new DataError('Acceso retirado', '42501'));
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    const key = [...workspace().globalSearch!.scopeKey, 'global-search', 'Privado'];
+    client.setQueryData(key, { title: 'Dato privado anterior' });
+    await act(async () => {
+      await expect(workspace().globalSearch!.search({ query: 'Privado', kind: 'all', include_archived: false, offset: 0, limit: 5 })).rejects.toThrow(
+        'Acceso retirado',
+      );
+    });
+    await waitFor(() => expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument());
+    expect(client.getQueryData(key)).toBeUndefined();
+    expect(workspace().accessUnavailable).toBe(true);
   });
 
   it('rechaza un segundo guardado simultáneo para evitar escrituras con la misma versión', async () => {

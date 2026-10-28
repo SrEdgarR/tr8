@@ -41,6 +41,12 @@
     8px 0 color-mix(in srgb, var(--surface-2) 48%, transparent),
     -8px 0 color-mix(in srgb, var(--surface-2) 48%, transparent);
 }
+.tc-comment.tc-search-target {
+  background: var(--accent-soft);
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 5px;
+  scroll-margin: 30px;
+}
 .tc-comment-body {
   flex: 1;
   min-width: 0;

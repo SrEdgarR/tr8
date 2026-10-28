@@ -44,6 +44,11 @@ La [etapa 3 de recuperación de la demo](docs/demo-parity/stage-3.md) incorpora
 productividad, favoritos y vistas persistentes, además de editar y eliminar
 movimientos financieros conservando sus efectos y las versiones de los datos.
 
+La [etapa 8 de recuperación de la demo](docs/demo-parity/stage-8.md) incorpora
+búsqueda global del espacio, paleta con Ctrl/Cmd + K, resultados de proyectos,
+tareas, miembros, archivos y comentarios, acciones autorizadas y guía de atajos.
+Las consultas no se guardan en la URL ni en preferencias persistentes.
+
 La [etapa 7 de recuperación de la demo](docs/demo-parity/stage-7.md) añade
 comentarios paginados, edición y borrado confirmados, menciones por miembro y
 reacciones en el detalle de tareas. Bandeja y Notificaciones comparten avisos

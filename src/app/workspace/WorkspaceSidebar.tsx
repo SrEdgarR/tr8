@@ -11,6 +11,7 @@ import {
   Bell,
   LayoutGrid,
   LayoutDashboard,
+  Keyboard,
   List,
   ListTodo,
   PanelLeftClose,
@@ -32,6 +33,7 @@ import { localDate } from './helpers';
 import FavoriteButton from './FavoriteButton';
 
 interface Props {
+  onShortcuts?: () => void;
   unreadCount?: number | null;
   favoriteProjectIds?: readonly string[];
   favoriteCount?: number;
@@ -61,6 +63,7 @@ export default function WorkspaceSidebar({
   favoritesBusy = false,
   onFavoriteProject,
   unreadCount = null,
+  onShortcuts,
 }: Props) {
   const location = useLocation();
   const [params] = useSearchParams();
@@ -289,6 +292,21 @@ export default function WorkspaceSidebar({
         </nav>
       </div>
       <div className="side-bot">
+        {onShortcuts && (
+          <button
+            type="button"
+            className="sitem"
+            aria-label="Atajos de teclado"
+            title="Atajos de teclado"
+            onClick={() => {
+              onNavigate();
+              onShortcuts();
+            }}
+          >
+            <Keyboard className="i" size={16} aria-hidden="true" />
+            <span>Atajos de teclado</span>
+          </button>
+        )}
         <NavLink to={`/settings${scope}`} className={navClass} aria-label="Configuración" title="Configuración" onClick={onNavigate}>
           <Settings2 className="i" size={16} aria-hidden="true" />
           <span>Configuración</span>

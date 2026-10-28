@@ -10,6 +10,7 @@ import { errorMessage } from './helpers';
 import './communication.css';
 
 export interface TaskCommentsProps {
+  focusCommentId?: string | null;
   task: Task;
   api: CommunicationApi;
   readOnly: boolean;
@@ -28,10 +29,12 @@ export default function TaskComments(props: TaskCommentsProps) {
   return <ScopedTaskComments key={JSON.stringify([props.api.scopeKey, props.task.workspace_id, props.task.project_id, props.task.id])} {...props} />;
 }
 
-function ScopedTaskComments({ task, api, readOnly, pending = false, canComment = true, onChanged }: TaskCommentsProps) {
+function ScopedTaskComments({ task, api, readOnly, pending = false, canComment = true, onChanged, focusCommentId }: TaskCommentsProps) {
   const client = useQueryClient();
   const queryKey = [...api.scopeKey, 'comments', task.workspace_id, task.project_id, task.id];
   const headingId = useId();
+  const threadElement = useRef<HTMLDivElement>(null);
+  const focusedComment = useRef<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const active = useRef(true);
   const lock = useRef(false);
@@ -64,6 +67,7 @@ function ScopedTaskComments({ task, api, readOnly, pending = false, canComment =
     },
     getNextPageParam: (page: CommentThread) => page.next_before_id ?? undefined,
     staleTime: 15000,
+    refetchOnMount: focusCommentId ? 'always' : true,
     retry: false,
   });
   const available = !blocked && !query.error && !!query.data;
@@ -81,6 +85,24 @@ function ScopedTaskComments({ task, api, readOnly, pending = false, canComment =
   const actionPending = busy || pending;
   const bodyLength = Array.from(body).length;
   const currentAction = available && action ? rows.find(row => row.id === action.row.id) : undefined;
+  const targetLoaded = rows.some(row => row.id === focusCommentId);
+  const { isFetching: threadFetching, hasNextPage: threadHasNextPage, fetchNextPage: fetchOlderComments } = query;
+  const threadPageCount = query.data?.pages.length ?? 0;
+  useEffect(() => {
+    if (!focusCommentId || !available || threadFetching || focusedComment.current === focusCommentId) return;
+    if (!targetLoaded && threadHasNextPage && threadPageCount < 10) {
+      void fetchOlderComments();
+      return;
+    }
+    focusedComment.current = focusCommentId;
+    const element = Array.from(threadElement.current?.querySelectorAll<HTMLElement>('[data-comment-id]') ?? []).find(
+      row => row.dataset.commentId === focusCommentId,
+    );
+    if (element) {
+      element.scrollIntoView?.({ block: 'center', behavior: 'auto' });
+      element.focus({ preventScroll: true });
+    } else setNotice('El comentario ya no está disponible. Actualiza la búsqueda para comprobarlo.');
+  }, [focusCommentId, available, targetLoaded, threadFetching, threadHasNextPage, threadPageCount, fetchOlderComments]);
 
   function accept(saved: TaskComment) {
     client.setQueryData<InfiniteData<CommentThread, number | null>>(queryKey, previous => {
@@ -250,7 +272,7 @@ function ScopedTaskComments({ task, api, readOnly, pending = false, canComment =
               {query.isFetchingNextPage ? 'Cargando…' : 'Ver anteriores'}
             </button>
           )}
-          <div className="tc-thread" aria-label="Conversación de la tarea">
+          <div className="tc-thread" aria-label="Conversación de la tarea" ref={threadElement}>
             {rows.length === 0 && (
               <div className="tc-empty">
                 <MessageSquare size={24} aria-hidden="true" />
@@ -259,7 +281,13 @@ function ScopedTaskComments({ task, api, readOnly, pending = false, canComment =
               </div>
             )}
             {rows.map(row => (
-              <article key={row.id} className="tc-comment" aria-label={`Comentario de ${row.author_name}`}>
+              <article
+                key={row.id}
+                className={`tc-comment${row.id === focusCommentId ? ' tc-search-target' : ''}`}
+                tabIndex={row.id === focusCommentId ? -1 : undefined}
+                data-comment-id={row.id}
+                aria-label={`Comentario de ${row.author_name}`}
+              >
                 <IdentityAvatar name={row.author_name} decorative />
                 <div className="tc-comment-body">
                   <div className="tc-who">
