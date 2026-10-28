@@ -32,8 +32,7 @@ import type {
   WorkspaceProps,
   WorkspaceSummary,
 } from '../types';
-import Calendar from './Calendar';
-import CalendarSettings from './CalendarZoneSettings';
+import { deferSection } from './deferSection';
 import ProjectForm from './ProjectForm';
 import ProjectDeleteDialog from './ProjectDeleteDialog';
 import ProjectDuplicateDialog from './ProjectDuplicateDialog';
@@ -44,12 +43,8 @@ import TaskCollectionPage from './TaskCollectionPage';
 import ProductivityTasks from './ProductivityTasks';
 import useProductivity, { type ProductivityController } from './useProductivity';
 import usePlanning, { type PlanningController } from './usePlanning';
-import Timeline from './Timeline';
 import DependencyPanel from './DependencyPanel';
 import MilestonePanel from './MilestonePanel';
-import ProjectFiles from './ProjectFiles';
-import TaskComments from './TaskComments';
-import InboxPage from './InboxPage';
 import useWorkspaceSearch from './useWorkspaceSearch';
 import FavoriteButton from './FavoriteButton';
 import FavoritesPage from './FavoritesPage';
@@ -67,6 +62,13 @@ import ProjectSummary from './ProjectSummary';
 import { buildDashboardModel } from './dashboard-model';
 import './workspace.css';
 import './visual-navigation.css';
+
+const Calendar = deferSection(() => import('./Calendar'), 'el calendario');
+const CalendarSettings = deferSection(() => import('./CalendarZoneSettings'), 'Configuración');
+const Timeline = deferSection(() => import('./Timeline'), 'Timeline');
+const ProjectFiles = deferSection(() => import('./ProjectFiles'), 'los archivos');
+const TaskComments = deferSection(() => import('./TaskComments'), 'los comentarios');
+const InboxPage = deferSection(() => import('./InboxPage'), 'la bandeja');
 
 type ProjectActions = {
   productivity: ProductivityController;

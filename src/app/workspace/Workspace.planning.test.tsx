@@ -42,9 +42,11 @@ describe('Timeline integrado en TR8', () => {
         .find(link => link.getAttribute('href')?.startsWith('/timeline'))!,
     );
     await waitFor(() => expect(planning.load).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('region', { name: 'Cronograma del espacio' })).toBeInTheDocument();
     expect(container.querySelectorAll('.pwt-page')).toHaveLength(1);
     await user.click(within(sidebar).getByRole('link', { name: summaryProject.name }));
     await user.click(within(screen.getByLabelText('Vista de tareas')).getByRole('button', { name: 'Timeline' }));
+    expect(await screen.findByRole('region', { name: `Cronograma de ${summaryProject.name}` })).toBeInTheDocument();
     expect(container.querySelectorAll('.pwt-page')).toHaveLength(1);
     expect(screen.getByRole('heading', { name: summaryProject.name, level: 1 })).toBeInTheDocument();
     await user.click(
@@ -52,6 +54,7 @@ describe('Timeline integrado en TR8', () => {
         .getAllByRole('link', { name: 'Timeline' })
         .find(link => link.getAttribute('href')?.startsWith('/timeline'))!,
     );
+    expect(await screen.findByRole('region', { name: 'Cronograma del espacio' })).toBeInTheDocument();
     expect(container.querySelectorAll('.pwt-page')).toHaveLength(1);
     expect(screen.queryByRole('heading', { name: summaryProject.name, level: 1 })).not.toBeInTheDocument();
   });

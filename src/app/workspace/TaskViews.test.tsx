@@ -72,6 +72,21 @@ describe('productive task views', () => {
     expect(title).toHaveValue('Preparar portada');
     expect(onPatch).not.toHaveBeenCalled();
   });
+  it('does not save or discard an inline title while an IME is composing', async () => {
+    const onPatch = vi.fn().mockResolvedValue(undefined);
+    mount(props({ onPatch }), '/tasks?view=table');
+    const title = screen.getByRole('textbox', { name: 'Título de Preparar portada' });
+    title.focus();
+    fireEvent.change(title, { target: { value: 'Planificación 東京' } });
+    fireEvent.keyDown(title, { key: 'Enter', isComposing: true });
+    expect(onPatch).not.toHaveBeenCalled();
+    fireEvent.keyDown(title, { key: 'Escape', isComposing: true });
+    expect(title).toHaveFocus();
+    expect(title).toHaveValue('Planificación 東京');
+    fireEvent.keyDown(title, { key: 'Enter' });
+    await waitFor(() => expect(onPatch).toHaveBeenCalledOnce());
+    expect(onPatch).toHaveBeenCalledWith(tasks[0], { title: 'Planificación 東京' });
+  });
   it('configures columns and keeps the title present', async () => {
     const user = userEvent.setup();
     mount(props(), '/tasks?view=table');

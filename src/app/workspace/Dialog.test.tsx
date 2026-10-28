@@ -43,6 +43,38 @@ function click(target: Element, x: number, y: number) {
   fireEvent.click(target, { clientX: x, clientY: y, detail: 1 });
 }
 describe('Dialog dismissal', () => {
+  it('closes only the inner dialog when Escape cancels a nested editor', async () => {
+    const outerClose = vi.fn();
+    const innerClose = vi.fn();
+    function NestedFixture() {
+      const [innerOpen, setInnerOpen] = useState(false);
+      return (
+        <Dialog title="Tarea" onClose={outerClose}>
+          <button onClick={() => setInnerOpen(true)}>Editar comentario</button>
+          {innerOpen && (
+            <Dialog
+              title="Comentario"
+              onClose={() => {
+                innerClose();
+                setInnerOpen(false);
+              }}
+            >
+              <input aria-label="Texto del comentario" data-initial-focus />
+            </Dialog>
+          )}
+        </Dialog>
+      );
+    }
+    render(<NestedFixture />);
+    const opener = screen.getByRole('button', { name: 'Editar comentario' });
+    await userEvent.click(opener);
+    const inner = screen.getByRole('dialog', { name: 'Comentario' });
+    fireEvent(inner, new Event('cancel', { cancelable: true }));
+    expect(innerClose).toHaveBeenCalledOnce();
+    expect(outerClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Tarea' })).toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
   it('closes on a genuine backdrop click and restores focus to its opener', async () => {
     const onClose = vi.fn();
     const dialog = await open({ onClose });

@@ -19,6 +19,7 @@ export default function SettingsDisclosure({
   disabled?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [visited, setVisited] = useState(false);
   const contentId = useId();
   return (
     <section className="pw-settings-disclosure">
@@ -34,6 +35,7 @@ export default function SettingsDisclosure({
           onClick={() => {
             const next = !expanded;
             setExpanded(next);
+            if (next) setVisited(true);
             onExpandedChange?.(next);
           }}
         >
@@ -53,7 +55,7 @@ export default function SettingsDisclosure({
         </button>
       </h3>
       <div id={contentId} className="pw-settings-disclosure-body" hidden={!expanded}>
-        {children}
+        {visited ? children : null}
       </div>
     </section>
   );

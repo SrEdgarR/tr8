@@ -50,6 +50,7 @@ function AccountFinancePage({
   onRefreshReady?: (refresh: (() => void) | null) => void;
 }) {
   const [record, setRecord] = useState<AccountFinanceRecord | null>(null),
+    [dashboardEpoch, setDashboardEpoch] = useState(0),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [pending, setPending] = useState<AccountFinanceWrite | null>(null);
@@ -107,6 +108,9 @@ function AccountFinancePage({
     try {
       const value = await api.load();
       if (ticket === generation.current) {
+        // A refreshed version invalidates drafts and restore confirmations based
+        // on the previous ledger; normal saves keep the active dashboard view.
+        if (current.current && current.current.version !== value.version) setDashboardEpoch(epoch => epoch + 1);
         current.current = value;
         setRecord(value);
         setPending(null);
@@ -207,9 +211,10 @@ function AccountFinancePage({
         <>
           {busy && <div role="status">Guardando tus finanzas…</div>}
           <FinancialDashboard
+            key={dashboardEpoch}
             snapshot={record.snapshot}
             finance={{ busy: blocked, save }}
-            security={<AccountSecurity snapshot={record.snapshot} busy={blocked} onSave={save} onVault={onVault} />}
+            security={<AccountSecurity key={record.version} snapshot={record.snapshot} busy={blocked} onSave={save} onVault={onVault} />}
           />
         </>
       )}

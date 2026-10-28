@@ -132,6 +132,7 @@ export default function CalendarSettings({
   appearance?: AppearanceController;
 }) {
   const [category, setCategory] = useState<SettingsCategory>('general');
+  const [visited, setVisited] = useState<SettingsCategory[]>(['general']);
   return (
     <div className="page pw-settings">
       <div className="ph">
@@ -158,7 +159,10 @@ export default function CalendarSettings({
                     className={category === id ? 'is-current' : ''}
                     aria-current={category === id ? 'page' : undefined}
                     aria-controls={`tr8-settings-${id}`}
-                    onClick={() => setCategory(id)}
+                    onClick={() => {
+                      setCategory(id);
+                      setVisited(previous => (previous.includes(id) ? previous : [...previous, id]));
+                    }}
                   >
                     <Icon size={16} aria-hidden="true" />
                     <span>{label}</span>
@@ -184,35 +188,37 @@ export default function CalendarSettings({
               <h2>Apariencia</h2>
               <p>Personaliza el aspecto de TR8 en este navegador.</p>
             </header>
-            {appearance ? (
-              <AppearanceSettings appearance={appearance} />
-            ) : (
-              <p className="faint">Las preferencias de apariencia no están disponibles en este momento.</p>
-            )}
+            {visited.includes('appearance') &&
+              (appearance ? (
+                <AppearanceSettings appearance={appearance} />
+              ) : (
+                <p className="faint">Las preferencias de apariencia no están disponibles en este momento.</p>
+              ))}
           </section>
           <section id="tr8-settings-connections" className="pw-settings-category" aria-label="Conexiones de la cuenta" hidden={category !== 'connections'}>
             <header className="pw-settings-category-heading">
               <h2>Conexiones</h2>
               <p>Conecta tus plataformas y gestiona sus permisos desde un solo lugar.</p>
             </header>
-            {integrations ?? <p className="faint">No hay conexiones disponibles en este momento.</p>}
+            {visited.includes('connections') && (integrations ?? <p className="faint">No hay conexiones disponibles en este momento.</p>)}
           </section>
           <section id="tr8-settings-activity" className="pw-settings-category" aria-label="Actividad de los procesos" hidden={category !== 'activity'}>
             <header className="pw-settings-category-heading">
               <h2>Actividad</h2>
               <p>Consulta el procesamiento de tus cambios en segundo plano.</p>
             </header>
-            {processes ? (
-              <SettingsDisclosure
-                title="Procesos en segundo plano"
-                description="Estado e historial de los cambios preparados por TR8."
-                icon={<Activity size={18} />}
-              >
-                {processes}
-              </SettingsDisclosure>
-            ) : (
-              <p className="faint">El estado de los procesos no está disponible en este momento.</p>
-            )}
+            {visited.includes('activity') &&
+              (processes ? (
+                <SettingsDisclosure
+                  title="Procesos en segundo plano"
+                  description="Estado e historial de los cambios preparados por TR8."
+                  icon={<Activity size={18} />}
+                >
+                  {processes}
+                </SettingsDisclosure>
+              ) : (
+                <p className="faint">El estado de los procesos no está disponible en este momento.</p>
+              ))}
           </section>
         </div>
       </div>

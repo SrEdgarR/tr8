@@ -31,6 +31,12 @@ Las altas e invitaciones externas permanecen desactivadas, por decisión del pro
 
 ## Especificación y evolución
 
+La [etapa 9 de estabilización](docs/demo-parity/stage-9.md) corrige foco y cierre
+de diálogos, edición IME y formularios financieros obsoletos; separa la carga de
+secciones y conserva borradores de configuración. El [inventario de la demo](docs/demo-parity/stage-9-inventory.md)
+documenta las capacidades reales y las variantes pendientes. El recorrido visual
+manual sigue pendiente por el bloqueo de la herramienta de navegador.
+
 La [recuperación visual de la demo, etapa 1](docs/demo-parity/stage-1.md) incorpora
 iconos de proyecto persistentes, sidebar colapsable y submenús, estados y avatares,
 menú de creación y preferencias de apariencia por cuenta en este navegador.

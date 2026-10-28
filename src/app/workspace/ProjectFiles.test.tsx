@@ -76,6 +76,15 @@ afterEach(() => {
 });
 
 describe('archivos privados del proyecto', () => {
+  it.each(['Ver detalles', 'Cambiar nombre', 'Eliminar archivo'])('devuelve el foco al botón de opciones tras cerrar %s', async action => {
+    await mount();
+    const opener = await screen.findByRole('button', { name: 'Opciones de Diseño.pdf' });
+    await openMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: action }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar ventana' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
   it('abre los detalles solicitados desde búsqueda sin descargar el contenido', async () => {
     const source = api();
     const { wrapper } = provider();

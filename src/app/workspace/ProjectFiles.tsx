@@ -296,6 +296,7 @@ function ScopedProjectFiles({ data, project, api, readable, writable, focusFileI
     }
   }
   function openAction(type: FileAction['type'], row: ProjectFile) {
+    if (menuId) trigger.current?.focus();
     setMenuId(null);
     setError(null);
     setNotice(null);

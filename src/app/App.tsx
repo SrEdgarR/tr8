@@ -1,13 +1,11 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CircleAlert, LoaderCircle, LockKeyhole } from 'lucide-react';
 import AuthScreen from './auth/AuthScreen';
 import Workspace from './workspace/Workspace';
-import ProcessesPanel from './workspace/ProcessesPanel';
-import GoogleCalendarPanel from './workspace/GoogleCalendarPanel';
-import McpConnectionsPanel from './workspace/McpConnectionsPanel';
+import { deferSection } from './workspace/deferSection';
 import GoogleCalendarReturn from './workspace/GoogleCalendarReturn';
 import PublicInformation from './PublicInformation';
 import type { ProcessesApi } from './data/processes';
@@ -34,7 +32,10 @@ import type { CalendarApi, CollaborationApi, DataSyncState, Project, Task, Works
 import { createFinanceApi, changeFinanceAccountPassword } from './finance/ui/api';
 import { createAccountFinanceApi } from './finance/ui/account-api';
 
-const FinancePage = lazy(() => import('./finance/ui/PersonalFinancePage'));
+const FinancePage = deferSection(() => import('./finance/ui/PersonalFinancePage'), 'Finanzas');
+const ProcessesPanel = deferSection(() => import('./workspace/ProcessesPanel'), 'los procesos');
+const GoogleCalendarPanel = deferSection(() => import('./workspace/GoogleCalendarPanel'), 'la conexión con Google');
+const McpConnectionsPanel = deferSection(() => import('./workspace/McpConnectionsPanel'), 'las conexiones MCP');
 
 function LoadingScreen() {
   return (
@@ -712,15 +713,13 @@ function ScopedWorkspace({
       onRefreshFinance={financeRefresh ?? undefined}
       finance={
         selected.kind === 'personal' ? (
-          <Suspense fallback={<div role="status">Abriendo Finanzas…</div>}>
-            <FinancePage
-              key={`${session.user.id}:${selected.id}`}
-              vaultApi={financeApi}
-              accountApi={accountFinanceApi}
-              onSyncState={setFinanceSyncState}
-              onRefreshReady={registerFinanceRefresh}
-            />
-          </Suspense>
+          <FinancePage
+            key={`${session.user.id}:${selected.id}`}
+            vaultApi={financeApi}
+            accountApi={accountFinanceApi}
+            onSyncState={setFinanceSyncState}
+            onRefreshReady={registerFinanceRefresh}
+          />
         ) : undefined
       }
       integrations={

@@ -258,7 +258,7 @@ describe('espacios y equipos', () => {
     const settingsLink = screen.getByRole('link', { name: 'Configuración' });
     expect(settingsLink).toHaveAttribute('href', '/settings?workspace=workspace-a');
     await user.click(settingsLink);
-    expect(screen.getByRole('heading', { name: 'Configuración', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Configuración', level: 1 })).toBeInTheDocument();
     const categories = screen.getByRole('navigation', { name: 'Categorías de configuración' });
     expect(screen.getByRole('region', { name: 'Configuración general' })).toBeVisible();
     const zoneToggle = screen.getByRole('button', { name: /^Zona horaria/ });

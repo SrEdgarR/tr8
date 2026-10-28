@@ -99,6 +99,7 @@ export function Dialog({
       }}
       onCancel={event => {
         event.preventDefault();
+        event.stopPropagation();
         if (!busy) onClose();
       }}
     >

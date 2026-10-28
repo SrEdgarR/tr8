@@ -180,7 +180,7 @@ describe('zona horaria en Configuración', () => {
     const input = await screen.findByRole('combobox', { name: 'Zona horaria de visualización' });
     await waitFor(() => expect(input).toBeEnabled());
     expect(input).toHaveValue('America/La_Paz');
-    expect(screen.getByText('Estado de los procesos de prueba')).not.toBeVisible();
+    expect(screen.queryByText('Estado de los procesos de prueba')).not.toBeInTheDocument();
     expect(api.saveProfile).not.toHaveBeenCalled();
     fireEvent.change(input, { target: { value: 'Europe/Madrid' } });
     fireEvent.click(screen.getByRole('button', { name: 'Guardar zona' }));
@@ -238,9 +238,8 @@ describe('zona horaria en Configuración', () => {
     const zoneToggle = screen.getByRole('button', { name: /^Zona horaria/ });
     expect(zoneToggle).toHaveAttribute('aria-expanded', 'false');
     await waitFor(() => expect(api.profile).toHaveBeenCalled());
-    const input = screen.getByLabelText('Zona horaria de visualización');
-    await waitFor(() => expect(input).toHaveValue('America/La_Paz'));
-    expect(input).not.toBeVisible();
+    await waitFor(() => expect(zoneToggle).toHaveAccessibleDescription(/America\/La_Paz/));
+    expect(screen.queryByLabelText('Zona horaria de visualización')).not.toBeInTheDocument();
     expect(api.saveProfile).not.toHaveBeenCalled();
     expect(api.items).not.toHaveBeenCalled();
 
@@ -248,19 +247,18 @@ describe('zona horaria en Configuración', () => {
     expect(screen.getByRole('region', { name: 'Conexiones de la cuenta' })).toBeVisible();
     expect(screen.getByRole('region', { name: 'Conexión de prueba' })).toBeVisible();
     expect(screen.queryByRole('region', { name: 'Configuración general' })).not.toBeInTheDocument();
-    expect(input).toBeInTheDocument();
-    expect(input).not.toBeVisible();
+    expect(screen.queryByLabelText('Zona horaria de visualización')).not.toBeInTheDocument();
 
     fireEvent.click(within(navigation).getByRole('button', { name: 'Actividad' }));
     expect(screen.getByRole('region', { name: 'Actividad de los procesos' })).toBeVisible();
     const processesToggle = screen.getByRole('button', { name: /^Procesos en segundo plano/ });
     expect(processesToggle).toHaveAttribute('aria-expanded', 'false');
-    const processes = screen.getByText('Estado de los procesos de prueba');
-    expect(processes).not.toBeVisible();
+    expect(screen.queryByText('Estado de los procesos de prueba')).not.toBeInTheDocument();
     const bodyId = processesToggle.getAttribute('aria-controls');
     expect(bodyId).toBeTruthy();
-    expect(document.getElementById(bodyId!)).toContainElement(processes);
     fireEvent.click(processesToggle);
+    const processes = screen.getByText('Estado de los procesos de prueba');
+    expect(document.getElementById(bodyId!)).toContainElement(processes);
     expect(processesToggle).toHaveAttribute('aria-expanded', 'true');
     expect(processes).toBeVisible();
     fireEvent.click(processesToggle);
