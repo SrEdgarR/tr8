@@ -2,6 +2,7 @@ import type { ProjectIconName } from './project-identity';
 import type { ProductivityApi } from './productivity-types';
 import type { WorkManagementApi } from './work-management-types';
 import type { PlanningApi } from './planning-types';
+import type { ProjectFilesApi } from './project-files-types';
 
 export type TaskStatus = 'backlog' | 'todo' | 'progress' | 'review' | 'done';
 export type Priority = 'none' | 'low' | 'medium' | 'high' | 'urgent';
@@ -259,6 +260,7 @@ export interface WorkspaceProps {
   workManagement?: WorkManagementApi;
   productivity?: ProductivityApi;
   planning?: PlanningApi;
+  projectFiles?: ProjectFilesApi;
   financeSyncState?: DataSyncState;
   onRefreshFinance?: () => void;
   workspace?: WorkspaceSummary;

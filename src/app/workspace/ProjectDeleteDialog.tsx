@@ -51,6 +51,9 @@ export default function ProjectDeleteDialog({ project, taskCount, pending, onDel
             </p>
             <p>Esta acción no se puede deshacer. Los demás proyectos y sus tareas se conservarán.</p>
             <p className="faint">
+              Si el proyecto contiene archivos o cargas pendientes, retíralos desde Archivos antes de eliminarlo. Puedes archivarlo para conservarlos.
+            </p>
+            <p className="faint">
               Se solicitará retirar las copias vinculadas en Google Calendar y Google Tasks. Una conexión pausada, un conflicto o un fallo puede dejar la
               limpieza pendiente.
             </p>

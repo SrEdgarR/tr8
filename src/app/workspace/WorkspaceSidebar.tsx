@@ -13,6 +13,7 @@ import {
   ListTodo,
   PanelLeftClose,
   PanelLeftOpen,
+  Paperclip,
   Plus,
   Settings2,
   Star,
@@ -68,7 +69,9 @@ export default function WorkspaceSidebar({
   const scope = data.workspace ? `?workspace=${data.workspace.id}` : '';
   const workspaceName = data.workspace?.kind === 'team' ? data.workspace.name : 'Mi espacio personal';
   const navClass = ({ isActive }: { isActive: boolean }) => `sitem${isActive ? ' on' : ''}`;
-  const view = ['overview', 'table', 'board', 'calendar', 'timeline', 'activity', 'archived'].includes(params.get('view') ?? '') ? params.get('view') : 'list';
+  const view = ['overview', 'table', 'board', 'calendar', 'timeline', 'files', 'activity', 'archived'].includes(params.get('view') ?? '')
+    ? params.get('view')
+    : 'list';
 
   function href(project: Project, nextView: string) {
     const search = new URLSearchParams();
@@ -207,6 +210,7 @@ export default function WorkspaceSidebar({
                 ...(data.workManagement ? [{ id: 'archived', label: 'Archivadas', icon: Archive }] : []),
                 ...(data.calendar ? [{ id: 'calendar', label: 'Calendario', icon: CalendarDays }] : []),
                 ...(data.planning ? [{ id: 'timeline', label: 'Timeline', icon: ChartGantt }] : []),
+                ...(data.projectFiles ? [{ id: 'files', label: 'Archivos', icon: Paperclip }] : []),
                 ...(data.collaboration && canInProject(data, project.id, 'audit.read') ? [{ id: 'activity', label: 'Actividad', icon: Activity }] : []),
               ];
               return (

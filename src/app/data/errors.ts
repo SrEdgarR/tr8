@@ -13,6 +13,11 @@ export function dataError(cause: unknown): DataError {
   const record = typeof cause === 'object' && cause !== null ? (cause as Record<string, unknown>) : {};
   const code = typeof record.code === 'string' ? record.code : undefined;
   const message = typeof record.message === 'string' ? record.message : String(cause);
+  if (code === 'PT422')
+    return new DataError(
+      'Retira los archivos y las cargas pendientes desde Archivos antes de eliminar este proyecto. También puedes archivarlo para conservarlos.',
+      code,
+    );
   if (code === 'PT409')
     return new DataError(
       'Este registro cambió en otra pestaña o dispositivo. Se han actualizado los datos; revisa los cambios antes de volver a guardar.',

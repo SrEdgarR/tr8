@@ -29,6 +29,7 @@ import usePlanning, { type PlanningController } from './usePlanning';
 import Timeline from './Timeline';
 import DependencyPanel from './DependencyPanel';
 import MilestonePanel from './MilestonePanel';
+import ProjectFiles from './ProjectFiles';
 import FavoriteButton from './FavoriteButton';
 import FavoritesPage from './FavoritesPage';
 import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon } from './ui';
@@ -380,6 +381,7 @@ function ProjectPage({
         onReorder={actions.onReorder}
         summaryContent={<ProjectSummary project={project} data={data} onOpen={onOpen} />}
         archivedContent={data.workManagement ? <ArchivedTasks tasks={archivedTasks} onOpen={onOpen} /> : undefined}
+        filesContent={data.projectFiles ? <ProjectFiles data={data} project={project} api={data.projectFiles} /> : undefined}
         timelineContent={
           data.planning ? (
             <Timeline

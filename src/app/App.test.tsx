@@ -17,6 +17,7 @@ import type { PlanningState, ProjectMilestone } from './planning-types';
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
   unsubscribe: vi.fn(),
+  files: { list: vi.fn(), upload: vi.fn(), download: vi.fn(), rename: vi.fn(), remove: vi.fn() },
   planning: {
     load: vi.fn(),
     addDependency: vi.fn(),
@@ -74,6 +75,7 @@ vi.mock('./data/client', () => ({
 }));
 vi.mock('./data/repository', () => ({ createRepository: () => mocks.repository }));
 vi.mock('./data/planning', () => ({ createPlanningRepository: () => mocks.planning }));
+vi.mock('./data/project-files', () => ({ createProjectFilesRepository: () => mocks.files }));
 vi.mock('./data/work-management', () => ({
   createWorkManagementRepository: (_client: unknown, workspaceId: string) => ({
     ...mocks.work,

@@ -17,6 +17,8 @@ import { createMcpRepository } from './data/mcp';
 import { createProductivityRepository } from './data/productivity';
 import { createPlanningRepository } from './data/planning';
 import type { PlanningApi } from './planning-types';
+import { createProjectFilesRepository } from './data/project-files';
+import type { ProjectFilesApi } from './project-files-types';
 import { createWorkManagementRepository } from './data/work-management';
 import type { ProductivityApi } from './productivity-types';
 import type { WorkManagementApi } from './work-management-types';
@@ -367,6 +369,7 @@ function ScopedWorkspace({
   const scopeRevision = [...selected.permissions].sort().join('|');
   const productivityRepository = useMemo(() => createProductivityRepository(dataClient, selected.id), [dataClient, selected.id]);
   const planningRepository = useMemo(() => createPlanningRepository(dataClient, selected.id), [dataClient, selected.id]);
+  const filesRepository = useMemo(() => createProjectFilesRepository(dataClient, selected.id), [dataClient, selected.id]);
   const workRepository = useMemo(() => createWorkManagementRepository(dataClient, selected.id), [dataClient, selected.id]);
   const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
@@ -579,6 +582,14 @@ function ScopedWorkspace({
     moveTask: (task, targetId, id, clearAssignee) => write(() => workRepository.moveTask(task, targetId, id, clearAssignee), acceptTask),
     archiveTask: (task, archived, id) => write(() => workRepository.archiveTask(task, archived, id), acceptTask),
   };
+  const projectFiles: ProjectFilesApi = {
+    scopeKey: [...collaborationScope, 'project-files'],
+    list: (project, signal) => readCollaboration(() => filesRepository.list(project, signal)),
+    upload: (project, file, id) => write(() => filesRepository.upload(project, file, id)),
+    download: file => readCollaboration(() => filesRepository.download(file)),
+    rename: (file, name) => write(() => filesRepository.rename(file, name)),
+    remove: file => write(() => filesRepository.remove(file)),
+  };
   const planning: PlanningApi = {
     scopeKey: [...collaborationScope, 'planning'],
     load: signal => readCollaboration(() => planningRepository.load(signal)),
@@ -670,6 +681,7 @@ function ScopedWorkspace({
       collaboration={collaboration}
       productivity={productivity}
       planning={planning}
+      projectFiles={projectFiles}
       workManagement={workManagement}
       calendar={calendar}
       financeSyncState={financeSyncState}
