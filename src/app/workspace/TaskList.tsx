@@ -18,13 +18,14 @@ export default function TaskList({
   onReorder,
   onDragStart,
   onDrop,
+  selection,
 }: TaskTableProps) {
   const projectMap = new Map(projects.map(project => [project.id, project]));
   return (
-    <div className="pw-task-list" role="table" aria-label="Lista de tareas">
+    <div className={`pw-task-list${selection ? ' tv-selectable-list' : ''}`} role="table" aria-label="Lista de tareas">
       <div className="pw-task-row pw-task-list-head" role="row">
         <span role="columnheader">
-          <span className="sr">Completar</span>
+          <span className="sr">{selection ? 'Seleccionar y completar' : 'Completar'}</span>
         </span>
         <span role="columnheader">Tarea</span>
         <span role="columnheader">Estado</span>
@@ -34,7 +35,7 @@ export default function TaskList({
       {tasks.map(task => (
         <div
           key={task.id}
-          className={`pw-task-row${task.status === 'done' ? ' pw-done' : ''}`}
+          className={`pw-task-row${task.status === 'done' ? ' pw-done' : ''}${selection?.selectedIds.includes(task.id) ? ' tv-row-selected' : ''}`}
           role="row"
           draggable={Boolean(onDragStart && !pending && mayEdit(task))}
           onDragStart={event => onDragStart?.(task.id, event)}
@@ -44,6 +45,20 @@ export default function TaskList({
           onDrop={event => onDrop?.(task, event)}
         >
           <span role="cell">
+            {selection && (
+              <label className="tv-select-task">
+                <input
+                  type="checkbox"
+                  aria-label={`Seleccionar ${task.title}`}
+                  checked={selection.selectedIds.includes(task.id)}
+                  disabled={selection.disabled || !selection.canSelect(task)}
+                  onChange={() => selection.toggle(task)}
+                />
+                <span aria-hidden="true">
+                  <Check size={12} />
+                </span>
+              </label>
+            )}
             <button
               className={`pw-complete${task.status === 'done' ? ' checked' : ''}`}
               disabled={pending || !mayEdit(task)}

@@ -12,6 +12,8 @@ import TaskList from './TaskList';
 import TaskBoard from './TaskBoard';
 import { defaultTaskView, filterTaskView, groupTaskView, manualTaskOrder, reorderedProjectTasks } from './task-views';
 import './task-views.css';
+import type { BulkTaskOperation, BulkTasksApi } from '../bulk-task-types';
+import BulkTaskActions, { type TaskSelection } from './BulkTaskActions';
 
 interface Props extends SavedViewsProps {
   scopeKey?: string;
@@ -35,6 +37,8 @@ interface Props extends SavedViewsProps {
   onReorder?: (tasks: Task[]) => Promise<void>;
   favoriteTaskIds?: readonly string[];
   onFavoriteTask?: (task: Task, favorite: boolean) => Promise<void>;
+  bulkTasks?: BulkTasksApi;
+  canBulkTask?: (task: Task, kind: BulkTaskOperation['kind']) => boolean;
 }
 
 export default function TasksView(props: Props) {
@@ -69,6 +73,8 @@ function ScopedTasksView({
   onDeleteView,
   productivityLoading,
   productivityError,
+  bulkTasks,
+  canBulkTask,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const members = useMemo(() => receivedMembers.filter(member => member.status === 'active'), [receivedMembers]);
@@ -98,6 +104,7 @@ function ScopedTasksView({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const actionLock = useRef(false);
   const query = config.query;
   const status = config.statuses.length === 1 ? config.statuses[0] : '';
@@ -121,11 +128,11 @@ function ScopedTasksView({
     config.favoritesOnly,
   );
   const mayEdit = (task: Task) => !task.archived_at && !readOnly && (canEditTask?.(task) ?? true);
-  const busy = pending || localBusy;
+  const busy = pending || localBusy || bulkBusy;
   const reorderEnabled = Boolean(onReorder && config.sort === 'manual' && config.direction === 'asc' && !readOnly);
 
   async function run(operation: () => Promise<void>) {
-    if (pending || actionLock.current) return;
+    if (pending || bulkBusy || actionLock.current) return;
     actionLock.current = true;
     setLocalBusy(true);
     setActionError(null);
@@ -186,6 +193,7 @@ function ScopedTasksView({
   }
 
   function changeView(next: string) {
+    if (bulkBusy) return;
     const params = new URLSearchParams(searchParams);
     if (
       next === 'board' ||
@@ -215,7 +223,7 @@ function ScopedTasksView({
     setSelectedView('');
   }
 
-  function renderContent(items: Task[]) {
+  function renderContent(items: Task[], selection?: TaskSelection) {
     const rowProps = {
       tasks: items,
       projects,
@@ -232,6 +240,7 @@ function ScopedTasksView({
       onReorder: reorderEnabled ? moveBy : undefined,
       onDragStart: reorderEnabled ? beginDrag : undefined,
       onDrop: reorderEnabled ? dropBefore : undefined,
+      selection,
     };
     return view === 'table' ? (
       <TaskTable {...rowProps} />
@@ -241,7 +250,7 @@ function ScopedTasksView({
       <TaskList {...rowProps} />
     );
   }
-  function renderGroups() {
+  function renderGroups(selection?: TaskSelection) {
     const grouped = config.group !== 'none' && !(view === 'board' && config.group === 'status');
     return (
       <>
@@ -252,19 +261,49 @@ function ScopedTasksView({
                 className="tv-group-heading"
                 aria-label={`${group.label}: ${group.tasks.length} tareas`}
                 aria-expanded={!collapsedGroups[`${config.group}:${group.id}`]}
+                disabled={bulkBusy}
                 onClick={() => setCollapsedGroups(previous => ({ ...previous, [`${config.group}:${group.id}`]: !previous[`${config.group}:${group.id}`] }))}
               >
                 <ChevronRight size={13} className={collapsedGroups[`${config.group}:${group.id}`] ? '' : 'is-open'} aria-hidden="true" />
                 <strong>{group.label}</strong>
                 <span>{group.tasks.length}</span>
               </button>
-              {!collapsedGroups[`${config.group}:${group.id}`] && renderContent(group.tasks)}
+              {!collapsedGroups[`${config.group}:${group.id}`] && renderContent(group.tasks, selection)}
             </section>
           ) : (
-            <div key="all">{renderContent(group.tasks)}</div>
+            <div key="all">{renderContent(group.tasks, selection)}</div>
           ),
         )}
       </>
+    );
+  }
+
+  function renderTaskResults(selection?: TaskSelection) {
+    return visible.length === 0 && (view === 'list' || view === 'table' || hasFilters) ? (
+      <EmptyState
+        title={hasFilters ? 'No hay coincidencias' : 'Tu siguiente paso empieza aquí'}
+        action={
+          hasFilters ? (
+            <button className="btn btn-secondary" disabled={bulkBusy} onClick={resetFilters}>
+              Limpiar filtros
+            </button>
+          ) : (
+            canCreate && (
+              <button className="btn btn-primary" disabled={busy} onClick={() => onCreate()}>
+                <Plus size={14} aria-hidden="true" /> Nueva tarea
+              </button>
+            )
+          )
+        }
+      >
+        {hasFilters
+          ? 'Prueba con otra búsqueda o cambia los filtros.'
+          : readOnly
+            ? 'Este proyecto no tiene tareas.'
+            : 'Crea una tarea y organiza su estado, prioridad y fecha.'}
+      </EmptyState>
+    ) : (
+      renderGroups(selection)
     );
   }
 
@@ -272,42 +311,77 @@ function ScopedTasksView({
     <div className="pw-tasks-area">
       <div className="pw-view-tabs" aria-label="Vista de tareas">
         {summaryContent && (
-          <button className={`pw-view-tab${view === 'overview' ? ' on' : ''}`} aria-pressed={view === 'overview'} onClick={() => changeView('overview')}>
+          <button
+            className={`pw-view-tab${view === 'overview' ? ' on' : ''}`}
+            aria-pressed={view === 'overview'}
+            disabled={bulkBusy}
+            onClick={() => changeView('overview')}
+          >
             <LayoutDashboard size={15} aria-hidden="true" />
             Resumen
           </button>
         )}
-        <button className={`pw-view-tab${view === 'list' ? ' on' : ''}`} aria-pressed={view === 'list'} onClick={() => changeView('list')}>
+        <button className={`pw-view-tab${view === 'list' ? ' on' : ''}`} aria-pressed={view === 'list'} disabled={bulkBusy} onClick={() => changeView('list')}>
           <List size={15} aria-hidden="true" />
           Lista
         </button>
-        <button className={`pw-view-tab${view === 'board' ? ' on' : ''}`} aria-pressed={view === 'board'} onClick={() => changeView('board')}>
+        <button
+          className={`pw-view-tab${view === 'board' ? ' on' : ''}`}
+          aria-pressed={view === 'board'}
+          disabled={bulkBusy}
+          onClick={() => changeView('board')}
+        >
           <SquareKanban size={15} aria-hidden="true" />
           Tablero
         </button>
-        <button className={`pw-view-tab${view === 'table' ? ' on' : ''}`} aria-pressed={view === 'table'} onClick={() => changeView('table')}>
+        <button
+          className={`pw-view-tab${view === 'table' ? ' on' : ''}`}
+          aria-pressed={view === 'table'}
+          disabled={bulkBusy}
+          onClick={() => changeView('table')}
+        >
           <Table2 size={15} aria-hidden="true" />
           Tabla
         </button>
         {calendarContent && (
-          <button className={`pw-view-tab${view === 'calendar' ? ' on' : ''}`} aria-pressed={view === 'calendar'} onClick={() => changeView('calendar')}>
+          <button
+            className={`pw-view-tab${view === 'calendar' ? ' on' : ''}`}
+            aria-pressed={view === 'calendar'}
+            disabled={bulkBusy}
+            onClick={() => changeView('calendar')}
+          >
             <CalendarDays size={15} aria-hidden="true" />
             Calendario
           </button>
         )}
         {timelineContent && (
-          <button className={`pw-view-tab${view === 'timeline' ? ' on' : ''}`} aria-pressed={view === 'timeline'} onClick={() => changeView('timeline')}>
+          <button
+            className={`pw-view-tab${view === 'timeline' ? ' on' : ''}`}
+            aria-pressed={view === 'timeline'}
+            disabled={bulkBusy}
+            onClick={() => changeView('timeline')}
+          >
             <ChartGantt size={15} aria-hidden="true" />
             Timeline
           </button>
         )}
         {filesContent && (
-          <button className={`pw-view-tab${view === 'files' ? ' on' : ''}`} aria-pressed={view === 'files'} onClick={() => changeView('files')}>
+          <button
+            className={`pw-view-tab${view === 'files' ? ' on' : ''}`}
+            aria-pressed={view === 'files'}
+            disabled={bulkBusy}
+            onClick={() => changeView('files')}
+          >
             <Paperclip size={15} aria-hidden="true" /> Archivos
           </button>
         )}
         {activityContent && (
-          <button className={`pw-view-tab${view === 'activity' ? ' on' : ''}`} aria-pressed={view === 'activity'} onClick={() => changeView('activity')}>
+          <button
+            className={`pw-view-tab${view === 'activity' ? ' on' : ''}`}
+            aria-pressed={view === 'activity'}
+            disabled={bulkBusy}
+            onClick={() => changeView('activity')}
+          >
             <Activity size={15} aria-hidden="true" />
             Actividad
           </button>
@@ -316,6 +390,7 @@ function ScopedTasksView({
           <button
             className={`pw-view-tab wm-archive-tab${view === 'archived' ? ' on' : ''}`}
             aria-pressed={view === 'archived'}
+            disabled={bulkBusy}
             onClick={() => changeView('archived')}
           >
             <Archive size={14} aria-hidden="true" />
@@ -342,11 +417,18 @@ function ScopedTasksView({
             <label className="pw-search">
               <Search size={14} aria-hidden="true" />
               <span className="sr">Buscar tareas</span>
-              <input type="search" placeholder="Buscar tareas…" maxLength={500} value={query} onChange={event => setQuery(event.target.value)} />
+              <input
+                type="search"
+                placeholder="Buscar tareas…"
+                maxLength={500}
+                value={query}
+                disabled={bulkBusy}
+                onChange={event => setQuery(event.target.value)}
+              />
             </label>
             <label className="pw-filter">
               <span className="sr">Filtrar por estado</span>
-              <select value={status} onChange={event => setStatus(event.target.value as TaskStatus | '')}>
+              <select value={status} disabled={bulkBusy} onChange={event => setStatus(event.target.value as TaskStatus | '')}>
                 <option value="">Todos los estados</option>
                 {STATUSES.map(item => (
                   <option key={item.id} value={item.id}>
@@ -357,7 +439,7 @@ function ScopedTasksView({
             </label>
             <label className="pw-filter">
               <span className="sr">Filtrar por prioridad</span>
-              <select value={priority} onChange={event => setPriority(event.target.value as Priority | '')}>
+              <select value={priority} disabled={bulkBusy} onChange={event => setPriority(event.target.value as Priority | '')}>
                 <option value="">Todas las prioridades</option>
                 {PRIORITIES.map(item => (
                   <option key={item.id} value={item.id}>
@@ -367,7 +449,7 @@ function ScopedTasksView({
               </select>
             </label>
             {hasFilters && (
-              <button className="btn btn-ghost btn-sm" onClick={resetFilters}>
+              <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={resetFilters}>
                 Limpiar filtros
               </button>
             )}
@@ -375,21 +457,26 @@ function ScopedTasksView({
               {visible.length} {visible.length === 1 ? 'tarea' : 'tareas'}
             </span>
           </div>
-          <TaskViewControls
-            config={{ ...config, view: view === 'table' ? 'table' : view === 'board' ? 'board' : 'list' }}
-            onChange={setConfig}
-            projects={projects}
-            members={members}
-            pending={busy}
-            selected={selectedView}
-            onSelect={selectSavedView}
-            savedViews={savedViews}
-            onCreateView={onCreateView}
-            onUpdateView={onUpdateView}
-            onDeleteView={onDeleteView}
-            productivityLoading={productivityLoading}
-            productivityError={productivityError}
-          />
+          <fieldset className="tv-bulk-controls-lock" disabled={bulkBusy}>
+            <legend className="sr">Filtros y organización de tareas</legend>
+            <TaskViewControls
+              config={{ ...config, view: view === 'table' ? 'table' : view === 'board' ? 'board' : 'list' }}
+              onChange={next => {
+                if (!bulkBusy) setConfig(next);
+              }}
+              projects={projects}
+              members={members}
+              pending={busy}
+              selected={selectedView}
+              onSelect={selectSavedView}
+              savedViews={savedViews}
+              onCreateView={onCreateView}
+              onUpdateView={onUpdateView}
+              onDeleteView={onDeleteView}
+              productivityLoading={productivityLoading}
+              productivityError={productivityError}
+            />
+          </fieldset>
           {onReorder && (
             <p className="tv-order-note">
               {readOnly
@@ -399,32 +486,21 @@ function ScopedTasksView({
                   : 'Selecciona orden manual ascendente para reordenar las tareas.'}
             </p>
           )}
-          {visible.length === 0 && (view === 'list' || view === 'table' || hasFilters) ? (
-            <EmptyState
-              title={hasFilters ? 'No hay coincidencias' : 'Tu siguiente paso empieza aquí'}
-              action={
-                hasFilters ? (
-                  <button className="btn btn-secondary" onClick={resetFilters}>
-                    Limpiar filtros
-                  </button>
-                ) : (
-                  canCreate && (
-                    <button className="btn btn-primary" disabled={busy} onClick={() => onCreate()}>
-                      <Plus size={14} aria-hidden="true" />
-                      Nueva tarea
-                    </button>
-                  )
-                )
-              }
+          {bulkTasks && canBulkTask && !readOnly && (view === 'list' || view === 'table') ? (
+            <BulkTaskActions
+              key={JSON.stringify([view, config, collapsedGroups, bulkTasks.scopeKey])}
+              tasks={groups.filter(group => config.group === 'none' || !collapsedGroups[`${config.group}:${group.id}`]).flatMap(group => group.tasks)}
+              projects={projects}
+              members={members}
+              api={bulkTasks}
+              can={canBulkTask}
+              pending={pending || localBusy}
+              onBusyChange={setBulkBusy}
             >
-              {hasFilters
-                ? 'Prueba con otra búsqueda o cambia los filtros.'
-                : readOnly
-                  ? 'Este proyecto no tiene tareas.'
-                  : 'Crea una tarea y organiza su estado, prioridad y fecha.'}
-            </EmptyState>
+              {selection => renderTaskResults(selection)}
+            </BulkTaskActions>
           ) : (
-            renderGroups()
+            renderTaskResults()
           )}
         </>
       )}

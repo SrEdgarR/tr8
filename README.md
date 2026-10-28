@@ -18,6 +18,7 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 - Proyectos: crear, editar, archivar, restaurar y eliminar con confirmación por nombre exacto y permiso propio. La eliminación incluye sus tareas y actividad; los demás proyectos quedan fuera de la operación.
 - Tareas: crear, editar, eliminar, completar y cambiar de estado; descripción, prioridad, fechas y un responsable opcional. Asignar y editar son permisos separados.
 - Mis tareas, Tareas y Favoritos; lista, tabla editable y tablero sobre los mismos datos. Filtros combinables, orden, grupos colapsables, columnas configurables y vistas guardadas por usuario y espacio. El tablero permite arrastrar tareas entre estados; las flechas ofrecen una alternativa para el orden manual.
+- Acciones masivas en Lista y Tabla: hasta 50 tareas visibles, estado, prioridad, responsable, archivo y eliminación confirmada. Permisos/versiones por tarea, resultados parciales e identidad estable para reintentar sin repetir cambios.
 - Finanzas personales con DOP por defecto, cuentas y tarjetas con saldos por moneda; ingresos, gastos, transferencias, pagos y planes. Los movimientos se pueden editar o eliminar con confirmación y validación de saldos. El acceso usa la cuenta TR8; la bóveda con contraseña privada es opcional.
 - Calendario general y por proyecto, mes y agenda, filtros, vencimientos de día completo y bloques horarios independientes. Zona IANA detectada al primer acceso, búsqueda por país o ciudad con hora en directo, edición posterior en Configuración y reprogramación con versión esperada. Transiciones y foco accesible con movimiento reducido.
 - Procesos internos durables: registro transaccional de cambios, reservas, reintentos, presupuesto compartido y consulta de procesos propios en Configuración. Un trabajo «Preparado» confirma su revisión interna; no una entrega externa.
@@ -30,6 +31,11 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 Las altas e invitaciones externas permanecen desactivadas, por decisión del propietario, hasta disponer de correo y provisión de cuentas adecuados. Se pueden administrar miembros existentes y preparar roles y proyectos. El correo opcional de etapa 4B sigue pendiente de proveedor y remitente verificado. Se mantienen Supabase Free y Vercel Hobby.
 
 ## Especificación y evolución
+
+La [etapa 10 de acciones masivas](docs/demo-parity/stage-10.md) incorpora selección
+en Lista y Tabla, revisión del lote, confirmación de eliminación, validación por
+tarea y reintentos con recibos privados. Conserva las mutaciones, auditoría y
+procesos de sincronización existentes.
 
 La [etapa 9 de estabilización](docs/demo-parity/stage-9.md) corrige foco y cierre
 de diálogos, edición IME y formularios financieros obsoletos; separa la carga de

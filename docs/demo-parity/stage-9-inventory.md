@@ -1,5 +1,9 @@
 # Inventario de cierre frente a la demo — etapa 9
 
+Nota posterior: las acciones masivas que aquí figuraban como pendientes se
+incorporaron en la [etapa 10](stage-10.md). Las tablas conservan el inventario
+histórico al cierre de la etapa 9.
+
 Revisión de fuentes del 28 de octubre de 2026. Referencias:
 [demo original de Gr8r Studio](https://gr8r-taskmanagement.vercel.app/) y
 [repositorio original](https://github.com/gr8rstudio/gr8r-studio/).

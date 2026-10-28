@@ -13,6 +13,8 @@ export function dataError(cause: unknown): DataError {
   const record = typeof cause === 'object' && cause !== null ? (cause as Record<string, unknown>) : {};
   const code = typeof record.code === 'string' ? record.code : undefined;
   const message = typeof record.message === 'string' ? record.message : String(cause);
+  if (code === 'PT410') return new DataError('Esta solicitud ha caducado. Revisa las tareas y prepara una nueva acción antes de confirmar.', code);
+  if (code === 'PT429') return new DataError('Se alcanzó el límite temporal de solicitudes. Espera y revisa el resultado antes de volver a intentarlo.', code);
   if (code === 'PT422' && message === 'Task comments must be removed before moving this task')
     return new DataError(
       'Esta tarea tiene una conversación. Para proteger su privacidad, no se puede trasladar a otro proyecto. Puedes duplicarla sin copiar los comentarios.',

@@ -5,6 +5,7 @@ import TasksView from './TasksView';
 import type { ProductivityController } from './useProductivity';
 import { buildDashboardModel } from './dashboard-model';
 import { localDate } from './helpers';
+import { canInProject } from './permissions';
 
 type Props = ComponentProps<typeof TasksView> & {
   data: WorkspaceProps;
@@ -14,10 +15,27 @@ type Props = ComponentProps<typeof TasksView> & {
 };
 
 export default function ProductivityTasks({ data, controller, context, projectId, ...props }: Props) {
-  const scope = JSON.stringify([data.currentUserId, data.workspace?.id, data.productivity?.scopeKey, context, projectId, props.scopeKey]);
+  const scope = JSON.stringify([
+    data.currentUserId,
+    data.workspace?.id,
+    data.productivity?.scopeKey,
+    data.bulkTasks?.scopeKey,
+    context,
+    projectId,
+    props.scopeKey,
+  ]);
   return (
     <TasksView
       {...props}
+      bulkTasks={data.bulkTasks}
+      canBulkTask={(task, kind) =>
+        !data.readOnly &&
+        !data.accessUnavailable &&
+        task.workspace_id === data.workspace?.id &&
+        !task.archived_at &&
+        data.projects.some(project => project.id === task.project_id && project.workspace_id === task.workspace_id && !project.archived_at) &&
+        canInProject(data, task.project_id, kind === 'assign' ? 'task.assign' : kind === 'delete' ? 'task.delete' : 'task.edit')
+      }
       members={buildDashboardModel(data, localDate()).members}
       scopeKey={scope}
       favoriteTaskIds={controller.state.favorites.filter(row => row.kind === 'task').map(row => row.id)}

@@ -22,6 +22,8 @@ import type { CommunicationApi } from './communication-types';
 import { createGlobalSearchRepository } from './data/search';
 import type { GlobalSearchApi } from './search-types';
 import { createWorkManagementRepository } from './data/work-management';
+import { createBulkTasksRepository } from './data/bulk-tasks';
+import type { BulkTasksApi } from './bulk-task-types';
 import type { ProductivityApi } from './productivity-types';
 import type { WorkManagementApi } from './work-management-types';
 import { createAccountDataClient } from './data/account-client';
@@ -378,6 +380,7 @@ function ScopedWorkspace({
   const communicationRepository = useMemo(() => createCommunicationRepository(dataClient, selected.id), [dataClient, selected.id]);
   const searchRepository = useMemo(() => createGlobalSearchRepository(dataClient, selected.id), [dataClient, selected.id]);
   const workRepository = useMemo(() => createWorkManagementRepository(dataClient, selected.id), [dataClient, selected.id]);
+  const bulkRepository = useMemo(() => createBulkTasksRepository(dataClient, selected.id), [dataClient, selected.id]);
   const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
   const locked = useRef(false);
@@ -589,6 +592,29 @@ function ScopedWorkspace({
     moveTask: (task, targetId, id, clearAssignee) => write(() => workRepository.moveTask(task, targetId, id, clearAssignee), acceptTask),
     archiveTask: (task, archived, id) => write(() => workRepository.archiveTask(task, archived, id), acceptTask),
   };
+  const bulkTasks: BulkTasksApi = {
+    scopeKey: [...collaborationScope, 'bulk-tasks'],
+    apply: (operation, items, request) =>
+      write(async () => {
+        try {
+          const result = await bulkRepository.apply(operation, items, request);
+          if (active.current && authorizationScope.current === collaborationScope) {
+            await queryClient.invalidateQueries({ queryKey });
+            await Promise.all(
+              ['productivity', 'communication', 'planning', 'global-search'].map(kind =>
+                queryClient.invalidateQueries({ queryKey: [...collaborationScope, kind] }),
+              ),
+            );
+          }
+          return result;
+        } catch (cause) {
+          // A transport/DTO failure can follow a committed write. Refresh the current
+          // snapshot, retaining the original batch identity for an explicit retry.
+          if (active.current && authorizationScope.current === collaborationScope) void queryClient.invalidateQueries({ queryKey });
+          throw cause;
+        }
+      }),
+  };
   const projectFiles: ProjectFilesApi = {
     scopeKey: [...collaborationScope, 'project-files'],
     list: (project, signal) => readCollaboration(() => filesRepository.list(project, signal)),
@@ -708,6 +734,7 @@ function ScopedWorkspace({
       communication={communication}
       globalSearch={globalSearch}
       workManagement={workManagement}
+      bulkTasks={bulkTasks}
       calendar={calendar}
       financeSyncState={financeSyncState}
       onRefreshFinance={financeRefresh ?? undefined}

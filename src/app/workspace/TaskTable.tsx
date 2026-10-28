@@ -7,6 +7,7 @@ import { errorMessage } from './helpers';
 import { IdentityAvatar, PriorityIcon } from './project-identity';
 import { ErrorNotice, StatusDot } from './ui';
 import TaskMetadata from './TaskMetadata';
+import type { TaskSelection } from './BulkTaskActions';
 
 type Column = TaskViewConfig['columns'][number];
 export interface TaskTableProps {
@@ -25,6 +26,7 @@ export interface TaskTableProps {
   onReorder?: (task: Task, direction: -1 | 1) => void;
   onDragStart?: (id: string, event: DragEvent) => void;
   onDrop?: (task: Task, event: DragEvent) => void;
+  selection?: TaskSelection;
 }
 
 function EditableCell({
@@ -154,6 +156,7 @@ export default function TaskTable({
   onReorder,
   onDragStart,
   onDrop,
+  selection,
 }: TaskTableProps) {
   const [error, setError] = useState<string | null>(null);
   async function priority(task: Task, value: Task['priority']) {
@@ -167,7 +170,9 @@ export default function TaskTable({
   }
   const projectMap = new Map(projects.map(project => [project.id, project]));
   const memberMap = new Map(members.map(member => [member.id, member]));
-  const style = { '--tv-columns': `70px minmax(230px,1fr) ${columns.map(column => columnWidths[column]).join(' ')}` } as CSSProperties;
+  const style = {
+    '--tv-columns': `${selection ? '100px' : '70px'} minmax(230px,1fr) ${columns.map(column => columnWidths[column]).join(' ')}`,
+  } as CSSProperties;
   return (
     <>
       {error && <ErrorNotice>{error}</ErrorNotice>}
@@ -187,7 +192,7 @@ export default function TaskTable({
           {tasks.map(task => (
             <div
               role="row"
-              className={`tv-table-row${task.status === 'done' ? ' pw-done' : ''}`}
+              className={`tv-table-row${task.status === 'done' ? ' pw-done' : ''}${selection?.selectedIds.includes(task.id) ? ' tv-row-selected' : ''}`}
               key={task.id}
               draggable={Boolean(onDragStart && !pending && mayEdit(task))}
               onDragStart={event => onDragStart?.(task.id, event)}
@@ -197,6 +202,20 @@ export default function TaskTable({
               onDrop={event => onDrop?.(task, event)}
             >
               <span role="cell" className="tv-table-actions">
+                {selection && (
+                  <label className="tv-select-task">
+                    <input
+                      type="checkbox"
+                      aria-label={`Seleccionar ${task.title}`}
+                      checked={selection.selectedIds.includes(task.id)}
+                      disabled={selection.disabled || !selection.canSelect(task)}
+                      onChange={() => selection.toggle(task)}
+                    />
+                    <span aria-hidden="true">
+                      <Check size={12} />
+                    </span>
+                  </label>
+                )}
                 <button
                   className={`pw-complete${task.status === 'done' ? ' checked' : ''}`}
                   aria-label={`${task.status === 'done' ? 'Reabrir' : 'Completar'} ${task.title}`}

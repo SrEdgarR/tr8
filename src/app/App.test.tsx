@@ -15,12 +15,14 @@ import type { GoogleCalendarStatus } from './data/google-calendar';
 import type { PlanningState, ProjectMilestone } from './planning-types';
 import type { InboxState, TaskComment } from './communication-types';
 import type { GlobalSearchPage, GlobalSearchQuery } from './search-types';
+import type { BulkTaskResult } from './bulk-task-types';
 
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
   unsubscribe: vi.fn(),
   files: { list: vi.fn(), upload: vi.fn(), download: vi.fn(), rename: vi.fn(), remove: vi.fn() },
   search: { search: vi.fn() },
+  bulk: { apply: vi.fn() },
   communication: {
     thread: vi.fn(),
     create: vi.fn(),
@@ -92,6 +94,7 @@ vi.mock('./data/planning', () => ({ createPlanningRepository: () => mocks.planni
 vi.mock('./data/project-files', () => ({ createProjectFilesRepository: () => mocks.files }));
 vi.mock('./data/communication', () => ({ createCommunicationRepository: () => mocks.communication }));
 vi.mock('./data/search', () => ({ createGlobalSearchRepository: () => mocks.search }));
+vi.mock('./data/bulk-tasks', () => ({ createBulkTasksRepository: () => mocks.bulk }));
 vi.mock('./data/work-management', () => ({
   createWorkManagementRepository: (_client: unknown, workspaceId: string) => ({
     ...mocks.work,
@@ -1094,6 +1097,76 @@ describe('sesiones y datos del espacio personal', () => {
     expect(workspace().accessUnavailable).toBe(true);
   });
 
+  it('aplica un lote una sola vez y vuelve a leer el snapshot sin eliminar otras tareas', async () => {
+    const request = { id: 'bulk-request', requested_at: '2026-10-28T18:00:00.000Z' };
+    const items = [{ id: task().id, project_id: task().project_id, version: 1 }];
+    const result: BulkTaskResult = { request_id: request.id, results: [{ id: task().id, outcome: 'applied', code: null }] };
+    mocks.bulk.apply.mockResolvedValue(result);
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    const searchKey = [...workspace().globalSearch!.scopeKey, 'global-search', 'QA'];
+    const planningKey = [...workspace().planning!.scopeKey, 'state'];
+    client.setQueryData(searchKey, { title: 'Resultado previo' });
+    client.setQueryData(planningKey, { dependencies: [], milestones: [] });
+    mocks.repository.load.mockResolvedValue({
+      projects: [project()],
+      tasks: [
+        { ...task(), status: 'done', version: 2 },
+        { ...task('Otra tarea'), id: 'other' },
+      ],
+    });
+    await act(async () => {
+      expect(await workspace().bulkTasks!.apply({ kind: 'status', status: 'done' }, items, request)).toEqual(result);
+    });
+    await waitFor(() => expect(workspace().tasks).toHaveLength(2));
+    expect(workspace().tasks.find(row => row.id === task().id)?.status).toBe('done');
+    expect(mocks.bulk.apply).toHaveBeenCalledExactlyOnceWith({ kind: 'status', status: 'done' }, items, request);
+    expect(client.getQueryState(searchKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(planningKey)?.isInvalidated).toBe(true);
+    expect(mocks.repository.updateTask).not.toHaveBeenCalled();
+    expect(mocks.repository.deleteTask).not.toHaveBeenCalled();
+  });
+  it('refresca después de un resultado masivo ambiguo y conserva el rechazo para reintentar la misma identidad', async () => {
+    mocks.bulk.apply.mockRejectedValue(new DataError('Resultado no confirmado', 'CLIENT_UPGRADE_REQUIRED'));
+    show();
+    await screen.findByText('Tarea privada');
+    const reads = mocks.repository.load.mock.calls.length;
+    const request = { id: 'bulk-request', requested_at: '2026-10-28T18:00:00.000Z' };
+    await act(async () => {
+      await expect(
+        workspace().bulkTasks!.apply({ kind: 'delete' }, [{ id: task().id, project_id: task().project_id, version: 1 }], request),
+      ).rejects.toMatchObject({ code: 'CLIENT_UPGRADE_REQUIRED' });
+    });
+    await waitFor(() => expect(mocks.repository.load.mock.calls.length).toBeGreaterThan(reads));
+    expect(mocks.bulk.apply).toHaveBeenCalledTimes(1);
+    expect(workspace().tasks).toEqual([task()]);
+  });
+  it('descarta un resultado masivo que llega después de abandonar el espacio', async () => {
+    const waiting = deferred<BulkTaskResult>();
+    mocks.bulk.apply.mockReturnValue(waiting.promise);
+    mocks.repository.load.mockImplementation(async (id: string) =>
+      id === 'team-a' ? { projects: [], tasks: [] } : { projects: [project()], tasks: [task()] },
+    );
+    show();
+    await screen.findByText('Tarea privada');
+    let save!: Promise<BulkTaskResult>;
+    act(() => {
+      save = workspace().bulkTasks!.apply({ kind: 'archive' }, [{ id: task().id, project_id: task().project_id, version: 1 }], {
+        id: 'bulk-request',
+        requested_at: '2026-10-28T18:00:00.000Z',
+      });
+    });
+    const rejected = expect(save).rejects.toThrow('espacio cambió');
+    await act(async () => {
+      screen.getByRole('button', { name: 'Abrir equipo' }).click();
+    });
+    await waitFor(() => expect(workspace().workspace?.id).toBe('team-a'));
+    await act(async () => {
+      waiting.resolve({ request_id: 'bulk-request', results: [{ id: task().id, outcome: 'applied', code: null }] });
+      await rejected;
+    });
+    expect(workspace().tasks).toEqual([]);
+  });
   it('rechaza un segundo guardado simultáneo para evitar escrituras con la misma versión', async () => {
     const pending = deferred<Task>();
     mocks.repository.updateTask.mockReturnValue(pending.promise);
