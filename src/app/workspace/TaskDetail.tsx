@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import {
   Archive,
   ArrowRightLeft,
@@ -39,6 +39,7 @@ export interface TaskDetailProps {
   collaboration?: CollaborationApi;
   calendar?: CalendarApi;
   api?: WorkManagementApi;
+  planningContent?: ReactNode;
   onUpdate: WorkspaceProps['onUpdateTask'];
   onDelete: WorkspaceProps['onDeleteTask'];
   onClose: () => void;
@@ -74,6 +75,7 @@ function ScopedTaskDetail({
   collaboration,
   calendar,
   api,
+  planningContent,
   onUpdate,
   onDelete,
   onClose,
@@ -488,6 +490,7 @@ function ScopedTaskDetail({
           <h4>Descripción</h4>
           <p className="td-description">{current.description || 'Añade contexto desde Editar tarea.'}</p>
         </section>
+        {planningContent}
         <form onSubmit={saveDetails} className="td-details-form">
           {changed && (
             <div className="pw-info">

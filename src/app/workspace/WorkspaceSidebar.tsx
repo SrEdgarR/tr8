@@ -3,6 +3,7 @@ import {
   Archive,
   Activity,
   CalendarDays,
+  ChartGantt,
   ChevronRight,
   SquareKanban,
   Home,
@@ -67,7 +68,7 @@ export default function WorkspaceSidebar({
   const scope = data.workspace ? `?workspace=${data.workspace.id}` : '';
   const workspaceName = data.workspace?.kind === 'team' ? data.workspace.name : 'Mi espacio personal';
   const navClass = ({ isActive }: { isActive: boolean }) => `sitem${isActive ? ' on' : ''}`;
-  const view = ['overview', 'table', 'board', 'calendar', 'activity', 'archived'].includes(params.get('view') ?? '') ? params.get('view') : 'list';
+  const view = ['overview', 'table', 'board', 'calendar', 'timeline', 'activity', 'archived'].includes(params.get('view') ?? '') ? params.get('view') : 'list';
 
   function href(project: Project, nextView: string) {
     const search = new URLSearchParams();
@@ -156,6 +157,12 @@ export default function WorkspaceSidebar({
                 <span>Calendario</span>
               </NavLink>
             )}
+            {data.planning && !data.accessUnavailable && canInWorkspace(data, 'project.read') && (
+              <NavLink to={`/timeline${scope}`} className={navClass} aria-label="Timeline" title="Timeline" onClick={onNavigate}>
+                <ChartGantt className="i" size={16} aria-hidden="true" />
+                <span>Timeline</span>
+              </NavLink>
+            )}
             {data.workspace?.kind === 'personal' && showFinance && (
               <NavLink to={`/finance${scope}`} className={navClass} aria-label="Finanzas" title="Finanzas" onClick={onNavigate}>
                 <Wallet className="i" size={16} aria-hidden="true" />
@@ -199,6 +206,7 @@ export default function WorkspaceSidebar({
                 { id: 'table', label: 'Tabla', icon: Table2 },
                 ...(data.workManagement ? [{ id: 'archived', label: 'Archivadas', icon: Archive }] : []),
                 ...(data.calendar ? [{ id: 'calendar', label: 'Calendario', icon: CalendarDays }] : []),
+                ...(data.planning ? [{ id: 'timeline', label: 'Timeline', icon: ChartGantt }] : []),
                 ...(data.collaboration && canInProject(data, project.id, 'audit.read') ? [{ id: 'activity', label: 'Actividad', icon: Activity }] : []),
               ];
               return (

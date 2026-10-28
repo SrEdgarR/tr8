@@ -15,6 +15,8 @@ import type { GoogleCalendarApi } from './data/google-calendar';
 import { createGoogleTasksRepository, type GoogleTasksApi } from './data/google-tasks';
 import { createMcpRepository } from './data/mcp';
 import { createProductivityRepository } from './data/productivity';
+import { createPlanningRepository } from './data/planning';
+import type { PlanningApi } from './planning-types';
 import { createWorkManagementRepository } from './data/work-management';
 import type { ProductivityApi } from './productivity-types';
 import type { WorkManagementApi } from './work-management-types';
@@ -364,6 +366,7 @@ function ScopedWorkspace({
   const repository = useMemo(() => createRepository(dataClient), [dataClient]);
   const scopeRevision = [...selected.permissions].sort().join('|');
   const productivityRepository = useMemo(() => createProductivityRepository(dataClient, selected.id), [dataClient, selected.id]);
+  const planningRepository = useMemo(() => createPlanningRepository(dataClient, selected.id), [dataClient, selected.id]);
   const workRepository = useMemo(() => createWorkManagementRepository(dataClient, selected.id), [dataClient, selected.id]);
   const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
@@ -576,6 +579,15 @@ function ScopedWorkspace({
     moveTask: (task, targetId, id, clearAssignee) => write(() => workRepository.moveTask(task, targetId, id, clearAssignee), acceptTask),
     archiveTask: (task, archived, id) => write(() => workRepository.archiveTask(task, archived, id), acceptTask),
   };
+  const planning: PlanningApi = {
+    scopeKey: [...collaborationScope, 'planning'],
+    load: signal => readCollaboration(() => planningRepository.load(signal)),
+    addDependency: (task, blocker, id) => write(() => planningRepository.addDependency(task, blocker, id)),
+    removeDependency: edge => write(() => planningRepository.removeDependency(edge)),
+    createMilestone: (project, input, id) => write(() => planningRepository.createMilestone(project, input, id)),
+    updateMilestone: (row, input) => write(() => planningRepository.updateMilestone(row, input)),
+    deleteMilestone: row => write(() => planningRepository.deleteMilestone(row)),
+  };
   const productivity: ProductivityApi = {
     scopeKey: [...collaborationScope, 'productivity'],
     load: signal => readCollaboration(() => productivityRepository.load(signal)),
@@ -657,6 +669,7 @@ function ScopedWorkspace({
       capabilities={unavailable ? {} : (query.data?.capabilities ?? {})}
       collaboration={collaboration}
       productivity={productivity}
+      planning={planning}
       workManagement={workManagement}
       calendar={calendar}
       financeSyncState={financeSyncState}

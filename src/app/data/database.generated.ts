@@ -420,6 +420,10 @@ export type Database = {
         Args: { p_workspace_id: string; p_action: string; p_input?: Json };
         Returns: Json;
       };
+      tr8_v2_planning: {
+        Args: { p_workspace_id: string; p_action: string; p_input?: Json };
+        Returns: Json;
+      };
       tr8_v2_work_management: {
         Args: { p_workspace_id: string; p_action: string; p_input?: Json };
         Returns: Json;

@@ -25,6 +25,10 @@ import ArchivedTasks from './ArchivedTasks';
 import TaskCollectionPage from './TaskCollectionPage';
 import ProductivityTasks from './ProductivityTasks';
 import useProductivity, { type ProductivityController } from './useProductivity';
+import usePlanning, { type PlanningController } from './usePlanning';
+import Timeline from './Timeline';
+import DependencyPanel from './DependencyPanel';
+import MilestonePanel from './MilestonePanel';
 import FavoriteButton from './FavoriteButton';
 import FavoritesPage from './FavoritesPage';
 import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon } from './ui';
@@ -44,6 +48,7 @@ import './visual-navigation.css';
 
 type ProjectActions = {
   productivity: ProductivityController;
+  planning: PlanningController;
   onPatch: (task: Task, patch: TaskPatch) => Promise<void>;
   onReorder: (ordered: Task[]) => Promise<void>;
   onEdit: (project: Project) => void;
@@ -375,6 +380,18 @@ function ProjectPage({
         onReorder={actions.onReorder}
         summaryContent={<ProjectSummary project={project} data={data} onOpen={onOpen} />}
         archivedContent={data.workManagement ? <ArchivedTasks tasks={archivedTasks} onOpen={onOpen} /> : undefined}
+        timelineContent={
+          data.planning ? (
+            <Timeline
+              data={data}
+              planning={actions.planning}
+              project={project}
+              onOpen={onOpen}
+              onReschedule={actions.onPatch}
+              milestoneContent={<MilestonePanel data={data} planning={actions.planning} project={project} />}
+            />
+          ) : undefined
+        }
         activityContent={
           actions.collaboration && actions.can(project.id, 'audit.read') ? (
             <ActivityPanel key={`activity:${project.id}`} api={actions.collaboration} projectId={project.id} />
@@ -545,6 +562,8 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   const financeView = location.pathname === '/finance' && Boolean(props.finance);
   const appearance = useAppearance(props.currentUserId);
   const [searchParams, setSearchParams] = useSearchParams();
+  const planningNeeded = location.pathname === '/timeline' || searchParams.get('view') === 'timeline' || searchParams.has('task');
+  const planning = usePlanning(props.planning, planningNeeded && !props.loading && !props.accessUnavailable && canInWorkspace(props, 'project.read'));
   const [mobileNav, setMobileNav] = useState(false);
   const [projectEditor, setProjectEditor] = useState<{ project?: Project } | null>(null);
   const [newTask, setNewTask] = useState<{ projectId?: string; status?: TaskStatus } | null>(null);
@@ -621,7 +640,9 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                         ? 'Actividad'
                         : location.pathname === '/calendar'
                           ? 'Calendario'
-                          : 'Inicio');
+                          : location.pathname === '/timeline'
+                            ? 'Timeline'
+                            : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -716,6 +737,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   }
   const projectActions: ProjectActions = {
     productivity,
+    planning,
     onPatch: patchTask,
     onReorder: reorderTasks,
     pending,
@@ -950,6 +972,20 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
               />
               <Route path="/team" element={<TeamAdministration {...props} />} />
               <Route
+                path="/timeline"
+                element={
+                  <div className="page">
+                    <Timeline
+                      data={{ ...props, pending }}
+                      planning={planning}
+                      onOpen={openTask}
+                      onReschedule={patchTask}
+                      milestoneContent={<MilestonePanel data={{ ...props, pending }} planning={planning} />}
+                    />
+                  </div>
+                }
+              />
+              <Route
                 path="/activity"
                 element={
                   <div className="page pw-activity-page">
@@ -1084,7 +1120,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           }}
         />
       )}
-      {selectedTask && !newTask && props.workManagement && !props.loading && !props.accessUnavailable && (
+      {selectedTask && !newTask && props.workManagement && !props.loading && !props.accessUnavailable && can(selectedTask.project_id, 'task.read') && (
         <TaskDetail
           key={`${props.currentUserId}:${props.workspace?.id}:${selectedTask.id}:${props.workManagement.scopeKey.join(':')}:${can(selectedTask.project_id, 'task.edit')}:${can(selectedTask.project_id, 'task.assign')}:${can(selectedTask.project_id, 'task.delete')}`}
           task={selectedTask}
@@ -1099,6 +1135,24 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           collaboration={props.collaboration}
           calendar={props.calendar}
           api={props.workManagement}
+          planningContent={
+            props.planning ? (
+              <DependencyPanel
+                key={`${selectedTask.id}:${selectedTask.project_id}:${props.planning.scopeKey.join(':')}`}
+                task={selectedTask}
+                tasks={props.tasks.filter(task => can(task.project_id, 'task.read'))}
+                projects={props.projects.filter(project => can(project.id, 'project.read'))}
+                planning={planning}
+                readOnly={
+                  props.readOnly ||
+                  Boolean(selectedTask.archived_at) ||
+                  Boolean(props.projects.find(project => project.id === selectedTask.project_id)?.archived_at)
+                }
+                canEdit={can(selectedTask.project_id, 'task.edit')}
+                onOpen={openTask}
+              />
+            ) : undefined
+          }
           onUpdate={props.onUpdateTask}
           onDelete={props.onDeleteTask}
           onClose={closeTask}

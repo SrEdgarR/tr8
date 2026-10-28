@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode, type DragEvent } from 'react';
-import { Activity, Archive, CalendarDays, ChevronRight, SquareKanban, LayoutDashboard, List, Plus, Search, Table2 } from 'lucide-react';
+import { Activity, Archive, CalendarDays, ChartGantt, ChevronRight, SquareKanban, LayoutDashboard, List, Plus, Search, Table2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { PRIORITIES, STATUSES } from '../constants';
 import type { Priority, Project, Task, TaskPatch, TaskStatus, WorkspaceMember } from '../types';
@@ -26,6 +26,7 @@ interface Props extends SavedViewsProps {
   onOpen: (task: Task) => void;
   onMove: (task: Task, status: TaskStatus) => Promise<void>;
   calendarContent?: ReactNode;
+  timelineContent?: ReactNode;
   activityContent?: ReactNode;
   summaryContent?: ReactNode;
   archivedContent?: ReactNode;
@@ -52,6 +53,7 @@ function ScopedTasksView({
   onOpen,
   onMove,
   calendarContent,
+  timelineContent,
   activityContent,
   summaryContent,
   archivedContent,
@@ -69,19 +71,21 @@ function ScopedTasksView({
   const [searchParams, setSearchParams] = useSearchParams();
   const members = useMemo(() => receivedMembers.filter(member => member.status === 'active'), [receivedMembers]);
   const view =
-    searchParams.get('view') === 'archived' && archivedContent
-      ? 'archived'
-      : searchParams.get('view') === 'overview' && summaryContent
-        ? 'overview'
-        : searchParams.get('view') === 'activity' && activityContent
-          ? 'activity'
-          : searchParams.get('view') === 'calendar' && calendarContent
-            ? 'calendar'
-            : searchParams.get('view') === 'board'
-              ? 'board'
-              : searchParams.get('view') === 'table'
-                ? 'table'
-                : 'list';
+    searchParams.get('view') === 'timeline' && timelineContent
+      ? 'timeline'
+      : searchParams.get('view') === 'archived' && archivedContent
+        ? 'archived'
+        : searchParams.get('view') === 'overview' && summaryContent
+          ? 'overview'
+          : searchParams.get('view') === 'activity' && activityContent
+            ? 'activity'
+            : searchParams.get('view') === 'calendar' && calendarContent
+              ? 'calendar'
+              : searchParams.get('view') === 'board'
+                ? 'board'
+                : searchParams.get('view') === 'table'
+                  ? 'table'
+                  : 'list';
   const [config, setConfig] = useState<TaskViewConfig>(() => ({
     ...defaultTaskView(),
     view: searchParams.get('view') === 'board' ? 'board' : searchParams.get('view') === 'table' ? 'table' : 'list',
@@ -179,7 +183,7 @@ function ScopedTasksView({
 
   function changeView(next: string) {
     const params = new URLSearchParams(searchParams);
-    if (next === 'board' || next === 'table' || next === 'calendar' || next === 'activity' || next === 'overview' || next === 'archived')
+    if (next === 'board' || next === 'table' || next === 'calendar' || next === 'timeline' || next === 'activity' || next === 'overview' || next === 'archived')
       params.set('view', next);
     else params.delete('view');
     if (next === 'board' || next === 'table' || next === 'list') setConfig(previous => ({ ...previous, view: next }));
@@ -278,6 +282,12 @@ function ScopedTasksView({
             Calendario
           </button>
         )}
+        {timelineContent && (
+          <button className={`pw-view-tab${view === 'timeline' ? ' on' : ''}`} aria-pressed={view === 'timeline'} onClick={() => changeView('timeline')}>
+            <ChartGantt size={15} aria-hidden="true" />
+            Timeline
+          </button>
+        )}
         {activityContent && (
           <button className={`pw-view-tab${view === 'activity' ? ' on' : ''}`} aria-pressed={view === 'activity'} onClick={() => changeView('activity')}>
             <Activity size={15} aria-hidden="true" />
@@ -295,7 +305,9 @@ function ScopedTasksView({
           </button>
         )}
       </div>
-      {view === 'archived' ? (
+      {view === 'timeline' ? (
+        timelineContent
+      ) : view === 'archived' ? (
         archivedContent
       ) : view === 'overview' ? (
         summaryContent

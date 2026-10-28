@@ -12,10 +12,19 @@ import { ActivityPanel } from './workspace/Collaboration';
 import Calendar from './workspace/Calendar';
 import { googleFixture } from './test/google-calendar';
 import type { GoogleCalendarStatus } from './data/google-calendar';
+import type { PlanningState, ProjectMilestone } from './planning-types';
 
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
   unsubscribe: vi.fn(),
+  planning: {
+    load: vi.fn(),
+    addDependency: vi.fn(),
+    removeDependency: vi.fn(),
+    createMilestone: vi.fn(),
+    updateMilestone: vi.fn(),
+    deleteMilestone: vi.fn(),
+  },
   work: {
     duplicateProject: vi.fn(),
     updateTaskDetails: vi.fn(),
@@ -64,6 +73,7 @@ vi.mock('./data/client', () => ({
   callbackRequestedRecovery: false,
 }));
 vi.mock('./data/repository', () => ({ createRepository: () => mocks.repository }));
+vi.mock('./data/planning', () => ({ createPlanningRepository: () => mocks.planning }));
 vi.mock('./data/work-management', () => ({
   createWorkManagementRepository: (_client: unknown, workspaceId: string) => ({
     ...mocks.work,
@@ -201,6 +211,7 @@ beforeEach(() => {
   mocks.showActivity = false;
   mocks.showCalendar = false;
   mocks.showIntegrations = false;
+  mocks.planning.load.mockResolvedValue({ dependencies: [], milestones: [] });
   mocks.auth.onAuthStateChange.mockImplementation(callback => {
     authListener = callback;
     return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
@@ -920,6 +931,50 @@ describe('sesiones y datos del espacio personal', () => {
     });
     expect(workspace().tasks).toEqual([]);
     expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+  });
+
+  it('guarda hitos sin reemplazar los proyectos o tareas del espacio', async () => {
+    const input = { name: 'Publicación', date: '2026-11-20', completed: false };
+    const saved: ProjectMilestone = {
+      ...input,
+      id: 'milestone-a',
+      workspace_id: 'personal-a',
+      project_id: 'project-a',
+      version: 1,
+      created_at: project().created_at,
+      updated_at: project().updated_at,
+    };
+    mocks.planning.createMilestone.mockResolvedValue(saved);
+    show();
+    await screen.findByText('Tarea privada');
+    await act(async () => {
+      expect(await workspace().planning!.createMilestone(project(), input, saved.id)).toEqual(saved);
+    });
+    expect(workspace().tasks).toEqual([task()]);
+    expect(workspace().projects).toEqual([project()]);
+    expect(mocks.repository.updateTask).not.toHaveBeenCalled();
+    expect(mocks.planning.createMilestone).toHaveBeenCalledExactlyOnceWith(project(), input, saved.id);
+  });
+
+  it('rechaza la lectura de planificación del espacio abandonado', async () => {
+    const waiting = deferred<PlanningState>();
+    mocks.planning.load.mockReturnValue(waiting.promise);
+    mocks.repository.load.mockImplementation(async (id: string) =>
+      id === 'team-a' ? { projects: [], tasks: [] } : { projects: [project()], tasks: [task()] },
+    );
+    show();
+    await screen.findByText('Tarea privada');
+    const pending = workspace().planning!.load();
+    const rejected = expect(pending).rejects.toThrow('espacio cambió');
+    await act(async () => {
+      screen.getByRole('button', { name: 'Abrir equipo' }).click();
+    });
+    await waitFor(() => expect(workspace().workspace?.id).toBe('team-a'));
+    await act(async () => {
+      waiting.resolve({ dependencies: [], milestones: [] });
+      await rejected;
+    });
+    expect(workspace().projects).toEqual([]);
   });
 
   it('rechaza un segundo guardado simultáneo para evitar escrituras con la misma versión', async () => {

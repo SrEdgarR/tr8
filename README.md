@@ -44,6 +44,10 @@ La [etapa 3 de recuperación de la demo](docs/demo-parity/stage-3.md) incorpora
 productividad, favoritos y vistas persistentes, además de editar y eliminar
 movimientos financieros conservando sus efectos y las versiones de los datos.
 
+La [etapa 5 de recuperación de la demo](docs/demo-parity/stage-5.md) incorpora
+Timeline global y por proyecto, dependencias informativas e hitos persistentes,
+con reprogramación explícita y permisos actuales.
+
 La [etapa 4 de recuperación de la demo](docs/demo-parity/stage-4.md) añade fechas
 propias y responsable de proyecto, plantillas, duplicación y el panel de detalle
 de tareas con etiquetas, estimación, subtareas, traslado y archivo reversible.
