@@ -369,7 +369,7 @@ export default function TaskForm({
           {confirmDelete && (
             <div className="pw-confirm" role="alert">
               <strong>¿Eliminar esta tarea?</strong>
-              <p>Se eliminará de tu cuenta. Esta acción no se puede deshacer.</p>
+              <p>Se eliminarán la tarea, sus subtareas, comentarios y reacciones. Esta acción no se puede deshacer.</p>
               <div className="row">
                 <button
                   type="button"

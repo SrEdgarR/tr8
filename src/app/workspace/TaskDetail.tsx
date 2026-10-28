@@ -340,7 +340,7 @@ function ScopedTaskDetail({
             {action.type === 'restore' && <p>La tarea volverá a las vistas activas con el mismo contenido.</p>}
             {action.type === 'delete' && (
               <>
-                <p>Esta acción elimina definitivamente la tarea y sus subtareas. Los demás trabajos no se modificarán.</p>
+                <p>Esta acción elimina definitivamente la tarea, sus subtareas, comentarios y reacciones. Los demás trabajos no se modificarán.</p>
                 <label className="pw-field">
                   Escribe ELIMINAR para confirmar
                   <input value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" disabled={disabled} />
