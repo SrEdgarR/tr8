@@ -24,6 +24,9 @@ const ACTION_NAMES: Record<string, string> = {
   'task.updated': 'Actualizó una tarea',
   'task.scheduled': 'Cambió el bloque horario de una tarea',
   'task.deleted': 'Eliminó una tarea',
+  'comment.created': 'Publicó un comentario',
+  'comment.updated': 'Editó un comentario',
+  'comment.deleted': 'Eliminó un comentario',
 };
 
 export function ActivityPanel({

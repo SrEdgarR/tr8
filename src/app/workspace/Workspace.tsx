@@ -1,5 +1,23 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Activity, Archive, ChevronRight, Copy, LogOut, Menu, Pencil, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, Users, X } from 'lucide-react';
+import {
+  Activity,
+  Archive,
+  Bell,
+  ChevronRight,
+  Copy,
+  LogOut,
+  Menu,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PROJECT_STATUSES } from '../constants';
 import type {
@@ -30,6 +48,8 @@ import Timeline from './Timeline';
 import DependencyPanel from './DependencyPanel';
 import MilestonePanel from './MilestonePanel';
 import ProjectFiles from './ProjectFiles';
+import TaskComments from './TaskComments';
+import InboxPage from './InboxPage';
 import FavoriteButton from './FavoriteButton';
 import FavoritesPage from './FavoritesPage';
 import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon } from './ui';
@@ -566,6 +586,19 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   const [searchParams, setSearchParams] = useSearchParams();
   const planningNeeded = location.pathname === '/timeline' || searchParams.get('view') === 'timeline' || searchParams.has('task');
   const planning = usePlanning(props.planning, planningNeeded && !props.loading && !props.accessUnavailable && canInWorkspace(props, 'project.read'));
+  const queryClient = useQueryClient();
+  const communicationEnabled = Boolean(props.communication && !props.loading && !props.accessUnavailable && canInWorkspace(props, 'project.read'));
+  const inbox = useQuery({
+    queryKey: [...(props.communication?.scopeKey ?? ['communication-unavailable']), 'inbox'],
+    queryFn: ({ signal }) => props.communication!.inbox(signal),
+    enabled: communicationEnabled,
+    staleTime: 15000,
+    retry: false,
+  });
+  const unreadCount = communicationEnabled && !inbox.error && inbox.data ? inbox.data.unread_count : null;
+  function refreshCommunication() {
+    if (props.communication) void queryClient.invalidateQueries({ queryKey: props.communication.scopeKey });
+  }
   const [mobileNav, setMobileNav] = useState(false);
   const [projectEditor, setProjectEditor] = useState<{ project?: Project } | null>(null);
   const [newTask, setNewTask] = useState<{ projectId?: string; status?: TaskStatus } | null>(null);
@@ -620,31 +653,35 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
   }, [projectEditor, editorAllowed, accessProject, accessAllowed, deleteProjectId, deleteAllowed, newTask, creatableProjects]);
   const pageName =
     currentProject?.name ??
-    (location.pathname === '/finance'
-      ? 'Finanzas'
-      : location.pathname === '/projects'
-        ? 'Proyectos'
-        : location.pathname === '/my-tasks'
-          ? 'Mis tareas'
-          : location.pathname === '/tasks'
-            ? 'Tareas'
-            : location.pathname === '/favorites'
-              ? 'Favoritos'
-              : location.pathname === '/settings'
-                ? 'Configuración'
-                : location.pathname === '/account'
-                  ? 'Mi cuenta'
-                  : location.pathname === '/team'
-                    ? 'Equipo'
-                    : location.pathname === '/overview'
-                      ? 'Vista general'
-                      : location.pathname === '/activity'
-                        ? 'Actividad'
-                        : location.pathname === '/calendar'
-                          ? 'Calendario'
-                          : location.pathname === '/timeline'
-                            ? 'Timeline'
-                            : 'Inicio');
+    (location.pathname === '/inbox'
+      ? 'Bandeja de entrada'
+      : location.pathname === '/notifications'
+        ? 'Notificaciones'
+        : location.pathname === '/finance'
+          ? 'Finanzas'
+          : location.pathname === '/projects'
+            ? 'Proyectos'
+            : location.pathname === '/my-tasks'
+              ? 'Mis tareas'
+              : location.pathname === '/tasks'
+                ? 'Tareas'
+                : location.pathname === '/favorites'
+                  ? 'Favoritos'
+                  : location.pathname === '/settings'
+                    ? 'Configuración'
+                    : location.pathname === '/account'
+                      ? 'Mi cuenta'
+                      : location.pathname === '/team'
+                        ? 'Equipo'
+                        : location.pathname === '/overview'
+                          ? 'Vista general'
+                          : location.pathname === '/activity'
+                            ? 'Actividad'
+                            : location.pathname === '/calendar'
+                              ? 'Calendario'
+                              : location.pathname === '/timeline'
+                                ? 'Timeline'
+                                : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -780,6 +817,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
         favoriteProjectIds={productivity.state.favorites.filter(row => row.kind === 'project').map(row => row.id)}
         favoriteCount={productivity.state.favorites.length}
         favoritesBusy={!productivity.available || productivity.pending}
+        unreadCount={unreadCount}
         onFavoriteProject={project => {
           void productivity
             .setFavorite('project', project.id, !productivity.state.favorites.some(row => row.kind === 'project' && row.id === project.id))
@@ -838,7 +876,14 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                 ? !props.onRefreshFinance || ['checking', 'saving', 'pending'].includes(props.financeSyncState ?? 'checking')
                 : props.loading || props.refreshing || pending
             }
-            onClick={financeView ? props.onRefreshFinance : props.onRetry}
+            onClick={
+              financeView
+                ? props.onRefreshFinance
+                : () => {
+                    props.onRetry();
+                    refreshCommunication();
+                  }
+            }
           >
             <RefreshCw
               size={14}
@@ -855,6 +900,17 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
               onProject={openNewProject}
               onTask={openNewTask}
             />
+          )}
+          {communicationEnabled && (
+            <Link
+              className="ibtn pw-notification-link"
+              to={`/notifications${scopeSearch}`}
+              aria-label={unreadCount === null ? 'Notificaciones' : `Notificaciones, ${unreadCount} sin leer`}
+              title={inbox.error ? 'No se pudieron actualizar las notificaciones' : 'Notificaciones'}
+            >
+              <Bell size={17} aria-hidden="true" />
+              {unreadCount !== null && unreadCount > 0 && <span className="pw-notification-dot" />}
+            </Link>
           )}
           <Link className="pw-topbar-account" to={`/account${scopeSearch}`} aria-label="Mi cuenta" title="Mi cuenta">
             <IdentityAvatar name={props.email} small decorative />
@@ -899,6 +955,40 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
             </EmptyState>
           ) : (
             <Routes>
+              {communicationEnabled && props.communication && (
+                <>
+                  <Route
+                    path="/inbox"
+                    element={
+                      <InboxPage
+                        key={`inbox:${props.communication.scopeKey.join(':')}`}
+                        api={props.communication}
+                        mode="inbox"
+                        readOnly={props.readOnly || pending}
+                        onChanged={refreshCommunication}
+                        onOpenTask={(taskId, projectId) => {
+                          navigate(`/projects/${projectId}?${new URLSearchParams({ workspace: props.workspace!.id, task: taskId })}`);
+                        }}
+                      />
+                    }
+                  />
+                  <Route
+                    path="/notifications"
+                    element={
+                      <InboxPage
+                        key={`notifications:${props.communication.scopeKey.join(':')}`}
+                        api={props.communication}
+                        mode="notifications"
+                        readOnly={props.readOnly || pending}
+                        onChanged={refreshCommunication}
+                        onOpenTask={(taskId, projectId) => {
+                          navigate(`/projects/${projectId}?${new URLSearchParams({ workspace: props.workspace!.id, task: taskId })}`);
+                        }}
+                      />
+                    }
+                  />
+                </>
+              )}
               <Route
                 path="/"
                 element={
@@ -1152,6 +1242,23 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                 }
                 canEdit={can(selectedTask.project_id, 'task.edit')}
                 onOpen={openTask}
+              />
+            ) : undefined
+          }
+          communicationContent={
+            props.communication ? (
+              <TaskComments
+                key={`${selectedTask.id}:${selectedTask.project_id}:${props.communication.scopeKey.join(':')}`}
+                task={selectedTask}
+                api={props.communication}
+                canComment={can(selectedTask.project_id, 'task.edit')}
+                pending={pending}
+                readOnly={
+                  props.readOnly ||
+                  Boolean(selectedTask.archived_at) ||
+                  Boolean(props.projects.find(project => project.id === selectedTask.project_id)?.archived_at)
+                }
+                onChanged={refreshCommunication}
               />
             ) : undefined
           }

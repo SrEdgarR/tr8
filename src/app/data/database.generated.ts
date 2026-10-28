@@ -216,6 +216,10 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      tr8_v2_communication: {
+        Args: { p_action: string; p_input?: Json; p_workspace_id: string };
+        Returns: Json;
+      };
       tr8_v2_create_invitation: {
         Args: { p_email: string; p_id: string; p_workspace_id: string };
         Returns: Json;

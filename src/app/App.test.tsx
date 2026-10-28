@@ -13,11 +13,23 @@ import Calendar from './workspace/Calendar';
 import { googleFixture } from './test/google-calendar';
 import type { GoogleCalendarStatus } from './data/google-calendar';
 import type { PlanningState, ProjectMilestone } from './planning-types';
+import type { InboxState, TaskComment } from './communication-types';
 
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
   unsubscribe: vi.fn(),
   files: { list: vi.fn(), upload: vi.fn(), download: vi.fn(), rename: vi.fn(), remove: vi.fn() },
+  communication: {
+    thread: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    react: vi.fn(),
+    inbox: vi.fn(),
+    setRead: vi.fn(),
+    readAll: vi.fn(),
+    dismiss: vi.fn(),
+  },
   planning: {
     load: vi.fn(),
     addDependency: vi.fn(),
@@ -76,6 +88,7 @@ vi.mock('./data/client', () => ({
 vi.mock('./data/repository', () => ({ createRepository: () => mocks.repository }));
 vi.mock('./data/planning', () => ({ createPlanningRepository: () => mocks.planning }));
 vi.mock('./data/project-files', () => ({ createProjectFilesRepository: () => mocks.files }));
+vi.mock('./data/communication', () => ({ createCommunicationRepository: () => mocks.communication }));
 vi.mock('./data/work-management', () => ({
   createWorkManagementRepository: (_client: unknown, workspaceId: string) => ({
     ...mocks.work,
@@ -977,6 +990,58 @@ describe('sesiones y datos del espacio personal', () => {
       await rejected;
     });
     expect(workspace().projects).toEqual([]);
+  });
+
+  it('guarda un comentario sin reemplazar ni editar los proyectos o tareas', async () => {
+    const saved: TaskComment = {
+      id: 'comment-a',
+      workspace_id: 'personal-a',
+      task_id: 'task-a',
+      author_id: 'owner-a',
+      author_name: 'Tú',
+      body: 'Ajustar los márgenes',
+      mentions: [],
+      reactions: [],
+      version: 1,
+      sequence: 1,
+      created_at: project().created_at,
+      updated_at: project().updated_at,
+      can_edit: true,
+      can_delete: true,
+    };
+    mocks.communication.create.mockResolvedValue(saved);
+    show();
+    await screen.findByText('Tarea privada');
+    await act(async () => {
+      expect(await workspace().communication!.create(task(), saved.id, saved.body, [])).toEqual(saved);
+    });
+    expect(workspace().tasks).toEqual([task()]);
+    expect(workspace().projects).toEqual([project()]);
+    expect(mocks.repository.updateTask).not.toHaveBeenCalled();
+    expect(mocks.repository.updateProject).not.toHaveBeenCalled();
+    expect(mocks.communication.create).toHaveBeenCalledExactlyOnceWith(task(), saved.id, saved.body, []);
+  });
+
+  it('descarta la bandeja que termina de cargar después de cambiar de espacio', async () => {
+    const waiting = deferred<InboxState>();
+    mocks.communication.inbox.mockReturnValue(waiting.promise);
+    mocks.repository.load.mockImplementation(async (id: string) =>
+      id === 'team-a' ? { projects: [], tasks: [] } : { projects: [project()], tasks: [task()] },
+    );
+    show();
+    await screen.findByText('Tarea privada');
+    const oldApi = workspace().communication!;
+    const rejected = expect(oldApi.inbox()).rejects.toThrow('espacio cambió');
+    await act(async () => {
+      screen.getByRole('button', { name: 'Abrir equipo' }).click();
+    });
+    await waitFor(() => expect(workspace().workspace?.id).toBe('team-a'));
+    expect(workspace().communication!.scopeKey).not.toEqual(oldApi.scopeKey);
+    await act(async () => {
+      waiting.resolve({ items: [], unread_count: 0 });
+      await rejected;
+    });
+    expect(workspace().tasks).toEqual([]);
   });
 
   it('rechaza un segundo guardado simultáneo para evitar escrituras con la misma versión', async () => {

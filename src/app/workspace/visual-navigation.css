@@ -314,3 +314,25 @@
 :root[data-motion='reduce'] .pw-project-card:hover {
   transform: none;
 }
+.pw-notification-link {
+  position: relative;
+  color: var(--text-2);
+}
+.pw-notification-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+}
+.sitem .ct.pw-unread-count {
+  background: var(--accent);
+  color: var(--accent-fg, #fff);
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  text-align: center;
+}

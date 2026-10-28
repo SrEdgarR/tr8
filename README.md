@@ -44,6 +44,13 @@ La [etapa 3 de recuperación de la demo](docs/demo-parity/stage-3.md) incorpora
 productividad, favoritos y vistas persistentes, además de editar y eliminar
 movimientos financieros conservando sus efectos y las versiones de los datos.
 
+La [etapa 7 de recuperación de la demo](docs/demo-parity/stage-7.md) añade
+comentarios paginados, edición y borrado confirmados, menciones por miembro y
+reacciones en el detalle de tareas. Bandeja y Notificaciones comparten avisos
+internos de menciones, comentarios y asignaciones, con leído/no leído y acceso
+vigente. No activa correo ni altas; las tareas con conversación no se trasladan
+a otro proyecto para proteger la privacidad de sus mensajes.
+
 La [etapa 6 de recuperación de la demo](docs/demo-parity/stage-6.md) añade archivos
 privados por proyecto, subida real, cuadrícula/lista, descarga, renombrado y
 eliminación confirmada con cuotas y permisos actuales.

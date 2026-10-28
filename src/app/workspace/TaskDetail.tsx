@@ -40,6 +40,7 @@ export interface TaskDetailProps {
   calendar?: CalendarApi;
   api?: WorkManagementApi;
   planningContent?: ReactNode;
+  communicationContent?: ReactNode;
   onUpdate: WorkspaceProps['onUpdateTask'];
   onDelete: WorkspaceProps['onDeleteTask'];
   onClose: () => void;
@@ -76,6 +77,7 @@ function ScopedTaskDetail({
   calendar,
   api,
   planningContent,
+  communicationContent,
   onUpdate,
   onDelete,
   onClose,
@@ -653,6 +655,7 @@ function ScopedTaskDetail({
             </button>
           </div>
         </form>
+        {communicationContent}
       </div>
     </Dialog>
   );

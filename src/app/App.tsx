@@ -19,6 +19,8 @@ import { createPlanningRepository } from './data/planning';
 import type { PlanningApi } from './planning-types';
 import { createProjectFilesRepository } from './data/project-files';
 import type { ProjectFilesApi } from './project-files-types';
+import { createCommunicationRepository } from './data/communication';
+import type { CommunicationApi } from './communication-types';
 import { createWorkManagementRepository } from './data/work-management';
 import type { ProductivityApi } from './productivity-types';
 import type { WorkManagementApi } from './work-management-types';
@@ -370,6 +372,7 @@ function ScopedWorkspace({
   const productivityRepository = useMemo(() => createProductivityRepository(dataClient, selected.id), [dataClient, selected.id]);
   const planningRepository = useMemo(() => createPlanningRepository(dataClient, selected.id), [dataClient, selected.id]);
   const filesRepository = useMemo(() => createProjectFilesRepository(dataClient, selected.id), [dataClient, selected.id]);
+  const communicationRepository = useMemo(() => createCommunicationRepository(dataClient, selected.id), [dataClient, selected.id]);
   const workRepository = useMemo(() => createWorkManagementRepository(dataClient, selected.id), [dataClient, selected.id]);
   const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
@@ -590,6 +593,18 @@ function ScopedWorkspace({
     rename: (file, name) => write(() => filesRepository.rename(file, name)),
     remove: file => write(() => filesRepository.remove(file)),
   };
+  const communication: CommunicationApi = {
+    scopeKey: [...collaborationScope, 'communication'],
+    thread: (task, beforeId, signal) => readCollaboration(() => communicationRepository.thread(task, beforeId, signal)),
+    create: (task, id, body, mentions) => write(() => communicationRepository.create(task, id, body, mentions)),
+    update: (comment, body) => write(() => communicationRepository.update(comment, body)),
+    remove: comment => write(() => communicationRepository.remove(comment)),
+    react: (comment, emoji, desired) => write(() => communicationRepository.react(comment, emoji, desired)),
+    inbox: signal => readCollaboration(() => communicationRepository.inbox(signal)),
+    setRead: (id, read) => write(() => communicationRepository.setRead(id, read)),
+    readAll: () => write(() => communicationRepository.readAll()),
+    dismiss: id => write(() => communicationRepository.dismiss(id)),
+  };
   const planning: PlanningApi = {
     scopeKey: [...collaborationScope, 'planning'],
     load: signal => readCollaboration(() => planningRepository.load(signal)),
@@ -682,6 +697,7 @@ function ScopedWorkspace({
       productivity={productivity}
       planning={planning}
       projectFiles={projectFiles}
+      communication={communication}
       workManagement={workManagement}
       calendar={calendar}
       financeSyncState={financeSyncState}

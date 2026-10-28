@@ -7,6 +7,8 @@ import {
   ChevronRight,
   SquareKanban,
   Home,
+  Inbox,
+  Bell,
   LayoutGrid,
   LayoutDashboard,
   List,
@@ -30,6 +32,7 @@ import { localDate } from './helpers';
 import FavoriteButton from './FavoriteButton';
 
 interface Props {
+  unreadCount?: number | null;
   favoriteProjectIds?: readonly string[];
   favoriteCount?: number;
   favoritesBusy?: boolean;
@@ -57,6 +60,7 @@ export default function WorkspaceSidebar({
   favoriteCount = 0,
   favoritesBusy = false,
   onFavoriteProject,
+  unreadCount = null,
 }: Props) {
   const location = useLocation();
   const [params] = useSearchParams();
@@ -127,6 +131,19 @@ export default function WorkspaceSidebar({
               <Home className="i" size={16} aria-hidden="true" />
               <span>Inicio</span>
             </NavLink>
+            {data.communication && !data.accessUnavailable && canInWorkspace(data, 'project.read') && (
+              <NavLink
+                to={`/inbox${scope}`}
+                className={navClass}
+                aria-label={unreadCount === null ? 'Bandeja de entrada' : `Bandeja de entrada ${unreadCount} sin leer`}
+                title="Bandeja de entrada"
+                onClick={onNavigate}
+              >
+                <Inbox className="i" size={16} aria-hidden="true" />
+                <span>Bandeja de entrada</span>
+                {unreadCount !== null && unreadCount > 0 && <span className="ct pw-unread-count">{unreadCount}</span>}
+              </NavLink>
+            )}
             <NavLink to={`/my-tasks${scope}`} className={navClass} aria-label={`Mis tareas ${mineCount}`} title="Mis tareas" onClick={onNavigate}>
               <ListTodo className="i" size={16} aria-hidden="true" />
               <span>Mis tareas</span>
@@ -137,6 +154,13 @@ export default function WorkspaceSidebar({
               <span>Favoritos</span>
               <span className="ct">{favoriteCount}</span>
             </NavLink>
+            {data.communication && !data.accessUnavailable && canInWorkspace(data, 'project.read') && (
+              <NavLink to={`/notifications${scope}`} className={navClass} aria-label="Notificaciones" title="Notificaciones" onClick={onNavigate}>
+                <Bell className="i" size={16} aria-hidden="true" />
+                <span>Notificaciones</span>
+                {unreadCount !== null && unreadCount > 0 && <span className="ct pw-unread-count">{unreadCount}</span>}
+              </NavLink>
+            )}
           </div>
           <div className="sgroup">
             <div className="sgroup-h">{workspaceName}</div>

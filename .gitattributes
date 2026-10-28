@@ -1,2 +1,4 @@
 * text=auto eol=lf
 *.svg text eol=lf
+# Preserve the exact source bytes already applied and verified in TEST.
+supabase/migrations/20261028142816_communication_stage7.sql -text
