@@ -961,6 +961,14 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           </div>
         )}
         <main className={financeView ? 'content pw-content-finance' : 'content'} id="workspace-content" tabIndex={-1} aria-busy={props.loading}>
+          {props.recurrenceError && (location.pathname.startsWith('/projects') || ['/tasks', '/my-tasks'].includes(location.pathname)) && (
+            <ErrorNotice>
+              {props.recurrenceError}{' '}
+              <button className="btn btn-secondary btn-sm" onClick={props.onRetryRecurrence}>
+                Revisar repeticiones
+              </button>
+            </ErrorNotice>
+          )}
           {props.loading ? (
             <Busy />
           ) : props.error && props.projects.length === 0 ? (
@@ -1250,6 +1258,8 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           collaboration={props.collaboration}
           calendar={props.calendar}
           api={props.workManagement}
+          recurrence={props.recurrence}
+          recurrenceCanCreate={!props.readOnly && !selectedTask.archived_at && can(selectedTask.project_id, 'task.create')}
           planningContent={
             props.planning ? (
               <DependencyPanel

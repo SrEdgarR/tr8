@@ -24,6 +24,8 @@ import type { GlobalSearchApi } from './search-types';
 import { createWorkManagementRepository } from './data/work-management';
 import { createBulkTasksRepository } from './data/bulk-tasks';
 import type { BulkTasksApi } from './bulk-task-types';
+import { createRecurrenceRepository } from './data/recurrence';
+import type { RecurrenceApi } from './recurrence-types';
 import type { ProductivityApi } from './productivity-types';
 import type { WorkManagementApi } from './work-management-types';
 import { createAccountDataClient } from './data/account-client';
@@ -381,6 +383,7 @@ function ScopedWorkspace({
   const searchRepository = useMemo(() => createGlobalSearchRepository(dataClient, selected.id), [dataClient, selected.id]);
   const workRepository = useMemo(() => createWorkManagementRepository(dataClient, selected.id), [dataClient, selected.id]);
   const bulkRepository = useMemo(() => createBulkTasksRepository(dataClient, selected.id), [dataClient, selected.id]);
+  const recurrenceRepository = useMemo(() => createRecurrenceRepository(dataClient, selected.id), [dataClient, selected.id]);
   const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
   const locked = useRef(false);
@@ -502,6 +505,22 @@ function ScopedWorkspace({
     retry: false,
   });
   const mutation = useMutation({ mutationFn: async (operation: () => Promise<unknown>) => operation(), retry: false });
+  const recurrenceSummaries = useQuery({
+    queryKey: [...collaborationScope, 'recurrence', 'summaries'],
+    queryFn: ({ signal }) => readCollaboration(() => recurrenceRepository.summaries(signal)),
+    enabled:
+      !accessError &&
+      !query.isPending &&
+      !query.error &&
+      (selected.owner_id === session.user.id || (selected.permissions.includes('project.read') && selected.permissions.includes('task.read'))),
+    staleTime: 15000,
+    refetchInterval: 30000,
+    retry: false,
+  });
+  const recurrenceByTask = useMemo(
+    () => new Map((recurrenceSummaries.error ? [] : (recurrenceSummaries.data ?? [])).map(row => [row.task_id, row])),
+    [recurrenceSummaries.data, recurrenceSummaries.error],
+  );
 
   async function write<T>(operation: () => Promise<T>, accept?: (data: WorkspaceData, row: T) => WorkspaceData): Promise<T> {
     const requestScope = collaborationScope;
@@ -612,6 +631,22 @@ function ScopedWorkspace({
           // snapshot, retaining the original batch identity for an explicit retry.
           if (active.current && authorizationScope.current === collaborationScope) void queryClient.invalidateQueries({ queryKey });
           throw cause;
+        }
+      }),
+  };
+  const recurrence: RecurrenceApi = {
+    scopeKey: [...collaborationScope, 'recurrence'],
+    state: (task, signal) => readCollaboration(() => recurrenceRepository.state(task, signal)),
+    summaries: signal => readCollaboration(() => recurrenceRepository.summaries(signal)),
+    save: (task, seriesVersion, rule, requestId) =>
+      write(async () => {
+        try {
+          return await recurrenceRepository.save(task, seriesVersion, rule, requestId);
+        } finally {
+          if (active.current && authorizationScope.current === collaborationScope) {
+            void queryClient.invalidateQueries({ queryKey });
+            void queryClient.invalidateQueries({ queryKey: [...collaborationScope, 'recurrence'] });
+          }
         }
       }),
   };
@@ -735,6 +770,9 @@ function ScopedWorkspace({
       globalSearch={globalSearch}
       workManagement={workManagement}
       bulkTasks={bulkTasks}
+      recurrence={recurrence}
+      recurrenceError={recurrenceSummaries.error ? 'No pudimos comprobar los indicadores de repetición. Puedes consultar cada tarea desde su detalle.' : null}
+      onRetryRecurrence={() => void recurrenceSummaries.refetch()}
       calendar={calendar}
       financeSyncState={financeSyncState}
       onRefreshFinance={financeRefresh ?? undefined}
@@ -777,7 +815,14 @@ function ScopedWorkspace({
       onSelectWorkspace={onSelectWorkspace}
       onCreateTeam={onCreateTeam}
       projects={unavailable ? [] : (query.data?.projects ?? [])}
-      tasks={unavailable ? [] : (query.data?.tasks ?? [])}
+      tasks={
+        unavailable
+          ? []
+          : (query.data?.tasks ?? []).map(task => {
+              const summary = recurrenceByTask.get(task.id);
+              return summary ? { ...task, recurrence: summary } : task;
+            })
+      }
       email={session.user.email ?? ''}
       loading={query.isPending && !accessError}
       refreshing={query.isFetching && !query.isPending}

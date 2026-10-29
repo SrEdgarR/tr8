@@ -16,6 +16,7 @@ import type { PlanningState, ProjectMilestone } from './planning-types';
 import type { InboxState, TaskComment } from './communication-types';
 import type { GlobalSearchPage, GlobalSearchQuery } from './search-types';
 import type { BulkTaskResult } from './bulk-task-types';
+import type { RecurrenceRule, RecurrenceState, RecurrenceSummary } from './recurrence-types';
 
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   files: { list: vi.fn(), upload: vi.fn(), download: vi.fn(), rename: vi.fn(), remove: vi.fn() },
   search: { search: vi.fn() },
   bulk: { apply: vi.fn() },
+  recurrence: { state: vi.fn(), summaries: vi.fn(), save: vi.fn() },
   communication: {
     thread: vi.fn(),
     create: vi.fn(),
@@ -95,6 +97,7 @@ vi.mock('./data/project-files', () => ({ createProjectFilesRepository: () => moc
 vi.mock('./data/communication', () => ({ createCommunicationRepository: () => mocks.communication }));
 vi.mock('./data/search', () => ({ createGlobalSearchRepository: () => mocks.search }));
 vi.mock('./data/bulk-tasks', () => ({ createBulkTasksRepository: () => mocks.bulk }));
+vi.mock('./data/recurrence', () => ({ createRecurrenceRepository: () => mocks.recurrence }));
 vi.mock('./data/work-management', () => ({
   createWorkManagementRepository: (_client: unknown, workspaceId: string) => ({
     ...mocks.work,
@@ -233,6 +236,7 @@ beforeEach(() => {
   mocks.showCalendar = false;
   mocks.showIntegrations = false;
   mocks.planning.load.mockResolvedValue({ dependencies: [], milestones: [] });
+  mocks.recurrence.summaries.mockResolvedValue([]);
   mocks.auth.onAuthStateChange.mockImplementation(callback => {
     authListener = callback;
     return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
@@ -627,9 +631,14 @@ describe('sesiones y datos del espacio personal', () => {
       await expect(workspace().collaboration!.roles()).rejects.toMatchObject({ code: '42501' });
     });
     expect(workspace().accessUnavailable).toBe(true);
-    expect(client.getQueriesData({ queryKey: ['collaboration', 'owner-a', 'personal-a'] })).toEqual([]);
+    expect(client.getQueriesData({ queryKey: ['collaboration', 'owner-a', 'personal-a'] }).every(([, data]) => data === undefined)).toBe(true);
     expect(client.getQueriesData({ queryKey: ['directory', 'owner-a', 'personal-a'] }).every(([, data]) => data === undefined)).toBe(true);
     expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+    const reads = mocks.recurrence.summaries.mock.calls.length;
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['collaboration', 'owner-a', 'personal-a'] });
+    });
+    expect(mocks.recurrence.summaries).toHaveBeenCalledTimes(reads);
   });
 
   it('carga datos con el ciclo doble de efectos de React StrictMode', async () => {
@@ -927,6 +936,173 @@ describe('sesiones y datos del espacio personal', () => {
     });
     await waitFor(() => expect(workspace().tasks).toEqual(expect.arrayContaining([saved, kept])));
     expect(mocks.work.updateTaskDetails).toHaveBeenCalledExactlyOnceWith(task(), { labels: ['Diseño'], estimate_minutes: 60, subtasks: [] });
+  });
+
+  function recurrenceFixture(): { summary: RecurrenceSummary; rule: RecurrenceRule; state: RecurrenceState } {
+    const rule: RecurrenceRule = { frequency: 'daily', interval: 1, weekdays: [], time_zone: 'UTC', until_date: null };
+    const summary: RecurrenceSummary = { series_id: 'series-a', task_id: task().id, frequency: 'daily', interval: 1, state: 'active' };
+    return {
+      summary,
+      rule,
+      state: {
+        task_id: task().id,
+        occurrence_date: '2026-10-30',
+        successor_task_id: null,
+        series: {
+          id: summary.series_id,
+          workspace_id: task().workspace_id,
+          project_id: task().project_id,
+          version: 1,
+          rule,
+          anchor_date: '2026-10-30',
+          state: 'active',
+          reason: null,
+          current_task_id: task().id,
+          current_task_created_at: task().created_at,
+          current_occurrence_date: '2026-10-30',
+        },
+      },
+    };
+  }
+
+  it('consulta indicadores de repetición después del dominio y los aísla de las filas y permisos anteriores', async () => {
+    const { summary } = recurrenceFixture();
+    const waiting = deferred<WorkspaceData>();
+    mocks.repository.load.mockReturnValue(waiting.promise);
+    mocks.recurrence.summaries.mockResolvedValue([summary]);
+    const { client } = show();
+    await waitFor(() => expect(mocks.repository.load).toHaveBeenCalledOnce());
+    expect(mocks.recurrence.summaries).not.toHaveBeenCalled();
+    await act(async () => {
+      waiting.resolve({ projects: [project()], tasks: [task()] });
+    });
+    await waitFor(() => expect(workspace().tasks[0]?.recurrence).toEqual(summary));
+    const oldScope = workspace().recurrence!.scopeKey;
+    expect(client.getQueriesData<WorkspaceData>({ queryKey: ['workspace', 'owner-a', 'personal-a'] })[0]?.[1]?.tasks).toEqual([task()]);
+    mocks.repository.projectCapabilities.mockResolvedValue([]);
+    mocks.recurrence.summaries.mockResolvedValue([]);
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['workspace', 'owner-a', 'personal-a'] });
+    });
+    await waitFor(() => expect(workspace().tasks).toEqual([]));
+    expect(workspace().recurrence!.scopeKey).not.toEqual(oldScope);
+    expect(client.getQueriesData({ queryKey: oldScope }).every(([, data]) => data === undefined)).toBe(true);
+  });
+
+  it('retira indicadores ante un error genérico de repetición sin bloquear los proyectos y permite reintentarlos', async () => {
+    const { summary } = recurrenceFixture();
+    mocks.recurrence.summaries.mockResolvedValue([summary]);
+    const { client } = show();
+    await waitFor(() => expect(workspace().tasks[0]?.recurrence).toEqual(summary));
+    mocks.recurrence.summaries.mockRejectedValue(new Error('Network connection failed'));
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: workspace().recurrence!.scopeKey });
+    });
+    await waitFor(() => expect(workspace().recurrenceError).toContain('indicadores de repetición'));
+    expect(workspace().tasks).toEqual([task()]);
+    expect(workspace().projects).toEqual([project()]);
+    expect(workspace().accessUnavailable).toBe(false);
+    expect(screen.getByText('Tarea privada')).toBeInTheDocument();
+    mocks.recurrence.summaries.mockResolvedValue([summary]);
+    await act(async () => {
+      workspace().onRetryRecurrence?.();
+    });
+    await waitFor(() => expect(workspace().tasks[0]?.recurrence).toEqual(summary));
+    expect(workspace().recurrenceError).toBeNull();
+    expect(mocks.auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('no consulta repeticiones para un lector de proyectos que no tiene permiso de leer tareas', async () => {
+    mocks.repository.context.mockResolvedValue({
+      contract_version: 2,
+      personal_workspace_id: 'personal-a',
+      external_invites_enabled: false,
+      workspaces: [{ id: 'personal-a', name: 'Equipo visible', kind: 'team', owner_id: 'other-owner', version: 1, permissions: ['project.read'] }],
+    });
+    mocks.repository.projectCapabilities.mockResolvedValue([{ project_id: 'project-a', access_level: 'read', permissions: ['project.read'] }]);
+    show();
+    await screen.findByText('Proyecto privado');
+    expect(workspace().tasks).toEqual([]);
+    expect(workspace().accessUnavailable).toBe(false);
+    expect(mocks.recurrence.summaries).not.toHaveBeenCalled();
+  });
+
+  it('una denegación de repetición retira dominio y cachés y detiene las siguientes consultas automáticas', async () => {
+    const { summary } = recurrenceFixture();
+    mocks.recurrence.summaries.mockResolvedValue([summary]);
+    const { client } = show();
+    await waitFor(() => expect(workspace().tasks[0]?.recurrence).toEqual(summary));
+    mocks.recurrence.summaries.mockRejectedValue(new DataError('Acceso a repeticiones retirado', '42501'));
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: workspace().recurrence!.scopeKey });
+    });
+    await waitFor(() => expect(workspace().accessUnavailable).toBe(true));
+    expect(workspace().tasks).toEqual([]);
+    expect(workspace().projects).toEqual([]);
+    expect(client.getQueriesData({ queryKey: ['collaboration', 'owner-a', 'personal-a'] }).every(([, data]) => data === undefined)).toBe(true);
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+    const reads = mocks.recurrence.summaries.mock.calls.length;
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['collaboration', 'owner-a', 'personal-a'] });
+    });
+    expect(mocks.recurrence.summaries).toHaveBeenCalledTimes(reads);
+  });
+
+  it('guarda un estado de repetición sin convertirlo en tarea ni sobrescribir el snapshot del usuario', async () => {
+    const { state, rule } = recurrenceFixture();
+    const current = { ...task(), due_date: '2026-10-30' },
+      kept = { ...task('Otra tarea conservada'), id: 'kept-task' };
+    mocks.repository.load.mockResolvedValue({ projects: [project()], tasks: [current, kept] });
+    mocks.recurrence.save.mockResolvedValue(state);
+    const { client } = show();
+    await screen.findByText(current.title);
+    await waitFor(() => expect(mocks.recurrence.summaries).toHaveBeenCalledOnce());
+    // Prevent a refresh from masking an erroneous optimistic insertion of the state DTO.
+    mocks.repository.load.mockReturnValue(new Promise<WorkspaceData>(() => {}));
+    await act(async () => {
+      expect(await workspace().recurrence!.save(current, null, rule, 'request-a')).toEqual(state);
+    });
+    expect(mocks.recurrence.save).toHaveBeenCalledExactlyOnceWith(current, null, rule, 'request-a');
+    expect(workspace().tasks).toEqual([current, kept]);
+    expect(client.getQueriesData<WorkspaceData>({ queryKey: ['workspace', 'owner-a', 'personal-a'] })[0]?.[1]?.tasks).toEqual([current, kept]);
+    expect(workspace().projects).toEqual([project()]);
+    expect(mocks.repository.updateTask).not.toHaveBeenCalled();
+    expect(mocks.repository.createTask).not.toHaveBeenCalled();
+  });
+
+  it('rechaza lecturas y guardados de repetición que llegan después de cambiar de espacio', async () => {
+    const { state, rule } = recurrenceFixture();
+    const reading = deferred<RecurrenceState>(),
+      saving = deferred<RecurrenceState>();
+    mocks.recurrence.state.mockReturnValue(reading.promise);
+    mocks.recurrence.save.mockReturnValue(saving.promise);
+    mocks.repository.load.mockImplementation(async (id: string) =>
+      id === 'team-a' ? { projects: [], tasks: [] } : { projects: [project()], tasks: [task()] },
+    );
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    const oldApi = workspace().recurrence!;
+    const read = oldApi.state(task());
+    let save!: Promise<RecurrenceState>;
+    act(() => {
+      save = oldApi.save(task(), null, rule, 'request-a');
+    });
+    const rejectedRead = expect(read).rejects.toThrow('espacio cambió');
+    const rejectedSave = expect(save).rejects.toThrow('espacio cambió');
+    await act(async () => {
+      screen.getByRole('button', { name: 'Abrir equipo' }).click();
+    });
+    await waitFor(() => expect(workspace().workspace?.id).toBe('team-a'));
+    expect(workspace().recurrence!.scopeKey).not.toEqual(oldApi.scopeKey);
+    await act(async () => {
+      reading.resolve(state);
+      saving.resolve(state);
+      await Promise.all([rejectedRead, rejectedSave]);
+    });
+    expect(workspace().tasks).toEqual([]);
+    expect(workspace().projects).toEqual([]);
+    expect(client.getQueriesData({ queryKey: oldApi.scopeKey }).every(([, data]) => data === undefined)).toBe(true);
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
   });
 
   it('rechaza el resultado tardío de detalle después de cambiar de espacio', async () => {

@@ -366,6 +366,7 @@ export default function TaskForm({
             />
           )}
           {!task && calendar && <p className="faint">Después de crear la tarea podrás añadir su bloque de trabajo opcional.</p>}
+          {!task && <p className="faint">Después de crear la tarea podrás configurar su repetición diaria, semanal o mensual desde el detalle.</p>}
           {confirmDelete && (
             <div className="pw-confirm" role="alert">
               <strong>¿Eliminar esta tarea?</strong>

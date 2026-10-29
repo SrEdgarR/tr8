@@ -19,11 +19,13 @@ import {
 } from 'lucide-react';
 import type { CalendarApi, CollaborationApi, Project, Task, TaskSubtask, WorkspaceProps } from '../types';
 import type { WorkManagementApi } from '../work-management-types';
+import type { RecurrenceApi } from '../recurrence-types';
 import { PRIORITIES, PROJECT_COLORS, STATUSES, formatDate } from '../constants';
 import { PriorityIcon, TaskStatusIcon } from './project-identity';
 import { Dialog, ErrorNotice, ProjectIcon } from './ui';
 import { errorMessage } from './helpers';
 import TaskForm from './TaskForm';
+import RecurrencePanel from './RecurrencePanel';
 import './task-detail.css';
 
 export interface TaskDetailProps {
@@ -39,6 +41,8 @@ export interface TaskDetailProps {
   collaboration?: CollaborationApi;
   calendar?: CalendarApi;
   api?: WorkManagementApi;
+  recurrence?: RecurrenceApi;
+  recurrenceCanCreate?: boolean;
   planningContent?: ReactNode;
   communicationContent?: ReactNode;
   onUpdate: WorkspaceProps['onUpdateTask'];
@@ -76,6 +80,8 @@ function ScopedTaskDetail({
   collaboration,
   calendar,
   api,
+  recurrence,
+  recurrenceCanCreate = false,
   planningContent,
   communicationContent,
   onUpdate,
@@ -493,6 +499,16 @@ function ScopedTaskDetail({
           <p className="td-description">{current.description || 'Añade contexto desde Editar tarea.'}</p>
         </section>
         {planningContent}
+        {recurrence && (
+          <RecurrencePanel
+            task={current}
+            api={recurrence}
+            calendar={calendar}
+            disabled={disabled || projectArchived}
+            canEdit={mayEdit}
+            canCreate={recurrenceCanCreate}
+          />
+        )}
         <form onSubmit={saveDetails} className="td-details-form">
           {changed && (
             <div className="pw-info">

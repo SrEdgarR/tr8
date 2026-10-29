@@ -1,0 +1,200 @@
+.recurrence-panel > .td-section-title h4 > svg {
+  color: var(--accent);
+}
+.recurrence-state {
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+  color: var(--text-2);
+  background: var(--hover);
+}
+.recurrence-state.is-active {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+}
+.recurrence-state.is-blocked {
+  color: var(--amber, var(--text-2));
+}
+.recurrence-summary {
+  display: grid;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.recurrence-summary > span,
+.recurrence-date-note,
+.recurrence-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.recurrence-summary > span {
+  color: var(--text-3);
+}
+.recurrence-summary p {
+  margin: 0;
+  line-height: 1.6;
+}
+.recurrence-buttons {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+}
+.recurrence-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+.recurrence-form > fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  gap: 15px;
+}
+.recurrence-input-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.recurrence-input-icon > svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+}
+.recurrence-panel .recurrence-input-icon > input,
+.recurrence-panel .recurrence-input-icon > select {
+  width: 100%;
+  min-width: 0;
+  padding-left: 32px;
+}
+.recurrence-panel .recurrence-input-icon > select {
+  appearance: none;
+  padding-right: 30px;
+}
+.recurrence-input-icon > .recurrence-select-chevron {
+  left: auto;
+  right: 10px;
+}
+.recurrence-weekdays {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.recurrence-weekdays legend {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  margin-bottom: 9px;
+}
+.recurrence-weekdays > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.recurrence-weekdays button {
+  min-width: 38px;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-2);
+  text-transform: capitalize;
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+.recurrence-weekdays button:hover:not(:disabled) {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.recurrence-weekdays button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.recurrence-weekdays button:focus-visible,
+.recurrence-check input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.recurrence-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.recurrence-check input {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+.recurrence-date-note {
+  align-items: flex-start;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  line-height: 1.6;
+  margin: 0;
+}
+.recurrence-date-note > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.recurrence-preview {
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--hover);
+  font-size: var(--fs-xs);
+}
+.recurrence-preview ul {
+  list-style: none;
+  margin: 11px 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+.recurrence-preview li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-2);
+}
+.recurrence-preview li > svg {
+  color: var(--accent);
+}
+.recurrence-preview p {
+  color: var(--text-3);
+  margin-bottom: 0;
+  line-height: 1.6;
+}
+.recurrence-notice {
+  font-size: var(--fs-xs);
+  color: var(--green);
+}
+@media (max-width: 480px) {
+  .recurrence-form .pw-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recurrence-weekdays button {
+    transition: none;
+  }
+  .recurrence-weekdays button:hover:not(:disabled) {
+    transform: none;
+  }
+}
