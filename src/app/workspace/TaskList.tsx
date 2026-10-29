@@ -24,8 +24,8 @@ export default function TaskList({
   return (
     <div className={`pw-task-list${selection ? ' tv-selectable-list' : ''}`} role="table" aria-label="Lista de tareas">
       <div className="pw-task-row pw-task-list-head" role="row">
-        <span role="columnheader">
-          <span className="sr">{selection ? 'Seleccionar y completar' : 'Completar'}</span>
+        <span role="columnheader" title={selection ? 'Seleccionar para acciones masivas o completar una tarea' : 'Completar una tarea'}>
+          Acciones
         </span>
         <span role="columnheader">Tarea</span>
         <span role="columnheader">Estado</span>
@@ -44,9 +44,9 @@ export default function TaskList({
           }}
           onDrop={event => onDrop?.(task, event)}
         >
-          <span role="cell">
+          <span role="cell" className="tv-list-task-actions">
             {selection && (
-              <label className="tv-select-task">
+              <label className="tv-select-task" title={`Seleccionar ${task.title} para acciones masivas`}>
                 <input
                   type="checkbox"
                   aria-label={`Seleccionar ${task.title}`}
@@ -60,25 +60,42 @@ export default function TaskList({
               </label>
             )}
             <button
-              className={`pw-complete${task.status === 'done' ? ' checked' : ''}`}
+              className={`pw-complete tv-complete-task${task.status === 'done' ? ' checked' : ''}`}
               disabled={pending || !mayEdit(task)}
               aria-label={task.status === 'done' ? `Reabrir ${task.title}` : `Completar ${task.title}`}
+              title={task.status === 'done' ? `Reabrir ${task.title}` : `Completar ${task.title}`}
+              aria-pressed={task.status === 'done'}
               onClick={() => void onMove(task, task.status === 'done' ? 'todo' : 'done')}
             >
-              {task.status === 'done' && <Check size={12} aria-hidden="true" />}
+              <Check size={12} aria-hidden="true" />
             </button>
           </span>
-          <span className="pw-task-title-cell" role="cell">
-            <span className="tv-list-title">
-              {onDragStart && <GripVertical size={12} className="tv-drag-hint" aria-hidden="true" />}
-              <button className="pw-task-title" onClick={() => onOpen(task)}>
-                {task.title}
-              </button>
+          <span className="pw-task-title-cell tv-list-title-cell" role="cell">
+            <span className="tv-list-content">
+              <span className="tv-list-title">
+                {onDragStart && <GripVertical size={12} className="tv-drag-hint" aria-hidden="true" />}
+                <button className="pw-task-title" onClick={() => onOpen(task)}>
+                  {task.title}
+                </button>
+              </span>
+              <span className="pw-task-subtitle">
+                <span className="mono">
+                  {projectMap.get(task.project_id)?.code}-{task.task_number}
+                </span>
+                <span className="pw-task-project-identity" style={{ color: projectMap.get(task.project_id)?.color }}>
+                  <ProjectGlyph icon={projectMap.get(task.project_id)?.icon} size={11} />
+                  {projectMap.get(task.project_id)?.name}
+                </span>
+              </span>
+              <TaskMetadata task={task} />
+            </span>
+            <span className="tv-list-row-actions">
               {onFavorite && (
                 <button
                   className={`ibtn ibtn-xs tv-star${favoriteIds.includes(task.id) ? ' is-favorite' : ''}`}
                   aria-pressed={favoriteIds.includes(task.id)}
                   aria-label={`${favoriteIds.includes(task.id) ? 'Quitar de favoritas' : 'Marcar favorita'} ${task.title}`}
+                  title={`${favoriteIds.includes(task.id) ? 'Quitar de favoritas' : 'Marcar favorita'} ${task.title}`}
                   disabled={pending}
                   onClick={() => onFavorite(task, !favoriteIds.includes(task.id))}
                 >
@@ -87,25 +104,27 @@ export default function TaskList({
               )}
               {onReorder && (
                 <span className="tv-reorder-actions">
-                  <button className="ibtn ibtn-xs" aria-label={`Subir ${task.title}`} disabled={pending || !mayEdit(task)} onClick={() => onReorder(task, -1)}>
+                  <button
+                    className="ibtn ibtn-xs"
+                    aria-label={`Subir ${task.title}`}
+                    title={`Subir ${task.title}`}
+                    disabled={pending || !mayEdit(task)}
+                    onClick={() => onReorder(task, -1)}
+                  >
                     <ArrowUp size={11} aria-hidden="true" />
                   </button>
-                  <button className="ibtn ibtn-xs" aria-label={`Bajar ${task.title}`} disabled={pending || !mayEdit(task)} onClick={() => onReorder(task, 1)}>
+                  <button
+                    className="ibtn ibtn-xs"
+                    aria-label={`Bajar ${task.title}`}
+                    title={`Bajar ${task.title}`}
+                    disabled={pending || !mayEdit(task)}
+                    onClick={() => onReorder(task, 1)}
+                  >
                     <ArrowDown size={11} aria-hidden="true" />
                   </button>
                 </span>
               )}
             </span>
-            <span className="pw-task-subtitle">
-              <span className="mono">
-                {projectMap.get(task.project_id)?.code}-{task.task_number}
-              </span>
-              <span className="pw-task-project-identity" style={{ color: projectMap.get(task.project_id)?.color }}>
-                <ProjectGlyph icon={projectMap.get(task.project_id)?.icon} size={11} />
-                {projectMap.get(task.project_id)?.name}
-              </span>
-            </span>
-            <TaskMetadata task={task} />
           </span>
           <span role="cell" className="pw-state-cell">
             <StatusDot status={task.status} />

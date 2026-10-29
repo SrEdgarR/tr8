@@ -5,9 +5,20 @@ import { STATUSES } from '../constants';
 import type { CalendarApi, CalendarItem, CalendarQuery, Project, TaskStatus, WorkspaceSummary } from '../types';
 import { Busy, Dialog, EmptyState, ErrorNotice, StatusDot } from './ui';
 import { errorMessage } from './helpers';
-import { addCivilDays, addCivilMonths, blockLastDate, dateInTimeZone, formatCivilDate, formatTime, monthDays, monthStart } from './CalendarTime';
+import {
+  addCivilDays,
+  addCivilMonths,
+  blockLastDate,
+  dateInTimeZone,
+  formatCivilDate,
+  formatTime,
+  monthDays,
+  monthStart,
+  validCivilDate,
+} from './CalendarTime';
 import { CalendarZoneEditor } from './CalendarZoneSettings';
 import useCalendarZonePreferences from './useCalendarZonePreferences';
+import './calendar-visibility.css';
 
 interface Props {
   api: CalendarApi;
@@ -15,6 +26,8 @@ interface Props {
   workspaceId?: string;
   project?: Project;
   projects: Project[];
+  /** A date from an already authorized task in this project, never an extra lookup. */
+  nextTaskDate?: string | null;
   onOpen: (item: CalendarItem) => void;
 }
 
@@ -91,7 +104,7 @@ function CalendarAgenda({ items, zone, from, onOpen }: { items: CalendarItem[]; 
   );
 }
 
-export default function Calendar({ api, workspaces, workspaceId, project, projects, onOpen }: Props) {
+export default function Calendar({ api, workspaces, workspaceId, project, projects, nextTaskDate, onOpen }: Props) {
   const zoneState = useCalendarZonePreferences(api, true);
   const { profile, zone } = zoneState;
   const [month, setMonth] = useState<string | null>(null);
@@ -188,6 +201,20 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
           (item.kind === 'block' && item.end_at && date < currentMonth && blockLastDate(item.end_at, zone ?? 'America/La_Paz') >= currentMonth)
       : false;
   });
+  const nextTaskMonth = nextTaskDate && validCivilDate(nextTaskDate) ? monthStart(nextTaskDate) : null;
+  const showNearbyDate = Boolean(
+    project &&
+    enabled &&
+    query.isSuccess &&
+    !query.isFetching &&
+    !query.hasNextPage &&
+    !currentItems.length &&
+    !status &&
+    !assignee &&
+    !mine &&
+    nextTaskMonth &&
+    nextTaskMonth !== currentMonth,
+  );
 
   if (api.accessError)
     return (
@@ -236,6 +263,19 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
               </button>
             </div>
           </div>
+          {showNearbyDate && nextTaskDate && nextTaskMonth && (
+            <aside className="pw-calendar-nearby" aria-label="Próxima fecha del proyecto">
+              <CalendarDays size={17} aria-hidden="true" />
+              <p>
+                <strong>La próxima tarea con fecha está en otro mes.</strong>
+                <span>{formatCivilDate(nextTaskDate, { day: 'numeric', month: 'long', year: 'numeric' })}. Sus fechas se conservan.</span>
+              </p>
+              <button className="btn btn-secondary btn-sm" onClick={() => setMonth(nextTaskMonth)}>
+                Ir a {formatCivilDate(nextTaskMonth, { month: 'long' })}
+                <ChevronRight size={14} aria-hidden="true" />
+              </button>
+            </aside>
+          )}
           <div className="pw-calendar-filters">
             {!project && (
               <label className="pw-field">
@@ -310,8 +350,9 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
             </label>
           </div>
           <p className="pw-calendar-caption">
-            Los filtros ofrecen proyectos del espacio abierto y proyectos y responsables de los elementos cargados. Para elegir otro proyecto, ábrelo desde la
-            navegación o cambia de espacio.
+            {project
+              ? 'Solo se muestran las tareas de este proyecto con fechas en el período seleccionado.'
+              : 'Los filtros ofrecen proyectos del espacio abierto y proyectos y responsables de los elementos cargados. Para elegir otro proyecto, ábrelo desde la navegación o cambia de espacio.'}
           </p>
           <p className="pw-calendar-caption pw-calendar-zone-caption">
             <Globe2 size={12} aria-hidden="true" />
@@ -374,7 +415,10 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
                 <CalendarAgenda items={items} zone={zone} from={from} onOpen={onOpen} />
               )}
               {(view === 'agenda' ? !items.length : !currentItems.length) && (
-                <EmptyState title="Sin fechas en este período">Cambia el mes o los filtros. Las tareas sin fecha están en «Sin programar».</EmptyState>
+                <EmptyState title="Sin fechas en este período">
+                  No hay fechas en {formatCivilDate(currentMonth, { month: 'long', year: 'numeric' })} con estos filtros. Usa las flechas para ver otros meses.
+                  Las tareas sin fecha están en «Sin programar».
+                </EmptyState>
               )}
               {query.hasNextPage && (
                 <div className="pw-calendar-pagination">

@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { Check, Columns3, Filter, Save, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { Bookmark, Check, CircleDot, Columns3, Filter, Flag, PencilLine, Save, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import type { SavedTaskView, TaskViewConfig } from '../productivity-types';
 import type { Project, WorkspaceMember } from '../types';
 import { PRIORITIES, STATUSES } from '../constants';
@@ -31,6 +31,9 @@ type Props = SavedViewsProps & {
   pending: boolean;
   selected: string;
   onSelect: (id: string) => void;
+  resultCount: number;
+  hasFilters: boolean;
+  onResetFilters: () => void;
 };
 function changed<T extends string>(list: T[], value: T, checked: boolean) {
   return checked ? [...list, value] : list.filter(item => item !== value);
@@ -50,6 +53,9 @@ export default function TaskViewControls({
   productivityError,
   selected,
   onSelect,
+  resultCount,
+  hasFilters,
+  onResetFilters,
 }: Props) {
   const [dialog, setDialog] = useState<'save' | 'edit' | 'delete' | null>(null);
   const [name, setName] = useState('');
@@ -59,6 +65,13 @@ export default function TaskViewControls({
   const submitting = useRef(false);
   const current = savedViews.find(view => view.id === selected);
   const patch = (value: Partial<TaskViewConfig>) => onChange({ ...config, ...value });
+  const filterCount =
+    config.statuses.length +
+    config.priorities.length +
+    config.projectIds.length +
+    config.assigneeIds.length +
+    Number(config.due !== 'all') +
+    Number(config.favoritesOnly);
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (submitting.current) return;
@@ -93,10 +106,56 @@ export default function TaskViewControls({
   }
   return (
     <>
-      <div className="tv-view-controls">
+      <div className="tv-view-controls" role="group" aria-label="Buscar, filtrar y organizar tareas">
+        <label className="tv-quick-search">
+          <Search size={14} aria-hidden="true" />
+          <span className="sr">Buscar tareas</span>
+          <input type="search" placeholder="Buscar tareas…" maxLength={500} value={config.query} onChange={event => patch({ query: event.target.value })} />
+        </label>
+        <label className="tv-quick-filter" title="Filtrar por estado">
+          <CircleDot size={14} aria-hidden="true" />
+          <span className="sr">Filtrar por estado</span>
+          <select
+            value={config.statuses.length > 1 ? 'multiple' : (config.statuses[0] ?? '')}
+            onChange={event => patch({ statuses: event.target.value ? [event.target.value as TaskViewConfig['statuses'][number]] : [] })}
+          >
+            <option value="">Todos los estados</option>
+            {config.statuses.length > 1 && (
+              <option value="multiple" disabled>
+                {config.statuses.length} estados
+              </option>
+            )}
+            {STATUSES.map(status => (
+              <option key={status.id} value={status.id}>
+                {status.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="tv-quick-filter" title="Filtrar por prioridad">
+          <Flag size={14} aria-hidden="true" />
+          <span className="sr">Filtrar por prioridad</span>
+          <select
+            value={config.priorities.length > 1 ? 'multiple' : (config.priorities[0] ?? '')}
+            onChange={event => patch({ priorities: event.target.value ? [event.target.value as TaskViewConfig['priorities'][number]] : [] })}
+          >
+            <option value="">Todas las prioridades</option>
+            {config.priorities.length > 1 && (
+              <option value="multiple" disabled>
+                {config.priorities.length} prioridades
+              </option>
+            )}
+            {PRIORITIES.map(priority => (
+              <option key={priority.id} value={priority.id}>
+                {priority.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <details className="tv-control-menu">
-          <summary>
-            <Filter size={14} aria-hidden="true" /> Filtros
+          <summary title="Filtros adicionales">
+            <Filter size={14} aria-hidden="true" /> <span className="tv-menu-label">Filtros</span>
+            {filterCount > 0 && <span className="tv-filter-count">{filterCount}</span>}
           </summary>
           <div className="tv-control-body tv-filter-grid">
             <fieldset>
@@ -178,8 +237,8 @@ export default function TaskViewControls({
           </div>
         </details>
         <details className="tv-control-menu">
-          <summary>
-            <SlidersHorizontal size={14} aria-hidden="true" /> Organizar
+          <summary title="Organizar tareas">
+            <SlidersHorizontal size={14} aria-hidden="true" /> <span className="tv-menu-label">Organizar</span>
           </summary>
           <div className="tv-control-body tv-organize-fields">
             <label>
@@ -219,8 +278,8 @@ export default function TaskViewControls({
         </details>
         {config.view === 'table' && (
           <details className="tv-control-menu">
-            <summary>
-              <Columns3 size={14} aria-hidden="true" /> Columnas
+            <summary title="Columnas de la tabla">
+              <Columns3 size={14} aria-hidden="true" /> <span className="tv-menu-label">Columnas</span>
             </summary>
             <div className="tv-control-body">
               <p className="faint">El título siempre está visible.</p>
@@ -240,6 +299,7 @@ export default function TaskViewControls({
         {(onCreateView || savedViews.length > 0 || productivityLoading) && (
           <label className="tv-saved-select">
             <span className="sr">Vistas guardadas</span>
+            <Bookmark size={14} aria-hidden="true" />
             <select
               aria-label="Vistas guardadas"
               value={selected}
@@ -256,14 +316,24 @@ export default function TaskViewControls({
           </label>
         )}
         {onCreateView && (
-          <button className="btn btn-ghost btn-sm" disabled={pending || busy || productivityLoading || Boolean(productivityError)} onClick={() => open('save')}>
+          <button
+            className="btn btn-ghost btn-sm tv-compact-action"
+            title="Guardar vista"
+            disabled={pending || busy || productivityLoading || Boolean(productivityError)}
+            onClick={() => open('save')}
+          >
             <Save size={13} aria-hidden="true" />
-            Guardar vista
+            <span className="tv-action-label">Guardar vista</span>
           </button>
         )}
         {current && onUpdateView && (
-          <button className="btn btn-ghost btn-sm" disabled={pending || busy || productivityLoading} onClick={() => open('edit')}>
-            Actualizar vista
+          <button
+            className="btn btn-ghost btn-sm tv-compact-action"
+            title="Actualizar vista"
+            disabled={pending || busy || productivityLoading}
+            onClick={() => open('edit')}
+          >
+            <PencilLine size={13} aria-hidden="true" /> <span className="tv-action-label">Actualizar vista</span>
           </button>
         )}
         {current && onDeleteView && (
@@ -276,6 +346,15 @@ export default function TaskViewControls({
             <Trash2 size={14} aria-hidden="true" />
           </button>
         )}
+        {hasFilters && (
+          <button type="button" className="btn btn-ghost btn-sm tv-clear-filters tv-compact-action" onClick={onResetFilters} title="Limpiar todos los filtros">
+            <X size={13} aria-hidden="true" />
+            <span className="tv-action-label">Limpiar filtros</span>
+          </button>
+        )}
+        <span className="pw-result-count" role="status">
+          {resultCount} {resultCount === 1 ? 'tarea' : 'tareas'}
+        </span>
       </div>
       {productivityError && <ErrorNotice>{productivityError}</ErrorNotice>}
       {dialog && (

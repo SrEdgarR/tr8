@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
 import type { SavedTaskView } from '../productivity-types';
 import TasksView from './TasksView';
+import TaskList from './TaskList';
 import { defaultTaskView } from './task-views';
 import { summaryMember, summaryProject, summaryTask } from './summary-test-fixtures';
 
@@ -48,6 +49,67 @@ function saved(config = defaultTaskView()): SavedTaskView {
 }
 
 describe('productive task views', () => {
+  it('keeps search, quick filters, advanced controls and saved views in the same toolbar', async () => {
+    const user = userEvent.setup();
+    mount(props({ savedViews: [saved()], onCreateView: vi.fn() }));
+    const controls = screen.getByRole('group', { name: 'Buscar, filtrar y organizar tareas' });
+    expect(within(controls).getByRole('searchbox', { name: 'Buscar tareas' })).toBeInTheDocument();
+    expect(within(controls).getByRole('combobox', { name: 'Vistas guardadas' })).toBeInTheDocument();
+    expect(within(controls).getByText('Filtros', { exact: true })).toBeInTheDocument();
+    expect(within(controls).getByText('Organizar', { exact: true })).toBeInTheDocument();
+    expect(within(controls).getByRole('button', { name: 'Guardar vista' })).toBeInTheDocument();
+    await user.selectOptions(within(controls).getByRole('combobox', { name: 'Filtrar por prioridad' }), 'high');
+    expect(within(controls).getByRole('status')).toHaveTextContent('1 tarea');
+    expect(screen.getByRole('button', { name: 'Revisar notas' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Preparar portada' })).not.toBeInTheDocument();
+    await user.click(within(controls).getByRole('button', { name: 'Limpiar filtros' }));
+    expect(within(controls).getByRole('status')).toHaveTextContent('3 tareas');
+  });
+  it('distinguishes selecting a task from completing it and identifies the row actions', async () => {
+    const user = userEvent.setup();
+    const toggle = vi.fn();
+    const onMove = vi.fn().mockResolvedValue(undefined);
+    const onFavorite = vi.fn();
+    const onReorder = vi.fn();
+    render(
+      <TaskList
+        tasks={[tasks[0]]}
+        projects={[summaryProject]}
+        members={[]}
+        columns={[]}
+        pending={false}
+        today="2026-10-29"
+        mayEdit={() => true}
+        onOpen={vi.fn()}
+        onMove={onMove}
+        favoriteIds={[]}
+        onFavorite={onFavorite}
+        onReorder={onReorder}
+        selection={{ selectedIds: [], disabled: false, canSelect: () => true, toggle }}
+      />,
+    );
+    const select = screen.getByRole('checkbox', { name: 'Seleccionar Preparar portada' });
+    const complete = screen.getByRole('button', { name: 'Completar Preparar portada' });
+    expect(select.parentElement).toHaveAttribute('title', 'Seleccionar Preparar portada para acciones masivas');
+    expect(complete).toHaveAttribute('title', 'Completar Preparar portada');
+    expect(complete).toHaveAttribute('aria-pressed', 'false');
+    await user.click(select);
+    expect(toggle).toHaveBeenCalledExactlyOnceWith(tasks[0]);
+    expect(onMove).not.toHaveBeenCalled();
+    await user.click(complete);
+    expect(onMove).toHaveBeenCalledExactlyOnceWith(tasks[0], 'done');
+    const favorite = screen.getByRole('button', { name: 'Marcar favorita Preparar portada' });
+    const up = screen.getByRole('button', { name: 'Subir Preparar portada' });
+    const down = screen.getByRole('button', { name: 'Bajar Preparar portada' });
+    expect(favorite).toHaveAttribute('title', 'Marcar favorita Preparar portada');
+    expect(up).toHaveAttribute('title', 'Subir Preparar portada');
+    expect(down).toHaveAttribute('title', 'Bajar Preparar portada');
+    await user.click(favorite);
+    await user.click(up);
+    expect(onFavorite).toHaveBeenCalledExactlyOnceWith(tasks[0], true);
+    expect(onReorder).toHaveBeenCalledExactlyOnceWith(tasks[0], -1);
+    expect(toggle).toHaveBeenCalledTimes(1);
+  });
   it('opens the table and edits a title using the original version while keeping failed drafts for retry', async () => {
     const user = userEvent.setup();
     const onPatch = vi.fn().mockRejectedValueOnce(new Error('La tarea cambió en otro dispositivo')).mockResolvedValue(undefined);
@@ -103,6 +165,7 @@ describe('productive task views', () => {
     await user.click(screen.getByText('Filtros', { exact: true }));
     await user.click(screen.getByRole('checkbox', { name: 'Por hacer' }));
     await user.click(screen.getByRole('checkbox', { name: 'En revisión' }));
+    expect(screen.getByRole('combobox', { name: 'Filtrar por estado' })).toHaveDisplayValue('2 estados');
     await user.click(screen.getByRole('checkbox', { name: summaryMember.display_name }));
     expect(screen.getByRole('button', { name: 'Preparar portada' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Revisar notas' })).toBeInTheDocument();

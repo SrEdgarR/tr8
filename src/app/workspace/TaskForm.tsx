@@ -1,11 +1,13 @@
-import { useId, useRef, useState, type FormEvent } from 'react';
-import { Trash2 } from 'lucide-react';
+import { useId, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { AlignLeft, CalendarDays, CalendarRange, ChevronDown, Info, TextCursorInput, Trash2, UserRound } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { PRIORITIES, STATUSES } from '../constants';
 import type { CalendarApi, CollaborationApi, Priority, Project, Task, TaskInput, TaskStatus, WorkspaceProps } from '../types';
 import CalendarSchedule from './CalendarSchedule';
 import { Dialog, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
+import { PriorityIcon, ProjectGlyph, TaskStatusIcon } from './project-identity';
+import './task-form.css';
 
 interface Props {
   task?: Task;
@@ -70,20 +72,24 @@ function TaskAssignment({
     <section className="pw-assignment" aria-label="Responsable de la tarea">
       <label className="pw-field">
         Responsable principal
-        <select
-          value={selected}
-          disabled={disabled || busy || !canAssign || members.isPending || !!members.error}
-          onChange={event => setSelected(event.target.value)}
-        >
-          <option value="">Sin responsable</option>
-          {!!selected && !available.some(member => member.id === selected) && <option value={selected}>Responsable no disponible</option>}
-          {available.map(member => (
-            <option key={member.id} value={member.id}>
-              {member.display_name}
-              {member.is_owner ? ' (propietario)' : ''}
-            </option>
-          ))}
-        </select>
+        <span className="task-form-control">
+          <UserRound size={15} aria-hidden="true" />
+          <select
+            value={selected}
+            disabled={disabled || busy || !canAssign || members.isPending || !!members.error}
+            onChange={event => setSelected(event.target.value)}
+          >
+            <option value="">Sin responsable</option>
+            {!!selected && !available.some(member => member.id === selected) && <option value={selected}>Responsable no disponible</option>}
+            {available.map(member => (
+              <option key={member.id} value={member.id}>
+                {member.display_name}
+                {member.is_owner ? ' (propietario)' : ''}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={13} className="task-form-chevron" aria-hidden="true" />
+        </span>
       </label>
       {members.error && <ErrorNotice>{errorMessage(members.error)}</ErrorNotice>}
       {error && <ErrorNotice>{error}</ErrorNotice>}
@@ -136,6 +142,10 @@ export default function TaskForm({
   const busy = pending || submitting;
   const archived = Boolean(projects.find(project => project.id === selectedProject)?.archived_at);
   const disabled = busy || archived || readOnly;
+  const project = projects.find(project => project.id === selectedProject);
+  const afterCreateOptions = [collaboration && canAssign ? 'el responsable' : null, calendar ? 'un bloque horario' : null, 'la repetición'].filter(
+    (option): option is string => Boolean(option),
+  );
 
   function independentSaved(before: Task, saved: Task, kind: 'assignment' | 'schedule') {
     const fields = [
@@ -232,7 +242,7 @@ export default function TaskForm({
         onSubmit={event => {
           void submit(event);
         }}
-        className="pw-form"
+        className="pw-form task-form"
       >
         <div className="pw-form-body">
           {error && <ErrorNotice>{error}</ErrorNotice>}
@@ -254,96 +264,129 @@ export default function TaskForm({
               {projects.find(project => project.id === task.project_id)?.code ?? 'TAREA'}-{task.task_number}
             </span>
           )}
-          <label className="pw-field" htmlFor={`${prefix}-title`}>
-            Título
-            <input
-              id={`${prefix}-title`}
-              data-initial-focus
-              required
-              maxLength={240}
-              value={title}
-              onChange={event => setTitle(event.target.value)}
-              disabled={disabled}
-              placeholder="¿Qué hay que hacer?"
-            />
-          </label>
-          <label className="pw-field" htmlFor={`${prefix}-description`}>
-            Descripción <span className="faint">Opcional</span>
-            <textarea
-              id={`${prefix}-description`}
-              rows={5}
-              maxLength={10000}
-              value={description}
-              onChange={event => setDescription(event.target.value)}
-              disabled={disabled}
-              placeholder="Añade contexto o los pasos de la tarea"
-            />
-          </label>
-          <label className="pw-field" htmlFor={`${prefix}-project`}>
-            Proyecto
-            <select
-              id={`${prefix}-project`}
-              required
-              value={selectedProject}
-              onChange={event => setSelectedProject(event.target.value)}
-              disabled={disabled || Boolean(task)}
-            >
-              <option value="" disabled>
-                Selecciona un proyecto
-              </option>
-              {projects
-                .filter(project => !project.archived_at || project.id === selectedProject)
-                .map(project => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                    {project.archived_at ? ' (archivado)' : ''}
+          <div className="task-form-content">
+            <label className="pw-field" htmlFor={`${prefix}-title`}>
+              Título
+              <span className="task-form-control task-form-title-control">
+                <TextCursorInput size={16} aria-hidden="true" />
+                <input
+                  id={`${prefix}-title`}
+                  data-initial-focus
+                  required
+                  maxLength={240}
+                  value={title}
+                  onChange={event => setTitle(event.target.value)}
+                  disabled={disabled}
+                  placeholder="¿Qué hay que hacer?"
+                />
+              </span>
+            </label>
+            <label className="pw-field" htmlFor={`${prefix}-description`}>
+              <span className="task-form-label">
+                Descripción <span className="faint">Opcional</span>
+              </span>
+              <span className="task-form-control task-form-description-control">
+                <AlignLeft size={16} aria-hidden="true" />
+                <textarea
+                  id={`${prefix}-description`}
+                  rows={3}
+                  maxLength={10000}
+                  value={description}
+                  onChange={event => setDescription(event.target.value)}
+                  disabled={disabled}
+                  placeholder="Añade contexto o los pasos de la tarea"
+                />
+              </span>
+            </label>
+          </div>
+          <div className="task-form-properties">
+            <label className="pw-field" htmlFor={`${prefix}-project`}>
+              Proyecto
+              <span
+                className="task-form-control task-form-project-control"
+                style={{ '--task-form-project-color': project?.color ?? 'var(--accent)' } as CSSProperties}
+              >
+                <ProjectGlyph icon={project?.icon} size={16} />
+                <select
+                  id={`${prefix}-project`}
+                  required
+                  value={selectedProject}
+                  onChange={event => setSelectedProject(event.target.value)}
+                  disabled={disabled || Boolean(task)}
+                >
+                  <option value="" disabled>
+                    Selecciona un proyecto
                   </option>
-                ))}
-            </select>
-          </label>
-          <div className="pw-field-grid">
-            <label className="pw-field" htmlFor={`${prefix}-status`}>
-              Estado
-              <select id={`${prefix}-status`} value={status} onChange={event => setStatus(event.target.value as TaskStatus)} disabled={disabled}>
-                {STATUSES.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
+                  {projects
+                    .filter(project => !project.archived_at || project.id === selectedProject)
+                    .map(project => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                        {project.archived_at ? ' (archivado)' : ''}
+                      </option>
+                    ))}
+                </select>
+                <ChevronDown size={13} className="task-form-chevron" aria-hidden="true" />
+              </span>
             </label>
-            <label className="pw-field" htmlFor={`${prefix}-priority`}>
-              Prioridad
-              <select id={`${prefix}-priority`} value={priority} onChange={event => setPriority(event.target.value as Priority)} disabled={disabled}>
-                {PRIORITIES.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="pw-field" htmlFor={`${prefix}-start`}>
-              Fecha de inicio
-              <input
-                id={`${prefix}-start`}
-                type="date"
-                value={startDate}
-                max={dueDate || undefined}
-                onChange={event => setStartDate(event.target.value)}
-                disabled={disabled}
-              />
-            </label>
-            <label className="pw-field" htmlFor={`${prefix}-due`}>
-              Vencimiento
-              <input
-                id={`${prefix}-due`}
-                type="date"
-                value={dueDate}
-                min={startDate || undefined}
-                onChange={event => setDueDate(event.target.value)}
-                disabled={disabled}
-              />
-            </label>
+            <div className="pw-field-grid">
+              <label className="pw-field" htmlFor={`${prefix}-status`}>
+                Estado
+                <span className="task-form-control">
+                  <TaskStatusIcon status={status} size={15} />
+                  <select id={`${prefix}-status`} value={status} onChange={event => setStatus(event.target.value as TaskStatus)} disabled={disabled}>
+                    {STATUSES.map(item => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} className="task-form-chevron" aria-hidden="true" />
+                </span>
+              </label>
+              <label className="pw-field" htmlFor={`${prefix}-priority`}>
+                Prioridad
+                <span className={`task-form-control task-form-priority is-${priority}`}>
+                  <PriorityIcon priority={priority} size={15} />
+                  <select id={`${prefix}-priority`} value={priority} onChange={event => setPriority(event.target.value as Priority)} disabled={disabled}>
+                    {PRIORITIES.map(item => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} className="task-form-chevron" aria-hidden="true" />
+                </span>
+              </label>
+              <label className="pw-field" htmlFor={`${prefix}-start`}>
+                Fecha de inicio
+                <span className="task-form-control">
+                  <CalendarRange size={15} aria-hidden="true" />
+                  <input
+                    id={`${prefix}-start`}
+                    type="date"
+                    value={startDate}
+                    max={dueDate || undefined}
+                    onChange={event => setStartDate(event.target.value)}
+                    disabled={disabled}
+                  />
+                </span>
+              </label>
+              <label className="pw-field" htmlFor={`${prefix}-due`}>
+                Vencimiento
+                <span className="task-form-control">
+                  <CalendarDays size={15} aria-hidden="true" />
+                  <input
+                    id={`${prefix}-due`}
+                    type="date"
+                    value={dueDate}
+                    min={startDate || undefined}
+                    onChange={event => setDueDate(event.target.value)}
+                    disabled={disabled}
+                  />
+                </span>
+              </label>
+            </div>
           </div>
           {task && collaboration && (
             <TaskAssignment
@@ -355,7 +398,6 @@ export default function TaskForm({
               onSaved={(before, saved) => independentSaved(before, saved, 'assignment')}
             />
           )}
-          {!task && collaboration && <p className="faint">Después de crear la tarea podrás elegir su responsable principal.</p>}
           {task && calendar && (
             <CalendarSchedule
               key={task.id}
@@ -365,8 +407,14 @@ export default function TaskForm({
               onSaved={(before, saved) => independentSaved(before, saved, 'schedule')}
             />
           )}
-          {!task && calendar && <p className="faint">Después de crear la tarea podrás añadir su bloque de trabajo opcional.</p>}
-          {!task && <p className="faint">Después de crear la tarea podrás configurar su repetición diaria, semanal o mensual desde el detalle.</p>}
+          {!task && (
+            <p className="task-form-help">
+              <Info size={15} aria-hidden="true" />
+              <span>
+                Después de crear la tarea podrás configurar {new Intl.ListFormat('es', { type: 'conjunction' }).format(afterCreateOptions)} desde el detalle.
+              </span>
+            </p>
+          )}
           {confirmDelete && (
             <div className="pw-confirm" role="alert">
               <strong>¿Eliminar esta tarea?</strong>

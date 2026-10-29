@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CollaborationApi, Project, Task, WorkspaceMember, WorkspaceProps, WorkspaceRole } from '../types';
 import Workspace from './Workspace';
 import TaskForm from './TaskForm';
-import { TeamAdministration } from './Collaboration';
+import { ActivityPanel, TeamAdministration } from './Collaboration';
 import { DataError } from '../data/errors';
 
 const date = '2026-10-23T12:00:00Z';
@@ -158,6 +158,58 @@ function show(ui: React.ReactNode, path = '/') {
     ),
   });
 }
+
+describe('identidad en la actividad', () => {
+  it('usa Tú solo para el actor actual que aún conserva el nombre genérico', async () => {
+    const source = api();
+    vi.mocked(source.activity).mockResolvedValue({
+      items: [
+        { id: 901, actor_id: owner.user_id, actor_name: 'Usuario', project_id: project.id, action: 'task.created', resource_id: task.id, created_at: date },
+        { id: 902, actor_id: member.user_id, actor_name: 'Usuario', project_id: project.id, action: 'task.updated', resource_id: task.id, created_at: date },
+        {
+          id: 903,
+          actor_id: owner.user_id,
+          actor_name: 'Nombre elegido',
+          project_id: project.id,
+          action: 'project.updated',
+          resource_id: project.id,
+          created_at: date,
+        },
+        {
+          id: 904,
+          actor_id: member.user_id,
+          actor_name: 'Persona del equipo',
+          project_id: project.id,
+          action: 'task.updated',
+          resource_id: task.id,
+          created_at: date,
+        },
+      ],
+      next_before_id: null,
+    });
+    show(<ActivityPanel api={source} currentUserId={owner.user_id} />);
+    const region = screen.getByRole('region', { name: 'Actividad' });
+    await within(region).findByText('Tú');
+    expect(within(region).getByText('Usuario')).toBeInTheDocument();
+    expect(within(region).getByText('Nombre elegido')).toBeInTheDocument();
+    expect(within(region).getByText('Persona del equipo')).toBeInTheDocument();
+    expect(within(region).getAllByText('Tú')).toHaveLength(1);
+    expect(within(region).queryByText('Propietario')).not.toBeInTheDocument();
+  });
+
+  it('conserva el nombre genérico si no conoce la identidad de la cuenta actual', async () => {
+    const source = api();
+    vi.mocked(source.activity).mockResolvedValue({
+      items: [
+        { id: 905, actor_id: owner.user_id, actor_name: 'Usuario', project_id: project.id, action: 'task.created', resource_id: task.id, created_at: date },
+      ],
+      next_before_id: null,
+    });
+    show(<ActivityPanel api={source} />);
+    expect(await screen.findByText('Usuario')).toBeInTheDocument();
+    expect(screen.queryByText('Tú')).not.toBeInTheDocument();
+  });
+});
 
 describe('colaboración y permisos en la interfaz', () => {
   it('abre una tarea desde la lista real del proyecto del propietario y conserva el espacio al cerrar', async () => {

@@ -55,6 +55,7 @@ import { canInProject, canInWorkspace } from './permissions';
 import SyncStatus from './SyncStatus';
 import WorkspaceSidebar from './WorkspaceSidebar';
 import WorkspaceCreateMenu from './WorkspaceCreateMenu';
+import AccountProfile from './AccountProfile';
 import { IdentityAvatar, ProjectGlyph, ProjectStatusDot } from './project-identity';
 import useAppearance from './useAppearance';
 import { HomeDashboard, OverviewDashboard } from './DashboardPages';
@@ -284,6 +285,13 @@ function ProjectPage({
     );
   const projectTasks = tasks.filter(task => !task.archived_at && task.project_id === project.id);
   const archivedTasks = tasks.filter(task => task.archived_at && task.project_id === project.id);
+  const nextTaskDate = actions.can(project.id, 'task.read')
+    ? (projectTasks
+        .filter(task => task.workspace_id === project.workspace_id && task.status !== 'done')
+        .flatMap(task => [task.start_date, task.due_date])
+        .filter((date): date is string => Boolean(date && date >= localDate()))
+        .sort()[0] ?? null)
+    : null;
   return (
     <div className="page flush pw-project-page">
       <div className="proj-h">
@@ -422,7 +430,7 @@ function ProjectPage({
         }
         activityContent={
           actions.collaboration && actions.can(project.id, 'audit.read') ? (
-            <ActivityPanel key={`activity:${project.id}`} api={actions.collaboration} projectId={project.id} />
+            <ActivityPanel key={`activity:${project.id}`} api={actions.collaboration} projectId={project.id} currentUserId={data.currentUserId} />
           ) : undefined
         }
         calendarContent={
@@ -434,6 +442,7 @@ function ProjectPage({
               workspaceId={project.workspace_id}
               workspaces={actions.calendarWorkspaces ?? []}
               projects={projects}
+              nextTaskDate={nextTaskDate}
               onOpen={actions.onOpenCalendar}
             />
           ) : undefined
@@ -498,7 +507,13 @@ function CreateTeamDialog({ onCreate, onClose }: { onCreate: NonNullable<Workspa
   );
 }
 
-function AccountPage({ email, pending, onSignOut, onPasswordReset }: Pick<WorkspaceProps, 'email' | 'pending' | 'onSignOut' | 'onPasswordReset'>) {
+function AccountPage({
+  email,
+  pending,
+  onSignOut,
+  onPasswordReset,
+  profile,
+}: Pick<WorkspaceProps, 'email' | 'pending' | 'onSignOut' | 'onPasswordReset' | 'profile'>) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -537,6 +552,7 @@ function AccountPage({ email, pending, onSignOut, onPasswordReset }: Pick<Worksp
             <p className="faint">{email}</p>
           </div>
         </div>
+        {profile && <AccountProfile api={profile} disabled={pending} />}
         <div className="pw-account-detail">
           <ShieldCheck size={17} aria-hidden="true" />
           <span>Tu espacio personal es privado. Los proyectos de equipo respetan sus permisos de acceso.</span>
@@ -874,6 +890,19 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           <div className="sp" />
           {search.trigger}
           <SyncStatus
+            onRefresh={
+              financeView
+                ? props.onRefreshFinance
+                : () => {
+                    props.onRetry();
+                    refreshCommunication();
+                  }
+            }
+            refreshDisabled={
+              financeView
+                ? !props.onRefreshFinance || ['checking', 'saving', 'pending'].includes(props.financeSyncState ?? 'checking')
+                : props.loading || props.refreshing || pending
+            }
             scope={financeView ? 'Finanzas' : 'Proyectos y tareas'}
             state={
               props.accessUnavailable
@@ -889,29 +918,6 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                         : 'synced'
             }
           />
-          <button
-            className="ibtn"
-            aria-label="Actualizar datos"
-            disabled={
-              financeView
-                ? !props.onRefreshFinance || ['checking', 'saving', 'pending'].includes(props.financeSyncState ?? 'checking')
-                : props.loading || props.refreshing || pending
-            }
-            onClick={
-              financeView
-                ? props.onRefreshFinance
-                : () => {
-                    props.onRetry();
-                    refreshCommunication();
-                  }
-            }
-          >
-            <RefreshCw
-              size={14}
-              className={(financeView ? props.financeSyncState === 'checking' || props.financeSyncState === 'saving' : props.refreshing) ? 'pw-spin' : ''}
-              aria-hidden="true"
-            />
-          </button>
           {!financeView && (
             <WorkspaceCreateMenu
               key={props.workspace?.id}
@@ -1121,7 +1127,7 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
                       </div>
                     </div>
                     {props.collaboration && !props.accessUnavailable && canInWorkspace(props, 'audit.read') ? (
-                      <ActivityPanel key={props.collaboration.scopeKey.join(':')} api={props.collaboration} />
+                      <ActivityPanel key={props.collaboration.scopeKey.join(':')} api={props.collaboration} currentUserId={props.currentUserId} />
                     ) : (
                       <EmptyState title="Actividad no disponible">No tienes acceso al historial de este espacio.</EmptyState>
                     )}
@@ -1164,7 +1170,15 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
               />
               <Route
                 path="/account"
-                element={<AccountPage email={props.email} pending={pending} onSignOut={props.onSignOut} onPasswordReset={props.onPasswordReset} />}
+                element={
+                  <AccountPage
+                    email={props.email}
+                    pending={pending}
+                    onSignOut={props.onSignOut}
+                    onPasswordReset={props.onPasswordReset}
+                    profile={props.profile}
+                  />
+                }
               />
               <Route
                 path="*"

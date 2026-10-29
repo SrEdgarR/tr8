@@ -31,6 +31,7 @@ import { canInProject, canInWorkspace } from './permissions';
 import { buildDashboardModel } from './dashboard-model';
 import { localDate } from './helpers';
 import FavoriteButton from './FavoriteButton';
+import WorkspacePicker from './WorkspacePicker';
 
 interface Props {
   onShortcuts?: () => void;
@@ -110,16 +111,13 @@ export default function WorkspaceSidebar({
       </div>
       {data.workspace && data.workspaces && (
         <div className="pw-workspace-picker">
-          <label className="sr" htmlFor="workspace-select">
-            Espacio de trabajo
-          </label>
-          <select id="workspace-select" value={data.workspace.id} disabled={pending} onChange={event => data.onSelectWorkspace?.(event.target.value)}>
-            {data.workspaces.map(space => (
-              <option key={space.id} value={space.id}>
-                {space.kind === 'personal' ? 'Mi espacio personal' : space.name}
-              </option>
-            ))}
-          </select>
+          <WorkspacePicker
+            key={String(collapsed)}
+            workspaces={data.workspaces}
+            selectedId={data.workspace.id}
+            disabled={pending}
+            onSelect={data.onSelectWorkspace}
+          />
           {data.onCreateTeam && (
             <button className="ibtn" aria-label="Crear equipo" title="Crear equipo" disabled={pending} onClick={onCreateTeam}>
               <Plus size={15} aria-hidden="true" />

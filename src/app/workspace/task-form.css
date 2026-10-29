@@ -1,0 +1,120 @@
+.task-form-content,
+.task-form-properties {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.task-form-properties {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.task-form-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.task-form-label .faint {
+  font-size: 11px;
+  font-weight: 400;
+}
+.task-form-control {
+  display: flex;
+  align-items: center;
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+.task-form-control > svg,
+.task-form-control > .pw-priority-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  flex-shrink: 0;
+  color: var(--text-3);
+  pointer-events: none;
+}
+.task-form .pw-field .task-form-control > input,
+.task-form .pw-field .task-form-control > select,
+.task-form .pw-field .task-form-control > textarea {
+  width: 100%;
+  min-width: 0;
+  padding-left: 36px;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+.task-form .pw-field .task-form-control > select {
+  appearance: none;
+  padding-right: 32px;
+}
+.task-form-control > .task-form-chevron {
+  left: auto;
+  right: 11px;
+  color: var(--text-3);
+}
+.task-form-control:focus-within > svg {
+  color: var(--accent);
+}
+.task-form .pw-field .task-form-control > :is(input, select, textarea):hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+.task-form .pw-field .task-form-control > :is(input, select, textarea):focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.task-form-title-control > svg {
+  color: var(--accent);
+}
+.task-form-description-control > svg {
+  top: 12px;
+  transform: none;
+}
+.task-form .task-form-description-control > textarea {
+  min-height: 88px;
+}
+.task-form-project-control > svg:not(.task-form-chevron) {
+  color: var(--task-form-project-color);
+}
+.task-form-priority {
+  --task-form-priority-color: var(--text-3);
+}
+.task-form-priority.is-low {
+  --task-form-priority-color: var(--blue);
+}
+.task-form-priority.is-medium,
+.task-form-priority.is-high {
+  --task-form-priority-color: var(--amber);
+}
+.task-form-priority.is-urgent {
+  --task-form-priority-color: var(--red);
+}
+.task-form-priority > svg rect[fill='var(--text-2)'] {
+  fill: var(--task-form-priority-color);
+}
+.task-form-help {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  margin: 0;
+}
+.task-form-help > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-form .pw-field .task-form-control > :is(input, select, textarea) {
+    transition: none;
+  }
+}

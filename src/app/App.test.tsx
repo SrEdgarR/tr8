@@ -17,6 +17,7 @@ import type { InboxState, TaskComment } from './communication-types';
 import type { GlobalSearchPage, GlobalSearchQuery } from './search-types';
 import type { BulkTaskResult } from './bulk-task-types';
 import type { RecurrenceRule, RecurrenceState, RecurrenceSummary } from './recurrence-types';
+import type { UserProfile } from './profile-types';
 
 const mocks = vi.hoisted(() => ({
   auth: { getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn() },
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   search: { search: vi.fn() },
   bulk: { apply: vi.fn() },
   recurrence: { state: vi.fn(), summaries: vi.fn(), save: vi.fn() },
+  profile: { load: vi.fn(), save: vi.fn() },
   communication: {
     thread: vi.fn(),
     create: vi.fn(),
@@ -98,6 +100,7 @@ vi.mock('./data/communication', () => ({ createCommunicationRepository: () => mo
 vi.mock('./data/search', () => ({ createGlobalSearchRepository: () => mocks.search }));
 vi.mock('./data/bulk-tasks', () => ({ createBulkTasksRepository: () => mocks.bulk }));
 vi.mock('./data/recurrence', () => ({ createRecurrenceRepository: () => mocks.recurrence }));
+vi.mock('./data/profile', () => ({ createProfileRepository: () => mocks.profile }));
 vi.mock('./data/work-management', () => ({
   createWorkManagementRepository: (_client: unknown, workspaceId: string) => ({
     ...mocks.work,
@@ -237,6 +240,7 @@ beforeEach(() => {
   mocks.showIntegrations = false;
   mocks.planning.load.mockResolvedValue({ dependencies: [], milestones: [] });
   mocks.recurrence.summaries.mockResolvedValue([]);
+  mocks.profile.load.mockResolvedValue({ user_id: 'owner-a', display_name: 'Usuario', updated_at: '2026-10-29T10:00:00.000Z' });
   mocks.auth.onAuthStateChange.mockImplementation(callback => {
     authListener = callback;
     return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
@@ -282,6 +286,124 @@ afterEach(() => {
 });
 
 describe('sesiones y datos del espacio personal', () => {
+  it('lee el perfil en un ámbito separado sin inferir un nombre del correo ni alterar tareas', async () => {
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    const signal = new AbortController().signal;
+    let result!: UserProfile;
+    await act(async () => {
+      result = await workspace().profile!.load(signal);
+    });
+    expect(result).toEqual({ user_id: 'owner-a', display_name: 'Usuario', updated_at: '2026-10-29T10:00:00.000Z' });
+    expect(workspace().profile!.scopeKey).toEqual(['profile', 'owner-a', 'personal-a', 'project.read']);
+    expect(mocks.profile.load).toHaveBeenCalledExactlyOnceWith(signal);
+    expect(workspace().tasks).toEqual([task()]);
+    expect(client.getQueriesData<WorkspaceData>({ queryKey: ['workspace', 'owner-a', 'personal-a'] })[0]?.[1]?.tasks).toEqual([task()]);
+  });
+
+  it('guarda el perfil con CAS y refresca nombres en directorios y actividad sin insertar el perfil en las tareas', async () => {
+    const current: UserProfile = { user_id: 'owner-a', display_name: 'Usuario', updated_at: '2026-10-29T10:00:00.000Z' };
+    const saved: UserProfile = { ...current, display_name: 'Nombre elegido', updated_at: '2026-10-29T11:00:00.000Z' };
+    mocks.profile.save.mockResolvedValue(saved);
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    const directoryKey = ['directory', 'owner-a', 'another-team', 'member.read'];
+    const activityKey = ['collaboration', 'owner-a', 'another-team', 'project.read', 'activity'];
+    client.setQueryData(directoryKey, [{ display_name: 'Usuario' }]);
+    client.setQueryData(activityKey, [{ actor_name: 'Usuario' }]);
+    mocks.repository.load.mockReturnValue(new Promise<WorkspaceData>(() => {}));
+    await act(async () => {
+      expect(await workspace().profile!.save(current, 'Nombre elegido')).toEqual(saved);
+    });
+    expect(mocks.profile.save).toHaveBeenCalledExactlyOnceWith(current, 'Nombre elegido');
+    expect(client.getQueryState(directoryKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(activityKey)?.isInvalidated).toBe(true);
+    expect(workspace().tasks).toEqual([task()]);
+    expect(workspace().projects).toEqual([project()]);
+    expect(mocks.repository.updateTask).not.toHaveBeenCalled();
+    expect(mocks.repository.createTask).not.toHaveBeenCalled();
+  });
+
+  it('mantiene el dominio ante un error de perfil que no retira acceso', async () => {
+    mocks.profile.load.mockRejectedValue(new Error('No hay conexión'));
+    show();
+    await screen.findByText('Tarea privada');
+    await act(async () => {
+      await expect(workspace().profile!.load()).rejects.toMatchObject({ name: 'DataError' });
+    });
+    expect(workspace().accessUnavailable).toBe(false);
+    expect(workspace().tasks).toEqual([task()]);
+  });
+
+  it('rechaza lecturas y guardados de perfil tardíos al cambiar de espacio', async () => {
+    const current: UserProfile = { user_id: 'owner-a', display_name: 'Usuario', updated_at: '2026-10-29T10:00:00.000Z' };
+    const reading = deferred<UserProfile>(),
+      saving = deferred<UserProfile>();
+    mocks.profile.load.mockReturnValue(reading.promise);
+    mocks.profile.save.mockReturnValue(saving.promise);
+    mocks.repository.load.mockImplementation(async (id: string) =>
+      id === 'team-a' ? { projects: [], tasks: [] } : { projects: [project()], tasks: [task()] },
+    );
+    show();
+    await screen.findByText('Tarea privada');
+    const oldApi = workspace().profile!;
+    const read = oldApi.load();
+    let save!: Promise<UserProfile>;
+    act(() => {
+      save = oldApi.save(current, 'Nombre anterior');
+    });
+    const rejectedRead = expect(read).rejects.toThrow('espacio cambió');
+    const rejectedSave = expect(save).rejects.toThrow('espacio cambió');
+    act(() => screen.getByRole('button', { name: 'Abrir equipo' }).click());
+    await waitFor(() => expect(workspace().workspace?.id).toBe('team-a'));
+    expect(workspace().profile!.scopeKey).not.toEqual(oldApi.scopeKey);
+    await act(async () => {
+      reading.resolve(current);
+      saving.resolve({ ...current, display_name: 'Nombre anterior' });
+      await Promise.all([rejectedRead, rejectedSave]);
+    });
+    expect(workspace().tasks).toEqual([]);
+    expect(workspace().projects).toEqual([]);
+    expect(screen.queryByText('Tarea privada')).not.toBeInTheDocument();
+  });
+
+  it('ignora el perfil de una sesión cerrada sin contaminar la siguiente cuenta', async () => {
+    const current: UserProfile = { user_id: 'owner-a', display_name: 'Usuario', updated_at: '2026-10-29T10:00:00.000Z' };
+    const reading = deferred<UserProfile>(),
+      saving = deferred<UserProfile>();
+    mocks.profile.load.mockReturnValue(reading.promise);
+    mocks.profile.save.mockReturnValue(saving.promise);
+    const { client } = show();
+    await screen.findByText('Tarea privada');
+    const oldApi = workspace().profile!;
+    const read = oldApi.load();
+    let save!: Promise<UserProfile>;
+    act(() => {
+      save = oldApi.save(current, 'Cuenta anterior');
+    });
+    const rejectedRead = expect(read).rejects.toThrow('espacio cambió');
+    const rejectedSave = expect(save).rejects.toThrow('espacio cambió');
+    act(() => authListener('SIGNED_OUT', null));
+    await screen.findByRole('heading', { name: 'Inicio de sesión' });
+    mocks.repository.context.mockResolvedValue({
+      contract_version: 2,
+      personal_workspace_id: 'personal-b',
+      external_invites_enabled: false,
+      workspaces: [{ id: 'personal-b', name: 'Personal B', kind: 'personal', owner_id: 'owner-b', version: 1, permissions: ['project.read'] }],
+    });
+    mocks.repository.load.mockResolvedValue({ projects: [], tasks: [] });
+    act(() => authListener('SIGNED_IN', session('owner-b')));
+    await waitFor(() => expect(workspace().currentUserId).toBe('owner-b'));
+    await act(async () => {
+      reading.resolve(current);
+      saving.resolve({ ...current, display_name: 'Cuenta anterior' });
+      await Promise.all([rejectedRead, rejectedSave]);
+    });
+    expect(workspace().profile!.scopeKey).toEqual(['profile', 'owner-b', 'personal-b', 'project.read']);
+    expect(client.getQueriesData({ queryKey: ['workspace', 'owner-a'] })).toHaveLength(0);
+    expect(workspace().tasks).toEqual([]);
+  });
+
   it.each([
     ['/privacy', 'Privacidad en TR8'],
     ['/about', 'Un lugar para avanzar'],

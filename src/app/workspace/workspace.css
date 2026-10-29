@@ -1854,6 +1854,15 @@
   font-size: 13px;
 }
 
+.pw-activity-actor {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.pw-activity-actor > .pw-identity-avatar {
+  flex-shrink: 0;
+}
 .pw-activity-list time {
   color: var(--text-3);
   font-size: 12px;
@@ -1928,4 +1937,39 @@
   flex-shrink: 0;
   align-self: flex-start;
   margin: 16px var(--gutter) 0;
+}
+
+.pw-sync-button {
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+.pw-sync-button:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.pw-sync-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.pw-sync-button:disabled {
+  cursor: default;
+}
+.pw-sync-button > svg {
+  flex-shrink: 0;
+}
+.pw-sync-button > [role='status'] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pw-sync-button {
+    transition: none;
+  }
+}
+:root[data-motion='reduce'] .pw-sync-button {
+  transition: none;
 }

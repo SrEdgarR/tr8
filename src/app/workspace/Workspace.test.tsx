@@ -415,9 +415,10 @@ describe('espacios y equipos', () => {
         <Workspace {...workspaceProps({ workspace: personal, workspaces: [personal, team], onSelectWorkspace })} />
       </MemoryRouter>,
     );
-    await user.selectOptions(screen.getByLabelText('Espacio de trabajo'), 'team-a');
+    await user.click(screen.getByRole('combobox', { name: 'Espacio de trabajo' }));
+    await user.click(screen.getByRole('option', { name: 'Equipo editorial' }));
     expect(onSelectWorkspace).toHaveBeenCalledWith('team-a');
-    expect(screen.getByLabelText('Espacio de trabajo')).toHaveValue('workspace-a');
+    expect(screen.getByRole('combobox', { name: 'Espacio de trabajo' })).toHaveTextContent('Mi espacio personal');
   });
 
   it('muestra miembros sin exponer correos y mantiene las invitaciones externas desactivadas', () => {

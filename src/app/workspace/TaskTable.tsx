@@ -203,7 +203,7 @@ export default function TaskTable({
             >
               <span role="cell" className="tv-table-actions">
                 {selection && (
-                  <label className="tv-select-task">
+                  <label className="tv-select-task" title={`Seleccionar ${task.title} para acciones masivas`}>
                     <input
                       type="checkbox"
                       aria-label={`Seleccionar ${task.title}`}
@@ -217,12 +217,14 @@ export default function TaskTable({
                   </label>
                 )}
                 <button
-                  className={`pw-complete${task.status === 'done' ? ' checked' : ''}`}
+                  className={`pw-complete tv-complete-task${task.status === 'done' ? ' checked' : ''}`}
                   aria-label={`${task.status === 'done' ? 'Reabrir' : 'Completar'} ${task.title}`}
+                  title={`${task.status === 'done' ? 'Reabrir' : 'Completar'} ${task.title}`}
+                  aria-pressed={task.status === 'done'}
                   disabled={pending || !mayEdit(task)}
                   onClick={() => void onMove(task, task.status === 'done' ? 'todo' : 'done')}
                 >
-                  {task.status === 'done' && <Check size={12} aria-hidden="true" />}
+                  <Check size={12} aria-hidden="true" />
                 </button>
                 {onFavorite && (
                   <button

@@ -6,6 +6,7 @@ import type { CalendarApi, CalendarItem, CalendarPreferences, Project, Task, Wor
 import Calendar from './Calendar';
 import CalendarSchedule from './CalendarSchedule';
 import TaskForm from './TaskForm';
+import { addCivilDays, addCivilMonths, dateInTimeZone, formatCivilDate, monthStart } from './CalendarTime';
 
 const project: Project = {
   id: 'project-a',
@@ -193,6 +194,96 @@ describe('calendario interno', () => {
       expect.any(AbortSignal),
     );
     expect(screen.queryByLabelText('Espacios del calendario')).not.toBeInTheDocument();
+  });
+
+  it('explica que la próxima tarea del proyecto está en otro mes y permite abrirlo sin modificarla', async () => {
+    const user = userEvent.setup();
+    const currentMonth = monthStart(dateInTimeZone(new Date(), profile.time_zone!));
+    const nextMonth = addCivilMonths(currentMonth, 1);
+    const nextDate = addCivilDays(nextMonth, 1);
+    const futureItem = { ...item, date: nextDate, due_date: nextDate };
+    const items = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [], next_cursor: null })
+      .mockResolvedValue({ items: [futureItem], next_cursor: null });
+    const api = calendarApi({ items });
+    const onOpen = vi.fn();
+    mount(<Calendar api={api} project={project} workspaces={spaces} projects={[project]} nextTaskDate={nextDate} onOpen={onOpen} />);
+    const jump = await screen.findByRole('button', { name: `Ir a ${formatCivilDate(nextMonth, { month: 'long' })}` });
+    expect(screen.getByRole('heading', { name: formatCivilDate(currentMonth, { month: 'long', year: 'numeric' }) })).toBeInTheDocument();
+    expect(screen.getByLabelText('Próxima fecha del proyecto')).toHaveTextContent('está en otro mes');
+    expect(screen.getByLabelText('Próxima fecha del proyecto')).toHaveTextContent(
+      formatCivilDate(nextDate, { day: 'numeric', month: 'long', year: 'numeric' }),
+    );
+    await user.click(jump);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /Vencimiento de Editar portada/ }).length).toBeGreaterThan(0));
+    expect(items).toHaveBeenLastCalledWith(
+      expect.objectContaining({ workspace_ids: [project.workspace_id], project_ids: [project.id], time_zone: profile.time_zone, limit: 100 }),
+      expect.any(AbortSignal),
+    );
+    expect(screen.getByRole('heading', { name: formatCivilDate(nextMonth, { month: 'long', year: 'numeric' }) })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Próxima fecha del proyecto')).not.toBeInTheDocument();
+    expect(api.scheduleTask).not.toHaveBeenCalled();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('no ofrece una fecha que contradiga filtros activos ni amplía la consulta para buscarla', async () => {
+    const user = userEvent.setup();
+    const nextDate = addCivilDays(addCivilMonths(monthStart(dateInTimeZone(new Date(), profile.time_zone!)), 1), 1);
+    const api = calendarApi({ items: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) });
+    mount(<Calendar api={api} project={project} workspaces={spaces} projects={[project]} nextTaskDate={nextDate} onOpen={vi.fn()} />);
+    await screen.findByLabelText('Próxima fecha del proyecto');
+    await user.selectOptions(screen.getByLabelText('Estado'), 'done');
+    expect(screen.queryByLabelText('Próxima fecha del proyecto')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(api.items).toHaveBeenLastCalledWith(expect.objectContaining({ project_ids: [project.id], statuses: ['done'] }), expect.any(AbortSignal)),
+    );
+    await user.selectOptions(screen.getByLabelText('Estado'), '');
+    await screen.findByLabelText('Próxima fecha del proyecto');
+    await user.click(screen.getByLabelText('Solo mías'));
+    expect(screen.queryByLabelText('Próxima fecha del proyecto')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(api.items).toHaveBeenLastCalledWith(expect.objectContaining({ project_ids: [project.id], mine: true }), expect.any(AbortSignal)),
+    );
+    expect(api.scheduleTask).not.toHaveBeenCalled();
+  });
+
+  it.each(['not-a-date', '2026-02-30', null])('ignora una pista de fecha inválida o ausente: %s', async nextTaskDate => {
+    const api = calendarApi({ items: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) });
+    mount(<Calendar api={api} project={project} workspaces={spaces} projects={[project]} nextTaskDate={nextTaskDate} onOpen={vi.fn()} />);
+    await screen.findByText('Sin fechas en este período');
+    expect(screen.queryByLabelText('Próxima fecha del proyecto')).not.toBeInTheDocument();
+  });
+
+  it('no muestra la pista del proyecto al fallar el acceso, en calendario general ni con páginas pendientes', async () => {
+    const nextDate = addCivilDays(addCivilMonths(monthStart(dateInTimeZone(new Date(), profile.time_zone!)), 1), 1);
+    const api = calendarApi({ items: vi.fn().mockResolvedValue({ items: [], next_cursor: 'more' }) });
+    const { rerender } = mount(<Calendar api={api} project={project} workspaces={spaces} projects={[project]} nextTaskDate={nextDate} onOpen={vi.fn()} />);
+    await screen.findByRole('button', { name: 'Cargar más elementos' });
+    expect(screen.queryByLabelText('Próxima fecha del proyecto')).not.toBeInTheDocument();
+    rerender(
+      <Calendar
+        api={{ ...api, accessError: 'Acceso retirado' }}
+        project={project}
+        workspaces={spaces}
+        projects={[project]}
+        nextTaskDate={nextDate}
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Acceso retirado');
+    expect(screen.queryByLabelText('Próxima fecha del proyecto')).not.toBeInTheDocument();
+    rerender(
+      <Calendar
+        api={calendarApi({ items: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) })}
+        workspaces={spaces}
+        projects={[project]}
+        nextTaskDate={nextDate}
+        onOpen={vi.fn()}
+      />,
+    );
+    await screen.findByText('Sin fechas en este período');
+    expect(screen.queryByLabelText('Próxima fecha del proyecto')).not.toBeInTheDocument();
   });
 });
 

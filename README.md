@@ -12,6 +12,7 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 ## Funciones de TR8
 
 - Cuenta confirmada con Supabase Auth: inicio/cierre de sesión y recuperación de contraseña. El registro público está cerrado.
+- Nombre visible configurable desde Mi cuenta, compartido por actividad, comentarios y directorios autorizados. Las acciones propias muestran «Tú» cuando todavía se conserva el nombre inicial genérico.
 - Espacio personal privado, varios equipos, selector de espacio y directorio mínimo de miembros.
 - Roles personalizados por equipo, varios roles por miembro y administración delegada dentro de sus permisos actuales.
 - Proyectos privados con acceso explícito de lectura o escritura y controles de interfaz por capacidad efectiva.
@@ -32,6 +33,11 @@ La marca es **TR8** y el identificador de proyectos y plataformas es `tr8`.
 Las altas e invitaciones externas permanecen desactivadas, por decisión del propietario, hasta disponer de correo y provisión de cuentas adecuados. Se pueden administrar miembros existentes y preparar roles y proyectos. El correo opcional de etapa 4B sigue pendiente de proveedor y remitente verificado. Se mantienen Supabase Free y Vercel Hobby.
 
 ## Especificación y evolución
+
+Los [ajustes de interfaz de proyectos](docs/project-interface-polish.md) unifican
+los filtros, identifican las acciones de las filas, mejoran los formularios y el
+selector de espacios, alinean el resumen y reúnen actualización y sincronización
+en un control. El calendario ofrece acceso al mes de las próximas tareas.
 
 La [etapa 11 de tareas recurrentes](docs/demo-parity/stage-11.md) añade reglas
 privadas y generación transaccional al completar, también mediante acciones

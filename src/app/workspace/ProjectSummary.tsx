@@ -272,7 +272,7 @@ export default function ProjectSummary({ project, data, onOpen }: { project: Pro
         )}
         {data.collaboration && canInProject(data, project.id, 'audit.read') && (
           <section className="pw-summary-panel pw-summary-activity" aria-label="Actividad reciente del proyecto">
-            <ActivityPanel api={data.collaboration} projectId={project.id} compact title="Actividad reciente" />
+            <ActivityPanel api={data.collaboration} projectId={project.id} compact title="Actividad reciente" currentUserId={data.currentUserId} />
             <Link to={activityHref} className="pw-summary-link pw-summary-footer-link">
               Ver toda la actividad
               <ArrowRight size={13} aria-hidden="true" />

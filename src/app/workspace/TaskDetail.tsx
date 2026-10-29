@@ -572,7 +572,7 @@ function ScopedTaskDetail({
             </div>
             <label className="pw-field td-estimate">
               Estimación de trabajo
-              <div className="td-input-icon">
+              <div className="td-input-icon td-estimate-control">
                 <Timer size={14} aria-hidden="true" />
                 <input
                   aria-label="Estimación en minutos"
@@ -585,7 +585,9 @@ function ScopedTaskDetail({
                   disabled={metadataDisabled}
                   onChange={event => setEstimate(event.target.value)}
                 />
-                <span>min</span>
+                <span className="td-estimate-unit" aria-hidden="true">
+                  min
+                </span>
               </div>
             </label>
           </section>

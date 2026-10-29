@@ -7,6 +7,14 @@
 }
 .pw-project-summary {
   padding: 22px var(--gutter);
+  align-items: stretch;
+}
+.pw-project-summary > .pw-summary-stack {
+  display: flex;
+  flex-direction: column;
+}
+.pw-project-summary > .pw-summary-stack > .pw-summary-panel:last-child {
+  flex: 1;
 }
 .pw-summary-stack {
   display: grid;
@@ -410,6 +418,9 @@
 @media (max-width: 900px) {
   .pw-summary-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .pw-project-summary > .pw-summary-stack > .pw-summary-panel:last-child {
+    flex: initial;
   }
 }
 @media (max-width: 560px) {

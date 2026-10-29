@@ -162,8 +162,10 @@
   left: 10px;
   pointer-events: none;
   color: var(--text-3);
+  z-index: 1;
 }
-.td-input-icon > input {
+.td-input-icon > input,
+.td-section .pw-field .td-input-icon > input {
   width: 100%;
   min-width: 0;
   min-height: 34px;
@@ -181,18 +183,22 @@
     box-shadow 140ms,
     background 140ms;
 }
-.td-input-icon > input::placeholder {
+.td-input-icon > input::placeholder,
+.td-section .pw-field .td-input-icon > input::placeholder {
   color: var(--text-3);
 }
-.td-input-icon > input:hover:not(:disabled) {
+.td-input-icon > input:hover:not(:disabled),
+.td-section .pw-field .td-input-icon > input:hover:not(:disabled) {
   border-color: var(--border-strong);
 }
-.td-input-icon > input:focus-visible {
+.td-input-icon > input:focus-visible,
+.td-section .pw-field .td-input-icon > input:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
   background: var(--surface);
 }
-.td-input-icon > input:disabled {
+.td-input-icon > input:disabled,
+.td-section .pw-field .td-input-icon > input:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -207,8 +213,18 @@
   margin-top: 20px;
   max-width: 260px;
 }
-.td-estimate input {
-  padding-right: 40px;
+.td-estimate-control {
+  gap: 8px;
+}
+.td-section .td-estimate .td-input-icon > input {
+  flex: 1;
+  padding-right: 10px;
+  padding-left: 32px;
+}
+.td-estimate-control > .td-estimate-unit {
+  position: static;
+  flex-shrink: 0;
+  font-size: var(--fs-xs);
 }
 .td-subtasks {
   display: grid;

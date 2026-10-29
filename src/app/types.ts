@@ -7,6 +7,7 @@ import type { CommunicationApi } from './communication-types';
 import type { GlobalSearchApi } from './search-types';
 import type { BulkTasksApi } from './bulk-task-types';
 import type { RecurrenceApi, RecurrenceSummary } from './recurrence-types';
+import type { ProfileApi } from './profile-types';
 
 export type TaskStatus = 'backlog' | 'todo' | 'progress' | 'review' | 'done';
 export type Priority = 'none' | 'low' | 'medium' | 'high' | 'urgent';
@@ -262,6 +263,7 @@ export interface WorkspaceInvitation {
 export type DataSyncState = 'checking' | 'saving' | 'synced' | 'pending' | 'error' | 'locked';
 
 export interface WorkspaceProps {
+  profile?: ProfileApi;
   recurrence?: RecurrenceApi;
   recurrenceError?: string | null;
   onRetryRecurrence?: () => void;

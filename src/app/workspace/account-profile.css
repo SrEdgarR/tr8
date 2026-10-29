@@ -1,0 +1,55 @@
+.pw-profile {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+.pw-profile h3,
+.pw-profile-notice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pw-profile h3 {
+  margin: 0;
+  font-size: var(--fs);
+}
+.pw-profile h3 svg {
+  color: var(--accent);
+}
+.pw-profile > p {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+.pw-profile-form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.pw-profile-form > .pw-field {
+  flex: 1;
+  min-width: 180px;
+}
+.pw-profile-input {
+  display: block;
+  position: relative;
+}
+.pw-profile-input > svg {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+}
+.pw-profile .pw-profile-input > input {
+  width: 100%;
+  padding-left: 35px;
+}
+.pw-profile-form > p {
+  flex-basis: 100%;
+}
+.pw-profile .pw-profile-notice {
+  color: var(--green);
+}

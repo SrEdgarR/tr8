@@ -1,0 +1,36 @@
+.pw-calendar-nearby {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+.pw-calendar-nearby > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.pw-calendar-nearby p {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.pw-calendar-nearby p > span {
+  color: var(--text-3);
+}
+.pw-calendar-nearby > button {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .pw-calendar-nearby {
+    flex-wrap: wrap;
+  }
+  .pw-calendar-nearby > button {
+    margin-left: 29px;
+  }
+}

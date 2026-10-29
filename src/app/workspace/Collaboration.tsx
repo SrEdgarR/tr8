@@ -6,6 +6,7 @@ import { Busy, Dialog, EmptyState, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
 import { canInWorkspace, PERMISSIONS } from './permissions';
 import TeamSummary from './TeamSummary';
+import { IdentityAvatar } from './project-identity';
 
 const ACTION_NAMES: Record<string, string> = {
   'role.created': 'Creó un rol',
@@ -34,11 +35,13 @@ export function ActivityPanel({
   projectId = null,
   compact = false,
   title = 'Actividad',
+  currentUserId,
 }: {
   api: CollaborationApi;
   projectId?: string | null;
   compact?: boolean;
   title?: string;
+  currentUserId?: string;
 }) {
   const query = useInfiniteQuery({
     queryKey: [...api.scopeKey, 'activity', projectId],
@@ -60,16 +63,22 @@ export function ActivityPanel({
         <Busy />
       ) : items.length ? (
         <ol className="pw-activity-list">
-          {items.map(entry => (
-            <li key={entry.id}>
-              <span>
-                <strong>{entry.actor_name}</strong> · {ACTION_NAMES[entry.action] ?? 'Registró un cambio'}
-              </span>
-              <time dateTime={entry.created_at}>
-                {new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(entry.created_at))}
-              </time>
-            </li>
-          ))}
+          {items.map(entry => {
+            const actor = entry.actor_name === 'Usuario' && entry.actor_id === currentUserId ? 'Tú' : entry.actor_name;
+            return (
+              <li key={entry.id}>
+                <span className="pw-activity-actor">
+                  <IdentityAvatar name={actor} small decorative />
+                  <span>
+                    <strong>{actor}</strong> · {ACTION_NAMES[entry.action] ?? 'Registró un cambio'}
+                  </span>
+                </span>
+                <time dateTime={entry.created_at}>
+                  {new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(entry.created_at))}
+                </time>
+              </li>
+            );
+          })}
         </ol>
       ) : (
         <p className="faint">Todavía no hay actividad disponible.</p>

@@ -1,8 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode, type DragEvent } from 'react';
-import { Activity, Archive, CalendarDays, ChartGantt, ChevronRight, SquareKanban, LayoutDashboard, List, Paperclip, Plus, Search, Table2 } from 'lucide-react';
+import { Activity, Archive, CalendarDays, ChartGantt, ChevronRight, SquareKanban, LayoutDashboard, List, Paperclip, Plus, Table2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { PRIORITIES, STATUSES } from '../constants';
-import type { Priority, Project, Task, TaskPatch, TaskStatus, WorkspaceMember } from '../types';
+import type { Project, Task, TaskPatch, TaskStatus, WorkspaceMember } from '../types';
 import type { TaskViewConfig } from '../productivity-types';
 import { EmptyState, ErrorNotice } from './ui';
 import { errorMessage, localDate } from './helpers';
@@ -107,11 +106,6 @@ function ScopedTasksView({
   const [bulkBusy, setBulkBusy] = useState(false);
   const actionLock = useRef(false);
   const query = config.query;
-  const status = config.statuses.length === 1 ? config.statuses[0] : '';
-  const priority = config.priorities.length === 1 ? config.priorities[0] : '';
-  const setQuery = (value: string) => setConfig(previous => ({ ...previous, query: value }));
-  const setStatus = (value: TaskStatus | '') => setConfig(previous => ({ ...previous, statuses: value ? [value] : [] }));
-  const setPriority = (value: Priority | '') => setConfig(previous => ({ ...previous, priorities: value ? [value] : [] }));
   const today = localDate();
   const visible = useMemo(() => filterTaskView(tasks, projects, config, favoriteTaskIds, today), [tasks, projects, config, favoriteTaskIds, today]);
   const groups = useMemo(
@@ -413,50 +407,6 @@ function ScopedTasksView({
       ) : (
         <>
           {actionError && <ErrorNotice>{actionError}</ErrorNotice>}
-          <div className="toolbar pw-toolbar">
-            <label className="pw-search">
-              <Search size={14} aria-hidden="true" />
-              <span className="sr">Buscar tareas</span>
-              <input
-                type="search"
-                placeholder="Buscar tareas…"
-                maxLength={500}
-                value={query}
-                disabled={bulkBusy}
-                onChange={event => setQuery(event.target.value)}
-              />
-            </label>
-            <label className="pw-filter">
-              <span className="sr">Filtrar por estado</span>
-              <select value={status} disabled={bulkBusy} onChange={event => setStatus(event.target.value as TaskStatus | '')}>
-                <option value="">Todos los estados</option>
-                {STATUSES.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="pw-filter">
-              <span className="sr">Filtrar por prioridad</span>
-              <select value={priority} disabled={bulkBusy} onChange={event => setPriority(event.target.value as Priority | '')}>
-                <option value="">Todas las prioridades</option>
-                {PRIORITIES.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {hasFilters && (
-              <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={resetFilters}>
-                Limpiar filtros
-              </button>
-            )}
-            <span className="pw-result-count" role="status">
-              {visible.length} {visible.length === 1 ? 'tarea' : 'tareas'}
-            </span>
-          </div>
           <fieldset className="tv-bulk-controls-lock" disabled={bulkBusy}>
             <legend className="sr">Filtros y organización de tareas</legend>
             <TaskViewControls
@@ -475,6 +425,9 @@ function ScopedTasksView({
               onDeleteView={onDeleteView}
               productivityLoading={productivityLoading}
               productivityError={productivityError}
+              resultCount={visible.length}
+              hasFilters={hasFilters}
+              onResetFilters={resetFilters}
             />
           </fieldset>
           {onReorder && (

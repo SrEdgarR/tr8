@@ -505,7 +505,7 @@ export function HomeDashboard({ data, onNewProject, onNewTask, onOpen, onMove }:
           <Deadlines model={model} data={data} onOpen={onOpen} />
           {activityAvailable && (
             <div className="dp-activity">
-              <ActivityPanel api={data.collaboration!} compact title="Actividad reciente" />
+              <ActivityPanel api={data.collaboration!} compact title="Actividad reciente" currentUserId={data.currentUserId} />
               <Link className="dp-panel-footer" to={scoped(data, '/activity')}>
                 Ver toda la actividad
                 <ArrowRight size={13} aria-hidden="true" />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CircleAlert, CircleCheck, CloudOff, CloudUpload, LoaderCircle, LockKeyhole } from 'lucide-react';
+import { CircleAlert, CloudOff, CloudUpload, LockKeyhole, RefreshCw } from 'lucide-react';
 import type { DataSyncState } from '../types';
 
 const descriptions: Record<DataSyncState, string> = {
@@ -12,7 +12,17 @@ const descriptions: Record<DataSyncState, string> = {
 };
 
 /** A confirmation from TR8 is separate from the background Google integration. */
-export default function SyncStatus({ state, scope }: { state: DataSyncState; scope: string }) {
+export default function SyncStatus({
+  state,
+  scope,
+  onRefresh,
+  refreshDisabled = false,
+}: {
+  state: DataSyncState;
+  scope: string;
+  onRefresh?: () => void;
+  refreshDisabled?: boolean;
+}) {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [needsVerification, setNeedsVerification] = useState(() => !navigator.onLine);
   useEffect(() => {
@@ -33,27 +43,30 @@ export default function SyncStatus({ state, scope }: { state: DataSyncState; sco
   }, [state]);
   const status = !online ? 'offline' : state === 'synced' && needsVerification ? 'pending' : state;
   const Icon =
-    status === 'synced'
-      ? CircleCheck
-      : status === 'offline'
-        ? CloudOff
-        : status === 'error'
-          ? CircleAlert
-          : status === 'locked'
-            ? LockKeyhole
-            : status === 'pending'
-              ? CloudUpload
-              : LoaderCircle;
+    status === 'offline' ? CloudOff : status === 'error' ? CircleAlert : status === 'locked' ? LockKeyhole : status === 'pending' ? CloudUpload : RefreshCw;
   const label = status === 'offline' ? 'Sin conexión' : descriptions[status];
+  const title = `${scope}: ${status === 'synced' ? 'la información visible coincide con la última versión confirmada en TR8.' : label}`;
+  const icon = <Icon size={13} className={status === 'checking' || status === 'saving' ? 'pw-spin' : undefined} aria-hidden="true" />;
+  if (onRefresh)
+    return (
+      <button
+        type="button"
+        className="pw-sync pw-sync-button"
+        data-state={status}
+        aria-label="Actualizar datos"
+        disabled={refreshDisabled || state === 'checking' || state === 'saving' || !online}
+        onClick={() => onRefresh()}
+        title={`${title} Pulsa para actualizar los datos.`}
+      >
+        {icon}
+        <span role="status" aria-live="polite">
+          {label}
+        </span>
+      </button>
+    );
   return (
-    <span
-      className="pw-sync"
-      data-state={status}
-      role="status"
-      aria-live="polite"
-      title={`${scope}: ${status === 'synced' ? 'la información visible coincide con la última versión confirmada en TR8.' : label}`}
-    >
-      <Icon size={13} className={status === 'checking' || status === 'saving' ? 'pw-spin' : undefined} aria-hidden="true" />
+    <span className="pw-sync" data-state={status} role="status" aria-live="polite" title={title}>
+      {icon}
       {label}
     </span>
   );

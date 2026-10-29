@@ -26,6 +26,8 @@ import { createBulkTasksRepository } from './data/bulk-tasks';
 import type { BulkTasksApi } from './bulk-task-types';
 import { createRecurrenceRepository } from './data/recurrence';
 import type { RecurrenceApi } from './recurrence-types';
+import { createProfileRepository } from './data/profile';
+import type { ProfileApi } from './profile-types';
 import type { ProductivityApi } from './productivity-types';
 import type { WorkManagementApi } from './work-management-types';
 import { createAccountDataClient } from './data/account-client';
@@ -384,6 +386,7 @@ function ScopedWorkspace({
   const workRepository = useMemo(() => createWorkManagementRepository(dataClient, selected.id), [dataClient, selected.id]);
   const bulkRepository = useMemo(() => createBulkTasksRepository(dataClient, selected.id), [dataClient, selected.id]);
   const recurrenceRepository = useMemo(() => createRecurrenceRepository(dataClient, selected.id), [dataClient, selected.id]);
+  const profileRepository = useMemo(() => createProfileRepository(dataClient, session.user.id), [dataClient, session.user.id]);
   const queryKey = useMemo(() => ['workspace', session.user.id, selected.id, scopeRevision], [session.user.id, selected.id, scopeRevision]);
   const active = useRef(true);
   const locked = useRef(false);
@@ -634,6 +637,19 @@ function ScopedWorkspace({
         }
       }),
   };
+  const profile: ProfileApi = {
+    scopeKey: ['profile', session.user.id, selected.id, scopeRevision],
+    load: signal => readCollaboration(() => profileRepository.load(signal)),
+    save: (current, name) =>
+      write(async () => {
+        const saved = await profileRepository.save(current, name);
+        if (active.current && authorizationScope.current === collaborationScope) {
+          void queryClient.invalidateQueries({ queryKey: ['directory', session.user.id] });
+          void queryClient.invalidateQueries({ queryKey: ['collaboration', session.user.id] });
+        }
+        return saved;
+      }),
+  };
   const recurrence: RecurrenceApi = {
     scopeKey: [...collaborationScope, 'recurrence'],
     state: (task, signal) => readCollaboration(() => recurrenceRepository.state(task, signal)),
@@ -770,6 +786,7 @@ function ScopedWorkspace({
       globalSearch={globalSearch}
       workManagement={workManagement}
       bulkTasks={bulkTasks}
+      profile={profile}
       recurrence={recurrence}
       recurrenceError={recurrenceSummaries.error ? 'No pudimos comprobar los indicadores de repetición. Puedes consultar cada tarea desde su detalle.' : null}
       onRetryRecurrence={() => void recurrenceSummaries.refetch()}
