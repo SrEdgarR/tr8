@@ -37,7 +37,8 @@ no se cambian las fechas ni se importa otra copia desde Google para resolverlo.
 
 Cuando un proyecto no tiene elementos en el mes visible y la consulta terminó,
 TR8 muestra su próxima fecha autorizada y un botón para ir a ese mes. La pista
-se deriva de las tareas visibles del mismo proyecto y espacio, con permiso de
+se deriva del vencimiento de las tareas visibles del mismo proyecto y espacio,
+o del inicio cuando no hay vencimiento ni bloque horario, con permiso de
 lectura; no incluye tareas completadas o archivadas. Se retira cuando hay
 filtros activos o páginas pendientes para no confundir un filtro con ausencia
 de tareas. La navegación vuelve a consultar la ventana correspondiente.
@@ -73,7 +74,7 @@ tareas, finanzas, espacios y perfiles coinciden antes y después. Los registros
 e invitaciones externos siguen cerrados. No se añade dependencia, proveedor,
 cron ni recurso de pago.
 
-Pasan 1.527 pruebas de aplicación y 560 de servidor/Edge/MCP. Los 44 checks SQL
+Pasan 1.528 pruebas de aplicación y 560 de servidor/Edge/MCP. Los 44 checks SQL
 de perfil se ejecutaron en TEST con rollback: lectura propia, CAS, actividad,
 reintentos, validación, cuentas deshabilitadas, sesiones ajenas o terminadas,
 roles anónimos y llamadas MCP reales. Las identidades sintéticas no persisten.

@@ -288,7 +288,7 @@ function ProjectPage({
   const nextTaskDate = actions.can(project.id, 'task.read')
     ? (projectTasks
         .filter(task => task.workspace_id === project.workspace_id && task.status !== 'done')
-        .flatMap(task => [task.start_date, task.due_date])
+        .map(task => task.due_date ?? (!task.scheduled_start_at ? task.start_date : null))
         .filter((date): date is string => Boolean(date && date >= localDate()))
         .sort()[0] ?? null)
     : null;

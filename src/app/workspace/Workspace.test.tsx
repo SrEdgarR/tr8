@@ -9,6 +9,7 @@ import ProjectForm from './ProjectForm';
 import TaskForm from './TaskForm';
 import TasksView from './TasksView';
 import Workspace from './Workspace';
+import { addCivilMonths, dateInTimeZone, formatCivilDate } from './CalendarTime';
 
 function render(ui: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -405,6 +406,41 @@ describe('espacios y equipos', () => {
     await user.click(screen.getByTitle('Calendario'));
     expect(await screen.findByRole('heading', { name: 'Calendario', level: 1 })).toBeInTheDocument();
     await waitFor(() => expect(calendar.items).toHaveBeenCalledWith(expect.not.objectContaining({ project_ids: [project.id] }), expect.any(AbortSignal)));
+  });
+
+  it('ofrece el mes del vencimiento aunque la tarea tenga un inicio anterior en el mes visible', async () => {
+    const user = userEvent.setup();
+    const today = dateInTimeZone(new Date(), 'America/La_Paz');
+    const due = addCivilMonths(today, 1);
+    const calendar: CalendarApi = {
+      scopeKey: ['calendar', 'hint-date'],
+      profile: vi.fn().mockResolvedValue({ time_zone: 'America/La_Paz', version: 1, updated_at: null }),
+      saveProfile: vi.fn(),
+      items: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+      scheduleTask: vi.fn(),
+    };
+    const props = workspaceProps({
+      workspace: { ...personal, permissions: ['project.read', 'task.read'] },
+      workspaces: [{ ...personal, permissions: ['project.read', 'task.read'] }],
+      calendar,
+      tasks: [{ ...task, start_date: today, due_date: due }],
+    });
+    render(
+      <MemoryRouter initialEntries={[`/projects/${project.id}?workspace=workspace-a&view=calendar`]}>
+        <Workspace {...props} />
+      </MemoryRouter>,
+    );
+    const jump = await screen.findByRole('button', { name: `Ir a ${formatCivilDate(due, { month: 'long' })}` });
+    const initial = vi.mocked(calendar.items).mock.calls[0][0];
+    await user.click(jump);
+    await waitFor(() =>
+      expect(calendar.items).toHaveBeenCalledWith(
+        expect.objectContaining({ project_ids: [project.id], date_from: expect.not.stringMatching(new RegExp(`^${initial.date_from}$`)) }),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(props.onUpdateTask).not.toHaveBeenCalled();
+    expect(calendar.scheduleTask).not.toHaveBeenCalled();
   });
 
   it('permite elegir un equipo sin mezclar los proyectos cargados', async () => {
