@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { WorkspaceSummary } from '../types';
@@ -11,6 +11,38 @@ const spaces: WorkspaceSummary[] = [
 ];
 
 describe('workspace picker', () => {
+  it('keeps the popup in its mobile modal and uses local coordinates without clipping its options', async () => {
+    const onSelect = vi.fn();
+    const view = render(
+      <aside role="dialog" aria-modal="true" aria-label="Menú móvil">
+        <WorkspacePicker workspaces={spaces} selectedId="personal" onSelect={onSelect} modal />
+      </aside>,
+    );
+    const modal = screen.getByRole('dialog', { name: 'Menú móvil' });
+    const trigger = within(modal).getByRole('combobox', { name: 'Espacio de trabajo' });
+    vi.spyOn(modal, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 288, 700));
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 88, 240, 44));
+    await userEvent.click(trigger);
+    const popup = within(modal).getByRole('listbox', { name: 'Espacios de trabajo' });
+    expect(popup.parentElement).toBe(modal);
+    expect(popup).toHaveStyle({ position: 'absolute', width: '272px', left: '8px', top: '138px' });
+    await userEvent.keyboard('{ArrowDown}');
+    expect(trigger).toHaveAttribute('aria-activedescendant', within(popup).getByRole('option', { name: 'Horizon Studios' }).id);
+    view.rerender(
+      <aside>
+        <WorkspacePicker workspaces={spaces} selectedId="personal" onSelect={onSelect} />
+      </aside>,
+    );
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    const desktopTrigger = screen.getByRole('combobox', { name: 'Espacio de trabajo' });
+    await userEvent.click(desktopTrigger);
+    const desktopPopup = screen.getByRole('listbox', { name: 'Espacios de trabajo' });
+    expect(desktopPopup.parentElement).toBe(document.body);
+    expect(desktopPopup).toHaveStyle({ position: 'fixed' });
+    await userEvent.click(within(desktopPopup).getByRole('option', { name: 'Horizon Studios' }));
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith('studio');
+    expect(desktopTrigger).toHaveFocus();
+  });
   it('shows workspace identity and type, marks selection, and switches through the existing callback', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();

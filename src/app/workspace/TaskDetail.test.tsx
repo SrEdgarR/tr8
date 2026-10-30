@@ -67,6 +67,23 @@ function props(overrides: Partial<TaskDetailProps> = {}): TaskDetailProps {
 }
 
 describe('task detail and guarded task actions', () => {
+  it('opens secondary presentation actions without changing the task and returns focus on Escape', async () => {
+    const value = props();
+    render(<TaskDetail {...value} />);
+    const toggle = screen.getByRole('button', { name: 'Más acciones' });
+    const group = screen.getByRole('group', { name: 'Más acciones de tarea' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', group.id);
+    await userEvent.click(toggle);
+    expect(group).toHaveClass('is-open');
+    screen.getByRole('button', { name: 'Duplicar' }).focus();
+    await userEvent.keyboard('{Escape}');
+    expect(group).not.toHaveClass('is-open');
+    expect(toggle).toHaveFocus();
+    expect(value.api!.duplicateTask).not.toHaveBeenCalled();
+    expect(value.onDelete).not.toHaveBeenCalled();
+    expect(value.onUpdate).not.toHaveBeenCalled();
+  });
   it('shows task identity, safe description, actual metadata and authorized assignee name', () => {
     render(<TaskDetail {...props()} />);
     expect(screen.getByRole('dialog', { name: 'Detalle de tarea' })).toHaveClass('td-drawer');

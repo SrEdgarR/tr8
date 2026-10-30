@@ -235,6 +235,9 @@ export default function AuthScreen({ client, ownerEmail, recovery, onRecoveryCom
                 id="auth-email"
                 className="input input-lg personal-auth-email"
                 type="email"
+                inputMode="email"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={email}
                 onChange={event => setEmail(event.target.value.trim().toLowerCase())}
                 readOnly={recovery}

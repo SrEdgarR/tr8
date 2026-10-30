@@ -81,7 +81,7 @@
 }
 .btn-danger {
   background: var(--red);
-  color: #fff;
+  color: var(--text-inv);
 }
 .btn-danger:hover {
   background: color-mix(in srgb, var(--red) 88%, #000);

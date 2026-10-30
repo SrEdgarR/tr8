@@ -43,6 +43,78 @@ function click(target: Element, x: number, y: number) {
   fireEvent.click(target, { clientX: x, clientY: y, detail: 1 });
 }
 describe('Dialog dismissal', () => {
+  it.each(['inert', 'hidden', 'display'] as const)('restores focus to visible navigation when the original trigger becomes %s', async conceal => {
+    function HiddenOrigin() {
+      const [open, setOpen] = useState(false);
+      const [closedMenu, setClosedMenu] = useState(false);
+      return (
+        <>
+          <button className="pw-menu">Abrir navegación</button>
+          <aside
+            inert={conceal === 'inert' && closedMenu}
+            hidden={conceal === 'hidden' && closedMenu}
+            style={conceal === 'display' && closedMenu ? { display: 'none' } : undefined}
+          >
+            <button
+              onClick={() => {
+                setClosedMenu(true);
+                setOpen(true);
+              }}
+            >
+              Crear desde menú
+            </button>
+          </aside>
+          {open && (
+            <Dialog title="Nuevo elemento" onClose={() => setOpen(false)}>
+              <input aria-label="Nombre del elemento" data-initial-focus />
+            </Dialog>
+          )}
+        </>
+      );
+    }
+    render(<HiddenOrigin />);
+    const opener = screen.getByRole('button', { name: 'Crear desde menú' });
+    await userEvent.click(opener);
+    expect(screen.getByRole('textbox', { name: 'Nombre del elemento' })).toHaveFocus();
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar ventana' }));
+    expect(opener).not.toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Abrir navegación' })).toHaveFocus();
+  });
+  it('uses the content fallback when the trigger disappears and navigation is hidden', async () => {
+    function RemovedOrigin() {
+      const [open, setOpen] = useState(false);
+      const [removed, setRemoved] = useState(false);
+      return (
+        <>
+          <button className="pw-menu" style={{ display: 'none' }}>
+            Navegación oculta
+          </button>
+          <main id="workspace-content" tabIndex={-1}>
+            Contenido actual
+          </main>
+          {!removed && (
+            <button
+              onClick={() => {
+                setRemoved(true);
+                setOpen(true);
+              }}
+            >
+              Abrir elemento
+            </button>
+          )}
+          {open && (
+            <Dialog title="Elemento" onClose={() => setOpen(false)}>
+              <input aria-label="Nombre" data-initial-focus />
+            </Dialog>
+          )}
+        </>
+      );
+    }
+    render(<RemovedOrigin />);
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir elemento' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar ventana' }));
+    expect(screen.getByRole('main')).toHaveFocus();
+  });
   it('closes only the inner dialog when Escape cancels a nested editor', async () => {
     const outerClose = vi.fn();
     const innerClose = vi.fn();

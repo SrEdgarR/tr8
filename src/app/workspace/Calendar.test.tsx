@@ -93,6 +93,72 @@ function mount(ui: React.ReactNode) {
 }
 
 describe('calendario interno', () => {
+  it('selecciona un día de la agenda móvil sin reprogramar ni volver a consultar sus tareas', async () => {
+    const user = userEvent.setup();
+    const month = monthStart(dateInTimeZone(new Date(), profile.time_zone!));
+    const first = addCivilDays(month, 5),
+      second = addCivilDays(month, 12);
+    const firstItem = { ...item, date: first },
+      secondItem = { ...item, id: 'another:due', task_id: 'another', title: 'Revisar el presupuesto', date: second };
+    const api = calendarApi({ items: vi.fn().mockResolvedValue({ items: [firstItem, secondItem], next_cursor: null }) });
+    const onOpen = vi.fn();
+    mount(<Calendar api={api} workspaces={spaces} projects={[project]} onOpen={onOpen} />);
+    const agenda = await screen.findByRole('region', { name: 'Agenda móvil del mes' });
+    expect(within(agenda).getByText(secondItem.title)).toBeInTheDocument();
+    const initialRequests = vi.mocked(api.items).mock.calls.length;
+    await user.click(screen.getByRole('button', { name: `Ver el ${formatCivilDate(first)}, 1 elemento` }));
+    expect(within(agenda).getByText(firstItem.title)).toBeInTheDocument();
+    expect(within(agenda).queryByText(secondItem.title)).not.toBeInTheDocument();
+    await user.click(within(agenda).getByRole('button', { name: /Vencimiento de Editar portada/ }));
+    expect(onOpen).toHaveBeenCalledWith(firstItem);
+    await user.click(within(agenda).getByRole('button', { name: 'Ver todo el mes' }));
+    expect(within(agenda).getByText(secondItem.title)).toBeInTheDocument();
+    expect(api.items).toHaveBeenCalledTimes(initialRequests);
+    expect(api.scheduleTask).not.toHaveBeenCalled();
+  });
+
+  it('conserva los filtros del calendario al plegar sus opciones y devuelve el foco con Escape', async () => {
+    const user = userEvent.setup();
+    const api = calendarApi();
+    mount(<Calendar api={api} workspaces={spaces} projects={[project]} onOpen={vi.fn()} />);
+    const toggle = await screen.findByRole('button', { name: 'Filtros del calendario' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(toggle);
+    await user.selectOptions(screen.getByLabelText('Estado'), 'done');
+    await user.keyboard('{Escape}');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveFocus();
+    await user.click(toggle);
+    expect(screen.getByLabelText('Estado')).toHaveValue('done');
+    expect(api.items).toHaveBeenLastCalledWith(expect.objectContaining({ statuses: ['done'] }), expect.any(AbortSignal));
+    expect(api.scheduleTask).not.toHaveBeenCalled();
+  });
+
+  it('no afirma que un día está vacío mientras quedan páginas por cargar', async () => {
+    const user = userEvent.setup();
+    const month = monthStart(dateInTimeZone(new Date(), profile.time_zone!));
+    const first = addCivilDays(month, 5),
+      second = addCivilDays(month, 12);
+    const secondItem = { ...item, id: 'later:due', task_id: 'later', title: 'Tarea de una página posterior', date: second };
+    const items = vi
+      .fn()
+      .mockImplementation(query =>
+        Promise.resolve(query.cursor ? { items: [secondItem], next_cursor: null } : { items: [{ ...item, date: first }], next_cursor: 'page-two' }),
+      );
+    const api = calendarApi({ items });
+    mount(<Calendar api={api} workspaces={spaces} projects={[project]} onOpen={vi.fn()} />);
+    const day = await screen.findByRole('button', { name: `Ver el ${formatCivilDate(second)}, 0 elementos cargados` });
+    await user.click(day);
+    const agenda = screen.getByRole('region', { name: 'Agenda móvil del mes' });
+    expect(within(agenda).queryByText('No hay fechas para este día.')).not.toBeInTheDocument();
+    expect(within(agenda).getByRole('status')).toHaveTextContent('Carga el resto del período para comprobarlo');
+    await user.click(screen.getByRole('button', { name: 'Cargar más elementos' }));
+    expect(await within(agenda).findByText(secondItem.title)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `Ver el ${formatCivilDate(second)}, 1 elemento` })).toHaveAttribute('aria-pressed', 'true');
+    expect(items).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 'page-two' }), expect.any(AbortSignal));
+    expect(api.scheduleTask).not.toHaveBeenCalled();
+  });
+
   it('detecta y guarda la zona del dispositivo antes de consultar fechas en el primer acceso', async () => {
     const detectedZone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
     const api = calendarApi({

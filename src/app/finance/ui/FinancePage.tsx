@@ -1,9 +1,8 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
   ArrowLeftRight,
-  CalendarClock,
   Download,
   KeyRound,
   LockKeyhole,
@@ -15,11 +14,10 @@ import {
   Landmark,
   Coins,
   CalendarDays,
-  LayoutGrid,
-  List,
   Tag,
   Pencil,
   Trash2,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Busy, Dialog, ErrorNotice } from '../../workspace/ui';
 import { useFinance } from './useFinance';
@@ -42,9 +40,11 @@ import FinancialProjection from './FinancialProjection';
 import MovementEditor from './MovementEditor';
 import MovementDeleteDialog from './MovementDeleteDialog';
 import { creditCardGroups } from '../domain/credit-card-grouping';
+import FinanceSectionNavigation from './FinanceSectionNavigation';
 import type { DataSyncState } from '../../types';
 import './finance.css';
 import './credit-cards.css';
+import './finance-mobile.css';
 
 type Finance = ReturnType<typeof useFinance>;
 const kinds = { income: 'Ingreso', expense: 'Gasto', transfer: 'Transferencia', 'card-payment': 'Pago de tarjeta', refund: 'Reembolso' };
@@ -468,20 +468,7 @@ export function FinancialDashboard({
           </div>
         </div>
       )}
-      <nav className="pw-view-tabs tf-project-tabs" aria-label="Secciones de finanzas">
-        {[
-          { name: 'Resumen', icon: LayoutGrid },
-          { name: 'Cuentas', icon: Wallet },
-          { name: 'Movimientos', icon: List },
-          { name: 'Planes', icon: CalendarClock },
-          { name: 'Seguridad', icon: ShieldCheck },
-        ].map(({ name, icon: Icon }) => (
-          <button key={name} className={`pw-view-tab${tab === name ? ' on' : ''}`} aria-pressed={tab === name} onClick={() => setTab(name)}>
-            <Icon size={15} aria-hidden="true" />
-            {name}
-          </button>
-        ))}
-      </nav>
+      <FinanceSectionNavigation selected={tab} onChange={setTab} />
       <div className="tf-section-content">
         {(tab === 'Resumen' || tab === 'Cuentas') && (
           <Overview
@@ -681,6 +668,10 @@ function History({
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [visible, setVisible] = useState(50);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersId = useId();
+  const filterToggle = useRef<HTMLButtonElement>(null);
+  const filterCount = [account, currency, from, to].filter(Boolean).length;
   const invalid = !!from && !!to && from > to;
   const rows = invalid
     ? []
@@ -691,9 +682,40 @@ function History({
         ...(to ? { to } : {}),
       });
   return (
-    <div className="tf-card">
-      <h2>Movimientos confirmados</h2>
-      <div className="tf-filters">
+    <div className="tf-card tf-history">
+      <div className="tf-history-heading">
+        <h2>Movimientos confirmados</h2>
+        <button
+          ref={filterToggle}
+          type="button"
+          className="btn btn-secondary tf-history-filter-toggle"
+          aria-controls={filtersId}
+          aria-expanded={filtersOpen}
+          aria-label={filterCount ? `Filtrar movimientos, ${filterCount} ${filterCount === 1 ? 'filtro activo' : 'filtros activos'}` : 'Filtrar movimientos'}
+          onClick={() => setFiltersOpen(value => !value)}
+        >
+          <SlidersHorizontal size={16} aria-hidden="true" />
+          Filtros
+          {filterCount > 0 && (
+            <span className="tf-filter-count" aria-hidden="true">
+              {filterCount}
+            </span>
+          )}
+        </button>
+      </div>
+      <div
+        id={filtersId}
+        className={`tf-filters${filtersOpen ? ' is-open' : ''}`}
+        role="group"
+        aria-label="Filtros de movimientos"
+        onKeyDown={event => {
+          if (event.key === 'Escape' && filtersOpen) {
+            event.stopPropagation();
+            setFiltersOpen(false);
+            if (filterToggle.current && getComputedStyle(filterToggle.current).display !== 'none') filterToggle.current.focus();
+          }
+        }}
+      >
         <Field label="Cuenta">
           <select value={account} onChange={e => setAccount(e.target.value)}>
             <option value="">Todas las cuentas</option>
@@ -718,6 +740,22 @@ function History({
         <Field label="Hasta">
           <input type="date" value={to} onChange={e => setTo(e.target.value)} />
         </Field>
+        {filterCount > 0 && (
+          <button
+            type="button"
+            className="btn btn-ghost tf-history-clear"
+            aria-label="Limpiar filtros de movimientos"
+            onClick={() => {
+              setAccount('');
+              setCurrency('');
+              setFrom('');
+              setTo('');
+              setVisible(50);
+            }}
+          >
+            Limpiar filtros
+          </button>
+        )}
       </div>
       {invalid && <ErrorNotice>La fecha inicial debe ser anterior a la final.</ErrorNotice>}
       <div className="tf-ledger">

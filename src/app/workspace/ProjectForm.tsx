@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
-import { CalendarDays, Check, Flag, Layers3, UserRound } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, Flag, Layers3, UserRound } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { PROJECT_COLORS, PROJECT_STATUSES } from '../constants';
 import { PROJECT_ICONS, projectIconName, type ProjectIconName } from '../project-identity';
@@ -9,6 +9,7 @@ import { Dialog, ErrorNotice, ProjectIcon } from './ui';
 import { ProjectGlyph } from './project-identity';
 import { errorMessage } from './helpers';
 import './project-planning.css';
+import './mobile-form-communication.css';
 
 interface Props {
   project?: Project;
@@ -78,6 +79,8 @@ export default function ProjectForm({ project, pending, collaboration, canAssign
   const [requestId] = useState(() => crypto.randomUUID());
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [extrasOpen, setExtrasOpen] = useState(false);
+  const extrasId = useId();
   const lock = useRef(false);
   const busy = pending || submitting;
 
@@ -192,78 +195,94 @@ export default function ProjectForm({ project, pending, collaboration, canAssign
           {project && collaboration && canAssignLead && (
             <ProjectLeadField project={project} api={collaboration} selected={leadId} onChange={setLeadId} disabled={busy} />
           )}
-          {!project && (
-            <fieldset className="pw-project-templates" disabled={busy}>
-              <legend>
-                <Layers3 size={15} aria-hidden="true" /> Empezar desde una plantilla
-              </legend>
-              <label className={`pw-template-option${!template ? ' selected' : ''}`}>
-                <input type="radio" name={`${prefix}-template`} value="" checked={!template} onChange={() => setTemplate('')} />
-                <span>
-                  <strong>Proyecto vacío</strong>
-                  <small>Organiza tus tareas desde cero.</small>
-                </span>
-                {!template && <Check size={15} aria-hidden="true" />}
-              </label>
-              <div className="pw-template-grid">
-                {PROJECT_TEMPLATES.map(item => (
-                  <label key={item.key} className={`pw-template-option${template === item.key ? ' selected' : ''}`}>
-                    <input type="radio" name={`${prefix}-template`} value={item.key} checked={template === item.key} onChange={() => setTemplate(item.key)} />
-                    <span>
-                      <strong>{item.name}</strong>
-                      <small>
-                        {item.tasks.length} tareas · {item.description}
-                      </small>
-                    </span>
-                    {template === item.key && <Check size={15} aria-hidden="true" />}
-                  </label>
-                ))}
-              </div>
-              {template && (
-                <p className="pw-planning-help">
-                  Se crearán: {PROJECT_TEMPLATES.find(item => item.key === template)?.tasks.join(' · ')}. Sin fechas ni responsables asignados.
-                </p>
-              )}
-            </fieldset>
-          )}
-          <div className="pw-project-identity-options">
-            <fieldset className="pw-icon-options" disabled={busy}>
-              <legend>Icono del proyecto</legend>
-              <div>
-                {PROJECT_ICONS.map(item => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`pw-icon-option${icon === item.id ? ' selected' : ''}`}
-                    aria-label={`Icono ${item.label}`}
-                    aria-pressed={icon === item.id}
-                    title={item.label}
-                    onClick={() => setIcon(item.id)}
-                  >
-                    <ProjectGlyph icon={item.id} size={16} />
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset className="pw-colors">
-              <legend>Color del proyecto</legend>
-              <div>
-                {PROJECT_COLORS.map((value, index) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`pw-color${color === value ? ' selected' : ''}`}
-                    style={{ background: value }}
-                    aria-label={`Color ${index + 1}`}
-                    aria-pressed={color === value}
-                    disabled={busy}
-                    onClick={() => setColor(value)}
-                  >
-                    {color === value && <Check size={15} aria-hidden="true" />}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+          <button
+            type="button"
+            className="btn btn-secondary pw-project-extras-toggle"
+            aria-expanded={extrasOpen}
+            aria-controls={extrasId}
+            onClick={() => setExtrasOpen(value => !value)}
+          >
+            {project
+              ? 'Personalizar icono y color'
+              : template
+                ? `Plantilla: ${PROJECT_TEMPLATES.find(item => item.key === template)?.name}`
+                : 'Plantilla, icono y color'}
+            <ChevronDown size={16} aria-hidden="true" />
+          </button>
+          <div id={extrasId} className={`pw-project-extras${extrasOpen ? ' is-open' : ''}`}>
+            {!project && (
+              <fieldset className="pw-project-templates" disabled={busy}>
+                <legend>
+                  <Layers3 size={15} aria-hidden="true" /> Empezar desde una plantilla
+                </legend>
+                <label className={`pw-template-option${!template ? ' selected' : ''}`}>
+                  <input type="radio" name={`${prefix}-template`} value="" checked={!template} onChange={() => setTemplate('')} />
+                  <span>
+                    <strong>Proyecto vacío</strong>
+                    <small>Organiza tus tareas desde cero.</small>
+                  </span>
+                  {!template && <Check size={15} aria-hidden="true" />}
+                </label>
+                <div className="pw-template-grid">
+                  {PROJECT_TEMPLATES.map(item => (
+                    <label key={item.key} className={`pw-template-option${template === item.key ? ' selected' : ''}`}>
+                      <input type="radio" name={`${prefix}-template`} value={item.key} checked={template === item.key} onChange={() => setTemplate(item.key)} />
+                      <span>
+                        <strong>{item.name}</strong>
+                        <small>
+                          {item.tasks.length} tareas · {item.description}
+                        </small>
+                      </span>
+                      {template === item.key && <Check size={15} aria-hidden="true" />}
+                    </label>
+                  ))}
+                </div>
+                {template && (
+                  <p className="pw-planning-help">
+                    Se crearán: {PROJECT_TEMPLATES.find(item => item.key === template)?.tasks.join(' · ')}. Sin fechas ni responsables asignados.
+                  </p>
+                )}
+              </fieldset>
+            )}
+            <div className="pw-project-identity-options">
+              <fieldset className="pw-icon-options" disabled={busy}>
+                <legend>Icono del proyecto</legend>
+                <div>
+                  {PROJECT_ICONS.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`pw-icon-option${icon === item.id ? ' selected' : ''}`}
+                      aria-label={`Icono ${item.label}`}
+                      aria-pressed={icon === item.id}
+                      title={item.label}
+                      onClick={() => setIcon(item.id)}
+                    >
+                      <ProjectGlyph icon={item.id} size={16} />
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="pw-colors">
+                <legend>Color del proyecto</legend>
+                <div>
+                  {PROJECT_COLORS.map((value, index) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`pw-color${color === value ? ' selected' : ''}`}
+                      style={{ background: value }}
+                      aria-label={`Color ${index + 1}`}
+                      aria-pressed={color === value}
+                      disabled={busy}
+                      onClick={() => setColor(value)}
+                    >
+                      {color === value && <Check size={15} aria-hidden="true" />}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
           </div>
         </div>
         <div className="pw-form-footer">

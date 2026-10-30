@@ -18,6 +18,7 @@ import {
 } from './CalendarTime';
 import { CalendarZoneEditor } from './CalendarZoneSettings';
 import useCalendarZonePreferences from './useCalendarZonePreferences';
+import PlanningViewOptions from './PlanningViewOptions';
 import './calendar-visibility.css';
 
 interface Props {
@@ -118,6 +119,8 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
   const [archived, setArchived] = useState(Boolean(project?.archived_at));
   const [showUnscheduled, setShowUnscheduled] = useState(false);
   const [dayDialog, setDayDialog] = useState<string | null>(null);
+  const [mobileDay, setMobileDay] = useState<string | null>(null);
+  const selectedMobileDay = mobileDay?.slice(0, 7) === currentMonth.slice(0, 7) ? mobileDay : null;
   const eligibleWorkspaces = workspaces.filter(space => space.permissions.includes('project.read') && space.permissions.includes('task.read'));
   const workspaceIds = project ? [project.workspace_id] : selectedWorkspace === 'all' ? eligibleWorkspaces.map(space => space.id) : [selectedWorkspace];
   const grid = monthDays(currentMonth);
@@ -276,91 +279,105 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
               </button>
             </aside>
           )}
-          <div className="pw-calendar-filters">
-            {!project && (
+          <PlanningViewOptions
+            label="Filtros del calendario"
+            activeCount={
+              Number(selectedWorkspace !== 'all' && !project) +
+              Number(Boolean(selectedProject) && !project) +
+              Number(Boolean(status)) +
+              Number(Boolean(assignee)) +
+              Number(mine) +
+              Number(archived)
+            }
+          >
+            <div className="pw-calendar-filters">
+              {!project && (
+                <label className="pw-field">
+                  Espacios del calendario
+                  <select
+                    value={selectedWorkspace}
+                    onChange={event => {
+                      setSelectedWorkspace(event.target.value);
+                      setSelectedProject('');
+                      setAssignee('');
+                    }}
+                  >
+                    <option value="all">Todos mis espacios</option>
+                    {eligibleWorkspaces.map(space => (
+                      <option key={space.id} value={space.id}>
+                        {space.kind === 'personal' ? 'Mi espacio personal' : space.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {!project && (
+                <label className="pw-field">
+                  Proyecto
+                  <select
+                    value={selectedProject}
+                    onChange={event => {
+                      setSelectedProject(event.target.value);
+                      setAssignee('');
+                    }}
+                  >
+                    <option value="">Todos los proyectos</option>
+                    {selectedProject && !projectOptions.some(([id]) => id === selectedProject) && (
+                      <option value={selectedProject}>Proyecto seleccionado</option>
+                    )}
+                    {projectOptions.map(([id, name]) => (
+                      <option key={id} value={id}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="pw-field">
-                Espacios del calendario
-                <select
-                  value={selectedWorkspace}
-                  onChange={event => {
-                    setSelectedWorkspace(event.target.value);
-                    setSelectedProject('');
-                    setAssignee('');
-                  }}
-                >
-                  <option value="all">Todos mis espacios</option>
-                  {eligibleWorkspaces.map(space => (
-                    <option key={space.id} value={space.id}>
-                      {space.kind === 'personal' ? 'Mi espacio personal' : space.name}
+                Estado
+                <select value={status} onChange={event => setStatus(event.target.value as TaskStatus | '')}>
+                  <option value="">Todos los estados</option>
+                  {STATUSES.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
                     </option>
                   ))}
                 </select>
               </label>
-            )}
-            {!project && (
               <label className="pw-field">
-                Proyecto
-                <select
-                  value={selectedProject}
-                  onChange={event => {
-                    setSelectedProject(event.target.value);
-                    setAssignee('');
-                  }}
-                >
-                  <option value="">Todos los proyectos</option>
-                  {selectedProject && !projectOptions.some(([id]) => id === selectedProject) && <option value={selectedProject}>Proyecto seleccionado</option>}
-                  {projectOptions.map(([id, name]) => (
+                Responsable
+                <select value={assignee} onChange={event => setAssignee(event.target.value)}>
+                  <option value="">Todos los responsables</option>
+                  {assignee && !assigneeOptions.some(([id]) => id === assignee) && <option value={assignee}>Responsable seleccionado</option>}
+                  {assigneeOptions.map(([id, name]) => (
                     <option key={id} value={id}>
                       {name}
                     </option>
                   ))}
                 </select>
               </label>
-            )}
-            <label className="pw-field">
-              Estado
-              <select value={status} onChange={event => setStatus(event.target.value as TaskStatus | '')}>
-                <option value="">Todos los estados</option>
-                {STATUSES.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="pw-field">
-              Responsable
-              <select value={assignee} onChange={event => setAssignee(event.target.value)}>
-                <option value="">Todos los responsables</option>
-                {assignee && !assigneeOptions.some(([id]) => id === assignee) && <option value={assignee}>Responsable seleccionado</option>}
-                {assigneeOptions.map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="pw-calendar-check">
-              <input type="checkbox" checked={mine} onChange={event => setMine(event.target.checked)} />
-              Solo mías
-            </label>
-            <label className="pw-calendar-check">
-              <input type="checkbox" checked={archived} onChange={event => setArchived(event.target.checked)} />
-              Incluir proyectos archivados
-            </label>
-          </div>
-          <p className="pw-calendar-caption">
-            {project
-              ? 'Solo se muestran las tareas de este proyecto con fechas en el período seleccionado.'
-              : 'Los filtros ofrecen proyectos del espacio abierto y proyectos y responsables de los elementos cargados. Para elegir otro proyecto, ábrelo desde la navegación o cambia de espacio.'}
-          </p>
-          <p className="pw-calendar-caption pw-calendar-zone-caption">
-            <Globe2 size={12} aria-hidden="true" />
-            <span>Horas en {zone}. Puedes cambiar la zona en Configuración.</span>
-          </p>
-          <p className="pw-calendar-caption">
-            Bloque y vencimiento pueden aparecer por separado para una misma tarea. Las fechas sin hora son de día completo.
-          </p>
+              <label className="pw-calendar-check">
+                <input type="checkbox" checked={mine} onChange={event => setMine(event.target.checked)} />
+                Solo mías
+              </label>
+              <label className="pw-calendar-check">
+                <input type="checkbox" checked={archived} onChange={event => setArchived(event.target.checked)} />
+                Incluir proyectos archivados
+              </label>
+            </div>
+            <p className="pw-calendar-caption">
+              {project
+                ? 'Solo se muestran las tareas de este proyecto con fechas en el período seleccionado.'
+                : 'Los filtros ofrecen proyectos del espacio abierto y proyectos y responsables de los elementos cargados. Para elegir otro proyecto, ábrelo desde la navegación o cambia de espacio.'}
+            </p>
+            <p className="pw-calendar-caption pw-calendar-zone-caption">
+              <Globe2 size={12} aria-hidden="true" />
+              <span>Horas en {zone}. Puedes cambiar la zona en Configuración.</span>
+            </p>
+            <p className="pw-calendar-caption">
+              Bloque y vencimiento pueden aparecer por separado para una misma tarea. Las fechas sin hora son de día completo.
+            </p>
+          </PlanningViewOptions>
           {!workspaceIds.length ? (
             <EmptyState title="Sin proyectos con acceso al calendario">Necesitas permisos de lectura de proyectos y tareas en algún espacio.</EmptyState>
           ) : query.isPending ? (
@@ -376,7 +393,7 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
             <>
               {view === 'month' ? (
                 <>
-                  <div className="pw-calendar-grid" aria-label="Mes de proyectos">
+                  <div className="pw-calendar-grid pw-calendar-responsive-month" aria-label="Mes de proyectos">
                     <div className="pw-calendar-weekdays" aria-hidden="true">
                       {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => (
                         <span key={day}>{day}</span>
@@ -394,6 +411,20 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
                             <span className="pw-calendar-day-number" aria-hidden="true">
                               {Number(day.slice(8))}
                             </span>
+                            <button
+                              type="button"
+                              className="pw-calendar-mobile-day"
+                              aria-label={`Ver el ${formatCivilDate(day)}, ${entries.length} ${entries.length === 1 ? 'elemento' : 'elementos'}${query.hasNextPage ? (entries.length === 1 ? ' cargado' : ' cargados') : ''}`}
+                              aria-pressed={selectedMobileDay === day}
+                              aria-current={day === dateInTimeZone(new Date(), zone) ? 'date' : undefined}
+                              onClick={() => {
+                                setMonth(monthStart(day));
+                                setMobileDay(day);
+                              }}
+                            >
+                              <span>{Number(day.slice(8))}</span>
+                              {entries.length > 0 && <span className="pw-calendar-mobile-day-dot" aria-hidden="true" />}
+                            </button>
                             {entries.slice(0, 3).map(item => (
                               <CalendarEntry compact key={item.id} item={item} zone={zone} onOpen={onOpen} />
                             ))}
@@ -407,19 +438,44 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
                       })}
                     </div>
                   </div>
-                  <div className="pw-calendar-mobile-agenda">
-                    <CalendarAgenda items={currentItems} zone={zone} from={currentMonth} onOpen={onOpen} />
+                  <div className="pw-calendar-mobile-agenda" role="region" aria-label="Agenda móvil del mes">
+                    <div className="pw-calendar-mobile-agenda-heading">
+                      <h3>{selectedMobileDay ? formatCivilDate(selectedMobileDay, { day: 'numeric', month: 'long' }) : 'Agenda del mes'}</h3>
+                      {selectedMobileDay && (
+                        <button className="btn btn-ghost btn-sm" onClick={() => setMobileDay(null)}>
+                          Ver todo el mes
+                        </button>
+                      )}
+                    </div>
+                    <CalendarAgenda
+                      items={selectedMobileDay ? (daysByItem.get(selectedMobileDay) ?? []) : currentItems}
+                      zone={zone}
+                      from={selectedMobileDay ?? currentMonth}
+                      onOpen={onOpen}
+                    />
+                    {selectedMobileDay && !daysByItem.get(selectedMobileDay)?.length && (currentItems.length > 0 || query.hasNextPage) && (
+                      <p className="pw-calendar-caption" role="status">
+                        {query.hasNextPage
+                          ? 'Aún no hay elementos cargados para este día. Carga el resto del período para comprobarlo.'
+                          : 'No hay fechas para este día.'}
+                      </p>
+                    )}
                   </div>
                 </>
               ) : (
                 <CalendarAgenda items={items} zone={zone} from={from} onOpen={onOpen} />
               )}
-              {(view === 'agenda' ? !items.length : !currentItems.length) && (
-                <EmptyState title="Sin fechas en este período">
-                  No hay fechas en {formatCivilDate(currentMonth, { month: 'long', year: 'numeric' })} con estos filtros. Usa las flechas para ver otros meses.
-                  Las tareas sin fecha están en «Sin programar».
-                </EmptyState>
-              )}
+              {(view === 'agenda' ? !items.length : !currentItems.length) &&
+                (query.hasNextPage ? (
+                  <p className="pw-calendar-caption" role="status">
+                    Aún no hay fechas cargadas para este período. Carga más elementos para completar la consulta.
+                  </p>
+                ) : (
+                  <EmptyState title="Sin fechas en este período">
+                    No hay fechas en {formatCivilDate(currentMonth, { month: 'long', year: 'numeric' })} con estos filtros. Usa las flechas para ver otros
+                    meses. Las tareas sin fecha están en «Sin programar».
+                  </EmptyState>
+                ))}
               {query.hasNextPage && (
                 <div className="pw-calendar-pagination">
                   <p>Hay más elementos en este período.</p>
@@ -459,7 +515,13 @@ export default function Calendar({ api, workspaces, workspaceId, project, projec
                     {unplanned.map(item => (
                       <CalendarEntry key={item.id} item={item} zone={zone} onOpen={onOpen} />
                     ))}
-                    {!unplanned.length && <p>No hay tareas sin programar con estos filtros.</p>}
+                    {!unplanned.length && (
+                      <p>
+                        {unscheduled.hasNextPage
+                          ? 'Aún no hay tareas cargadas. Carga más para completar la consulta.'
+                          : 'No hay tareas sin programar con estos filtros.'}
+                      </p>
+                    )}
                   </div>
                 )}
                 {unscheduled.hasNextPage && (

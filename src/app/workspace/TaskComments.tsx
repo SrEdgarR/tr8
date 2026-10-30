@@ -8,6 +8,7 @@ import { IdentityAvatar } from './project-identity';
 import { Busy, Dialog, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
 import './communication.css';
+import './mobile-form-communication.css';
 
 export interface TaskCommentsProps {
   focusCommentId?: string | null;

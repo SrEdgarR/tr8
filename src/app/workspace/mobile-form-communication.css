@@ -1,0 +1,370 @@
+.td-more-toggle,
+.pw-project-extras-toggle {
+  display: none;
+}
+.td-secondary-actions,
+.pw-project-extras {
+  display: contents;
+}
+.pw-project-extras > .pw-project-templates,
+.pw-project-extras > .pw-project-identity-options {
+  grid-column: 1 / -1;
+}
+.td-subtask-check {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  min-height: 24px;
+  cursor: pointer;
+}
+.td-subtask-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--green);
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .td-drawer .td-body {
+    padding: 16px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    min-width: 0;
+    overscroll-behavior: contain;
+    scroll-padding-block: 16px;
+  }
+  .td-drawer .td-body > *,
+  .td-drawer .td-project-line > span,
+  .td-drawer .td-details-form,
+  .tc-section,
+  .ci-page,
+  .ci-page .ci-detail {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .td-drawer .td-project-line {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .td-drawer .td-project-line > span:not(.td-key):not(.picon) {
+    flex: 1;
+    overflow-wrap: anywhere;
+  }
+  .td-drawer .td-key {
+    margin-left: 0;
+  }
+  .td-drawer .td-title-row {
+    gap: 8px;
+    margin: 18px 0 14px;
+  }
+  .td-drawer .td-title-row h3 {
+    min-width: 0;
+    font-size: 20px;
+  }
+  .td-drawer .td-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 14px 0 20px;
+  }
+  .td-drawer .td-actions > .btn {
+    justify-content: center;
+    min-height: 44px;
+    white-space: normal;
+    line-height: 1.4;
+  }
+  .td-drawer .td-actions .td-more-toggle {
+    display: flex;
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-2);
+  }
+  .td-drawer .td-secondary-actions {
+    display: none;
+  }
+  .td-drawer .td-secondary-actions.is-open {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-column: 1 / -1;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    background: var(--surface-2);
+  }
+  .td-drawer .td-secondary-actions > .btn {
+    min-height: 44px;
+    justify-content: flex-start;
+    white-space: normal;
+  }
+  .td-drawer .td-properties {
+    grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1.2fr);
+    gap: 12px;
+    font-size: 13px;
+  }
+  .td-drawer .td-section {
+    margin-top: 20px;
+    padding-top: 18px;
+  }
+  .td-drawer .td-input-icon > input,
+  .td-drawer .td-section .pw-field .td-input-icon > input,
+  .td-drawer .td-subtask-title,
+  .task-form .pw-field .task-form-control > :is(input, select, textarea),
+  .pw-project-dialog .pw-field :is(input, select, textarea),
+  .recurrence-panel .pw-field :is(input, select) {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .task-form .pw-field-grid,
+  .pw-project-dialog .pw-project-dates,
+  .recurrence-panel .recurrence-form .pw-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .task-form .task-form-help {
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 10px;
+  }
+  .td-drawer .td-add-line .ibtn,
+  .td-drawer .td-add-line > .btn,
+  .td-drawer .td-subtask > .ibtn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0 8px;
+    justify-content: center;
+  }
+  .td-drawer .td-add-line > .btn {
+    width: auto;
+  }
+  .td-drawer .td-subtask {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    gap: 3px;
+    padding: 3px 0;
+  }
+  .td-drawer .td-subtask-check {
+    width: 44px;
+    min-height: 44px;
+  }
+  .td-drawer .td-subtask-check input {
+    width: 20px;
+    height: 20px;
+  }
+  .td-drawer .td-subtask-title {
+    padding: 6px;
+  }
+  .td-drawer .td-label {
+    padding: 0 4px 0 9px;
+    gap: 3px;
+    min-height: 36px;
+  }
+  .td-drawer .td-label > button {
+    width: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    justify-content: center;
+    align-items: center;
+  }
+  .td-drawer .td-transfer-assignee > label,
+  .recurrence-panel .recurrence-check {
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .recurrence-panel .recurrence-check input {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .recurrence-panel .recurrence-weekdays button {
+    min-width: 44px;
+    min-height: 44px;
+    flex: 1 0 44px;
+  }
+  .recurrence-panel .recurrence-buttons > .btn,
+  .td-drawer .td-save-bar > .btn {
+    min-height: 44px;
+    flex: 1 1 140px;
+    justify-content: center;
+    white-space: normal;
+  }
+  .pw-project-dialog .pw-project-extras-toggle {
+    display: flex;
+    grid-column: 1 / -1;
+    min-height: 44px;
+    white-space: normal;
+    justify-content: space-between;
+    text-align: left;
+  }
+  .pw-project-dialog .pw-project-extras {
+    display: none;
+  }
+  .pw-project-dialog .pw-project-extras.is-open {
+    display: grid;
+    grid-column: 1 / -1;
+    gap: 20px;
+    padding-top: 4px;
+  }
+  .pw-project-dialog .pw-project-identity-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pw-project-dialog .pw-icon-options > div {
+    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    gap: 5px;
+  }
+  .pw-project-dialog .pw-icon-option,
+  .pw-project-dialog .pw-color {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .pw-project-dialog .pw-icon-option {
+    width: 100%;
+  }
+  .pw-project-dialog .pw-template-option {
+    min-height: 44px;
+    padding: 12px;
+    align-items: center;
+  }
+  .pw-project-dialog .pw-template-option input {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+  }
+  .ci-page .ph > .acts {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .ci-page .ph > .acts > .btn {
+    min-height: 44px;
+    flex: 1 1 130px;
+    justify-content: center;
+    white-space: normal;
+  }
+  .ci-page .ci-categories {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .ci-page .ci-categories > button {
+    min-height: 44px;
+    padding: 8px;
+    justify-content: center;
+    min-width: 0;
+    font-size: 12px;
+  }
+  .ci-page .ci-categories > button > svg {
+    flex-shrink: 0;
+  }
+  .ci-page .ci-unread {
+    min-height: 44px;
+    white-space: normal;
+  }
+  .ci-page .ci-unread input {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .ci-page .ci-row-title strong,
+  .ci-page .ci-detail-person > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .ci-page .ci-row-project {
+    min-width: 0;
+  }
+  .ci-mobile-detail .ci-detail {
+    position: static;
+    border: 0;
+    padding: 16px;
+    animation: none;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .ci-mobile-detail .ci-detail > .btn {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+    white-space: normal;
+  }
+  .ci-page .ci-detail-actions .ibtn {
+    width: 44px;
+    height: 44px;
+  }
+  .tc-section .tc-comment-actions .ibtn,
+  .tc-section .tc-composer-footer > .ibtn,
+  .tc-section .tc-reaction,
+  .tc-section .tc-add-reaction,
+  .tc-section .tc-reaction-picker button,
+  .tc-section .tc-people-list > button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .tc-section .tc-comment-actions {
+    flex-wrap: wrap;
+  }
+  .tc-section .tc-who > strong {
+    overflow-wrap: anywhere;
+  }
+  .tc-section .tc-who time {
+    font-size: 11px;
+  }
+  .tc-section .tc-composer > textarea,
+  .tc-section .tc-edit > textarea,
+  .tc-section .tc-people-search > input {
+    font-size: 16px;
+  }
+  .tc-section .tc-people-search > input {
+    min-height: 44px;
+  }
+  .tc-section .tc-composer-footer {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tc-section .tc-composer-footer > .btn,
+  .tc-section .tc-edit-actions > .btn,
+  .tc-section > .btn {
+    min-height: 44px;
+    justify-content: center;
+  }
+  .tc-section .tc-shortcut {
+    display: none;
+  }
+  .tc-section .tc-mention > button {
+    min-width: 32px;
+    min-height: 36px;
+    justify-content: center;
+    align-items: center;
+  }
+}
+
+@media (max-width: 360px) {
+  .td-drawer .td-properties {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+  .td-drawer .td-properties dd {
+    margin-bottom: 9px;
+    padding-left: 23px;
+  }
+  .tc-section .tc-composer-footer > .btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-height: 500px) and (max-width: 900px) {
+  .td-drawer .td-title-row {
+    margin-block: 12px;
+  }
+  .td-drawer .td-section {
+    margin-top: 16px;
+    padding-top: 14px;
+  }
+}

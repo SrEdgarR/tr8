@@ -168,7 +168,7 @@
 }
 .tf-card-dialog .tf-defer-control > input[type='checkbox']:checked::before {
   transform: translateX(16px);
-  background: #fff;
+  background: var(--on-accent);
 }
 .tf-card-dialog .tf-defer-control > input[type='checkbox']:focus-visible {
   outline: 2px solid var(--accent);

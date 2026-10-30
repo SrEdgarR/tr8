@@ -46,6 +46,37 @@ export function EmptyState({ title, children, action }: { title: string; childre
   );
 }
 
+function canRestoreFocus(element: HTMLElement | null): element is HTMLElement {
+  if (!element?.isConnected || element.matches(':disabled') || element.closest('[hidden],[inert],[aria-hidden="true"],dialog:not([open])')) return false;
+  if (!element.matches('a[href],button,input,select,textarea,[tabindex]')) return false;
+  for (let current: HTMLElement | null = element; current; current = current.parentElement) {
+    const style = getComputedStyle(current);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+  }
+  return true;
+}
+
+function restoreFocus(trigger: HTMLElement | null) {
+  if (canRestoreFocus(trigger)) {
+    trigger.focus();
+    if (document.activeElement === trigger) return;
+  }
+  const remainingDialog = [...document.querySelectorAll<HTMLDialogElement>('dialog[open]')].at(-1);
+  const candidates = [
+    remainingDialog?.querySelector<HTMLElement>(
+      '[data-initial-focus],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)',
+    ),
+    document.querySelector<HTMLElement>('#tr8-sidebar[aria-modal="true"] [data-mobile-nav-close]'),
+    document.querySelector<HTMLElement>('.pw-menu'),
+    document.getElementById('workspace-content'),
+  ];
+  for (const candidate of candidates) {
+    if (!canRestoreFocus(candidate ?? null)) continue;
+    candidate!.focus();
+    if (document.activeElement === candidate) return;
+  }
+}
+
 export function Dialog({
   title,
   children,
@@ -71,7 +102,7 @@ export function Dialog({
     element?.querySelector<HTMLElement>('[data-initial-focus]')?.focus();
     return () => {
       element?.close();
-      if (trigger?.isConnected) trigger.focus();
+      restoreFocus(trigger);
     };
   }, []);
 

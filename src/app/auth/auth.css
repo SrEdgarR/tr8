@@ -104,3 +104,74 @@
     padding-top: 4vh;
   }
 }
+
+@media (max-width: 700px) {
+  .personal-auth {
+    min-width: 0;
+    overscroll-behavior-y: contain;
+    scroll-padding-block: 16px;
+  }
+  .personal-auth .auth-top {
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .personal-auth .auth-c {
+    min-width: 0;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  .personal-auth .auth-card {
+    min-width: 0;
+    gap: 16px;
+  }
+  .personal-auth .auth-card .input {
+    min-height: 48px;
+    font-size: 16px;
+    min-width: 0;
+    scroll-margin-block: 16px;
+  }
+  .personal-auth .personal-auth-password .input {
+    padding-right: 52px;
+  }
+  .personal-auth .personal-auth-password .ibtn {
+    right: 2px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .personal-auth .auth-card .field > .row {
+    flex-wrap: wrap;
+    gap: 2px 12px;
+  }
+  .personal-auth .personal-auth-forgot {
+    min-height: 44px;
+    padding-block: 8px;
+    text-align: left;
+    white-space: normal;
+  }
+  .personal-auth .auth-card > .btn {
+    min-height: 48px;
+    white-space: normal;
+    line-height: 1.4;
+    justify-content: center;
+  }
+  .personal-auth :is(.hint, .err, .alert, .sub, .personal-auth-footer) {
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+  }
+  .personal-auth .personal-auth-footer {
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-height: 500px) and (max-width: 900px) {
+  .personal-auth .auth-c {
+    padding-top: 12px;
+  }
+  .personal-auth .auth-top {
+    padding-block: 10px;
+  }
+}

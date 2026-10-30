@@ -58,12 +58,15 @@ import WorkspaceCreateMenu from './WorkspaceCreateMenu';
 import AccountProfile from './AccountProfile';
 import { IdentityAvatar, ProjectGlyph, ProjectStatusDot } from './project-identity';
 import useAppearance from './useAppearance';
+import useCompactViewport from './useCompactViewport';
+import useMobileNavigation from './useMobileNavigation';
 import { HomeDashboard, OverviewDashboard } from './DashboardPages';
 import ProjectSummary from './ProjectSummary';
 import { buildDashboardModel } from './dashboard-model';
 import './workspace.css';
 import './visual-navigation.css';
 import './mobile-workspace.css';
+import './mobile-foundations.css';
 
 const Calendar = deferSection(() => import('./Calendar'), 'el calendario');
 const CalendarSettings = deferSection(() => import('./CalendarZoneSettings'), 'Configuración');
@@ -632,6 +635,8 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
     if (props.communication) void queryClient.invalidateQueries({ queryKey: props.communication.scopeKey });
   }
   const [mobileNav, setMobileNav] = useState(false);
+  const compactNavigation = useCompactViewport('(max-width: 900px)');
+  useMobileNavigation(mobileNav, compactNavigation, () => setMobileNav(false));
   const [projectEditor, setProjectEditor] = useState<{ project?: Project } | null>(null);
   const [newTask, setNewTask] = useState<{ projectId?: string; status?: TaskStatus } | null>(null);
   const [accessProject, setAccessProject] = useState<Project | null>(null);
@@ -842,20 +847,18 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
     canCreateTask: creatableProjects.length > 0 && !pending,
     onCreateProject: openNewProject,
     onCreateTask: openNewTask,
-    onToggleSidebar: () => appearance.update({ sidebarCollapsed: !appearance.preferences.sidebarCollapsed }),
+    onToggleSidebar: () => {
+      if (compactNavigation) setMobileNav(previous => !previous);
+      else appearance.update({ sidebarCollapsed: !appearance.preferences.sidebarCollapsed });
+    },
   });
 
   return (
-    <div
-      className={`shell personal-workspace${mobileNav ? ' mnav' : ''}${appearance.preferences.sidebarCollapsed ? ' collapsed' : ''}`}
-      onKeyDown={event => {
-        if (event.key === 'Escape' && mobileNav) setMobileNav(false);
-      }}
-    >
+    <div className={`shell personal-workspace${mobileNav ? ' mnav' : ''}${appearance.preferences.sidebarCollapsed ? ' collapsed' : ''}`}>
       <a className="skip" href="#workspace-content">
         Ir al contenido
       </a>
-      {mobileNav && <button className="side-scrim" aria-label="Cerrar navegación" onClick={() => setMobileNav(false)} />}
+      {mobileNav && compactNavigation && <button className="side-scrim" aria-label="Cerrar navegación" tabIndex={-1} onClick={() => setMobileNav(false)} />}
       <WorkspaceSidebar
         key={`${props.currentUserId ?? 'session'}:${props.workspace?.id ?? 'workspace'}`}
         data={props}
@@ -863,21 +866,32 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
         favoriteCount={productivity.state.favorites.length}
         favoritesBusy={!productivity.available || productivity.pending}
         unreadCount={unreadCount}
-        onShortcuts={search.openGuide}
+        onShortcuts={() => {
+          setMobileNav(false);
+          search.openGuide();
+        }}
         onFavoriteProject={project => {
           void productivity
             .setFavorite('project', project.id, !productivity.state.favorites.some(row => row.kind === 'project' && row.id === project.id))
             .catch(() => {});
         }}
         collapsed={appearance.preferences.sidebarCollapsed}
+        mobile={compactNavigation}
+        mobileOpen={mobileNav && compactNavigation}
         pending={pending}
         showFinance={Boolean(props.finance)}
         onToggle={() => appearance.update({ sidebarCollapsed: !appearance.preferences.sidebarCollapsed })}
         onNavigate={() => setMobileNav(false)}
-        onCreateProject={openNewProject}
-        onCreateTeam={() => setCreatingTeam(true)}
+        onCreateProject={() => {
+          setMobileNav(false);
+          openNewProject();
+        }}
+        onCreateTeam={() => {
+          setMobileNav(false);
+          setCreatingTeam(true);
+        }}
       />
-      <div className="main">
+      <div className="main" inert={mobileNav && compactNavigation}>
         <header className="topbar">
           <button
             className="ibtn pw-menu"

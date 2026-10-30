@@ -1,10 +1,12 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CommunicationApi, InboxNotification, InboxState } from '../communication-types';
 import { DataError } from '../data/errors';
 import InboxPage from './InboxPage';
+
+afterEach(() => vi.unstubAllGlobals());
 
 const notification: InboxNotification = {
   id: 'notice-a',
@@ -73,6 +75,70 @@ async function mount(api = source(), props: Partial<React.ComponentProps<typeof 
   return { api, open, ...supplied, ...view };
 }
 describe('bandeja compartida de notificaciones internas', () => {
+  it('opens only the tapped notice in a mobile dialog and restores focus without marking it read', async () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    const { api, open } = await mount();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    const row = within(screen.getByLabelText('Avisos del espacio')).getByRole('button', { name: /Revisar portada/ });
+    await userEvent.click(row);
+    const dialog = screen.getByRole('dialog', { name: 'Detalle del aviso' });
+    expect(within(dialog).getByRole('heading', { name: notification.task_title })).toBeInTheDocument();
+    expect(api.setRead).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar ventana' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(row).toHaveFocus();
+    expect(api.setRead).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+  });
+  it('keeps a mobile notice error inside its dialog and preserves the explicit open action', async () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    const api = source();
+    vi.mocked(api.setRead).mockRejectedValue(new Error('No se pudo guardar el aviso.'));
+    const { open } = await mount(api);
+    await userEvent.click(within(screen.getByLabelText('Avisos del espacio')).getByRole('button', { name: /Revisar portada/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Detalle del aviso' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Abrir tarea y responder' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('No se pudo guardar el aviso.');
+    expect(open).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole('button', { name: 'Abrir tarea y responder' })).toBeEnabled();
+    expect(api.update).not.toHaveBeenCalled();
+    expect(api.remove).not.toHaveBeenCalled();
+  });
+  it('returns to the selected row on desktop resize and removes the mobile dialog when access is lost', async () => {
+    let listener = () => {};
+    const media = {
+      matches: true,
+      addEventListener: vi.fn((_event: string, callback: () => void) => {
+        listener = callback;
+      }),
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue(media));
+    const api = source();
+    const { client } = await mount(api);
+    const row = within(screen.getByLabelText('Avisos del espacio')).getByRole('button', { name: /Revisar portada/ });
+    await userEvent.click(row);
+    expect(screen.getByRole('dialog', { name: 'Detalle del aviso' })).toBeInTheDocument();
+    act(() => {
+      media.matches = false;
+      listener();
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(row).toHaveFocus();
+    expect(screen.getByRole('region', { name: 'Detalle del aviso' })).toHaveTextContent(notification.task_title);
+    act(() => {
+      media.matches = true;
+      listener();
+    });
+    expect(screen.getByRole('dialog', { name: 'Detalle del aviso' })).toBeInTheDocument();
+    vi.mocked(api.inbox).mockRejectedValue(new DataError('Acceso retirado', 'PT404'));
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: api.scopeKey });
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByText(notification.task_title)).not.toBeInTheDocument();
+    expect(api.setRead).not.toHaveBeenCalled();
+  });
   it('muestra avisos reales, su contexto, iconos y detalle sin activar servicios externos', async () => {
     await mount();
     expect(screen.getByRole('heading', { name: 'Bandeja de entrada' })).toBeInTheDocument();

@@ -8,6 +8,7 @@ import { Dialog, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
 import { PriorityIcon, ProjectGlyph, TaskStatusIcon } from './project-identity';
 import './task-form.css';
+import './mobile-form-communication.css';
 
 interface Props {
   task?: Task;

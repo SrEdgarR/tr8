@@ -36,6 +36,26 @@ function mount(api: CalendarApi, strict = false) {
 }
 
 describe('preferencia horaria automática del calendario', () => {
+  it('cambia categorías con el selector móvil y conserva las conexiones al volver a ellas', async () => {
+    const api = calendarApi({ profile: vi.fn().mockResolvedValue(savedProfile('America/La_Paz')) });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CalendarSettings api={api} integrations={<input aria-label="Borrador de conexión" />} />
+      </QueryClientProvider>,
+    );
+    const picker = screen.getByRole('combobox', { name: 'Sección de configuración' });
+    expect(screen.queryByRole('textbox', { name: 'Borrador de conexión' })).not.toBeInTheDocument();
+    fireEvent.change(picker, { target: { value: 'connections' } });
+    const draft = screen.getByRole('textbox', { name: 'Borrador de conexión' });
+    fireEvent.change(draft, { target: { value: 'Agente personal' } });
+    fireEvent.change(picker, { target: { value: 'general' } });
+    expect(screen.queryByRole('textbox', { name: 'Borrador de conexión' })).not.toBeInTheDocument();
+    fireEvent.change(picker, { target: { value: 'connections' } });
+    expect(screen.getByRole('textbox', { name: 'Borrador de conexión' })).toHaveValue('Agente personal');
+    expect(api.saveProfile).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.spyOn(CalendarTime, 'detectDeviceTimeZone').mockReturnValue('Asia/Tokyo');
   });

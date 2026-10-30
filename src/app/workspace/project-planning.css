@@ -45,8 +45,8 @@
   color: var(--text-3);
   pointer-events: none;
 }
-.pw-planning-control > input,
-.pw-planning-control > select {
+.pw-project-dialog .pw-field .pw-planning-control > input,
+.pw-project-dialog .pw-field .pw-planning-control > select {
   width: 100%;
   min-width: 0;
   padding-left: 33px;

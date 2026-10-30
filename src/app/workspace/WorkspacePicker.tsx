@@ -8,6 +8,7 @@ interface Props {
   workspaces: WorkspaceSummary[];
   selectedId: string;
   disabled?: boolean;
+  modal?: boolean;
   onSelect?: (id: string) => void;
 }
 const name = (space: WorkspaceSummary) => (space.kind === 'personal' ? 'Mi espacio personal' : space.name);
@@ -15,19 +16,19 @@ const name = (space: WorkspaceSummary) => (space.kind === 'personal' ? 'Mi espac
 export default function WorkspacePicker(props: Props) {
   return (
     <ScopedWorkspacePicker
-      key={JSON.stringify([props.selectedId, props.disabled, props.workspaces.map(space => [space.id, space.version, space.name])])}
+      key={JSON.stringify([props.selectedId, props.disabled, props.modal, props.workspaces.map(space => [space.id, space.version, space.name])])}
       {...props}
     />
   );
 }
 
-function ScopedWorkspacePicker({ workspaces, selectedId, disabled = false, onSelect }: Props) {
+function ScopedWorkspacePicker({ workspaces, selectedId, disabled = false, modal = false, onSelect }: Props) {
   const prefix = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState(selectedId);
-  const [position, setPosition] = useState({ left: 8, top: 64, width: 280, maxHeight: 360 });
+  const [position, setPosition] = useState({ position: 'fixed' as 'fixed' | 'absolute', left: 8, top: 64, width: 280, maxHeight: 360 });
   const typeahead = useRef({ value: '', at: 0 });
   const selected = workspaces.find(space => space.id === selectedId);
   const unavailable = disabled || !onSelect || !selected;
@@ -39,6 +40,8 @@ function ScopedWorkspacePicker({ workspaces, selectedId, disabled = false, onSel
   const listId = `${prefix}-spaces`;
   const optionId = (index: number) => `${prefix}-space-${index}`;
   const activeOptionId = optionId(activeIndex);
+  const modalContainer = open && modal ? (trigger.current?.closest<HTMLElement>('[role="dialog"][aria-modal="true"]') ?? null) : null;
+  const portalContainer = modalContainer ?? document.body;
 
   useEffect(() => {
     if (!open) return;
@@ -54,13 +57,19 @@ function ScopedWorkspacePicker({ workspaces, selectedId, disabled = false, onSel
     function place() {
       const bounds = trigger.current?.getBoundingClientRect();
       if (!bounds) return;
-      const width = Math.min(Math.max(bounds.width, 276), window.innerWidth - 16);
-      const below = window.innerHeight - bounds.bottom - 16;
-      const above = bounds.top - 16;
+      const containerBounds = modalContainer?.getBoundingClientRect();
+      const availableWidth = modalContainer ? modalContainer.clientWidth || containerBounds?.width || window.innerWidth : window.innerWidth;
+      const availableHeight = modalContainer ? modalContainer.clientHeight || containerBounds?.height || window.innerHeight : window.innerHeight;
+      const left = bounds.left - (containerBounds?.left ?? 0) - (modalContainer?.clientLeft ?? 0);
+      const topEdge = bounds.top - (containerBounds?.top ?? 0) - (modalContainer?.clientTop ?? 0);
+      const bottomEdge = topEdge + bounds.height;
+      const width = Math.min(Math.max(bounds.width, 276), availableWidth - 16);
+      const below = availableHeight - bottomEdge - 16;
+      const above = topEdge - 16;
       const upwards = below < 180 && above > below;
       const maxHeight = Math.max(100, Math.min(380, upwards ? above : below));
-      const top = upwards ? Math.max(8, bounds.top - Math.min(menu.current?.scrollHeight ?? 380, maxHeight) - 6) : bounds.bottom + 6;
-      setPosition({ left: Math.max(8, Math.min(bounds.left, window.innerWidth - width - 8)), top, width, maxHeight });
+      const top = upwards ? Math.max(8, topEdge - Math.min(menu.current?.scrollHeight ?? 380, maxHeight) - 6) : bottomEdge + 6;
+      setPosition({ position: modalContainer ? 'absolute' : 'fixed', left: Math.max(8, Math.min(left, availableWidth - width - 8)), top, width, maxHeight });
     }
     place();
     window.addEventListener('resize', place);
@@ -69,7 +78,7 @@ function ScopedWorkspacePicker({ workspaces, selectedId, disabled = false, onSel
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [open]);
+  }, [open, modalContainer]);
 
   useLayoutEffect(() => {
     if (open) document.getElementById(activeOptionId)?.scrollIntoView?.({ block: 'nearest' });
@@ -187,7 +196,7 @@ function ScopedWorkspacePicker({ workspaces, selectedId, disabled = false, onSel
               );
             })}
           </div>,
-          document.body,
+          portalContainer,
         )}
     </div>
   );

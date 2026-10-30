@@ -30,6 +30,20 @@ function callbacks() {
 }
 
 describe('identidad visual del proyecto', () => {
+  it('can fold optional customization without submitting or losing its selection', async () => {
+    const value = callbacks();
+    render(<ProjectForm {...value} />);
+    const toggle = screen.getByRole('button', { name: 'Plantilla, icono y color' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Icono Cohete' }));
+    await userEvent.click(toggle);
+    await userEvent.click(toggle);
+    expect(screen.getByRole('button', { name: 'Icono Cohete' })).toHaveAttribute('aria-pressed', 'true');
+    expect(value.onCreate).not.toHaveBeenCalled();
+    expect(value.onUpdate).not.toHaveBeenCalled();
+  });
   it('ofrece los 16 iconos de la demo y guarda icono y color de forma atómica', async () => {
     const user = userEvent.setup();
     const props = callbacks();

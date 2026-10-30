@@ -9,6 +9,7 @@ import { Busy, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
 import TimeZonePicker from './TimeZonePicker';
 import './recurrence.css';
+import './mobile-form-communication.css';
 
 interface Props {
   task: Task;

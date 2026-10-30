@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, AtSign, Bell, CheckCheck, Inbox, Mail, MailOpen, MessageSquare, RefreshCw, Trash2, UserPlus } from 'lucide-react';
 import type { CommunicationApi, InboxNotification, InboxState } from '../communication-types';
 import { IdentityAvatar } from './project-identity';
-import { Busy, EmptyState, ErrorNotice, ProjectIcon } from './ui';
+import { Busy, Dialog, EmptyState, ErrorNotice, ProjectIcon } from './ui';
+import useCompactViewport from './useCompactViewport';
 import { errorMessage } from './helpers';
 import './communication.css';
+import './mobile-form-communication.css';
 
 export interface InboxPageProps {
   api: CommunicationApi;
@@ -33,6 +35,7 @@ export default function InboxPage(props: InboxPageProps) {
 }
 
 function ScopedInboxPage({ api, mode = 'inbox', onOpenTask, readOnly = false, onChanged }: InboxPageProps) {
+  const compact = useCompactViewport();
   const client = useQueryClient();
   const queryKey = [...api.scopeKey, 'inbox'];
   const active = useRef(true);
@@ -59,7 +62,7 @@ function ScopedInboxPage({ api, mode = 'inbox', onOpenTask, readOnly = false, on
   const available = !!query.data && !query.error && !blocked;
   const all = available ? query.data!.items : [];
   const rows = all.filter(row => (filter === 'all' || row.kind === filter) && (!unreadOnly || row.read_at === null));
-  const selected = rows.find(row => row.id === selectedId) ?? rows[0];
+  const selected = rows.find(row => row.id === selectedId) ?? (compact ? undefined : rows[0]);
   const unread = available ? query.data!.unread_count : 0;
   function update(transform: (items: InboxNotification[]) => InboxNotification[]) {
     client.setQueryData<InboxState>(queryKey, previous => {
@@ -134,6 +137,50 @@ function ScopedInboxPage({ api, mode = 'inbox', onOpenTask, readOnly = false, on
     });
   }
 
+  const detail = selected ? (
+    <section className="ci-detail" aria-label="Detalle del aviso">
+      {compact && (error || query.error) && <ErrorNotice>{error ?? errorMessage(query.error)}</ErrorNotice>}
+      {compact && notice && (
+        <p className="tc-notice" role="status">
+          {notice}
+        </p>
+      )}
+      <div className="ci-detail-actions">
+        <button
+          type="button"
+          className="ibtn"
+          aria-label={selected.read_at === null ? 'Marcar aviso como leído' : 'Marcar aviso como no leído'}
+          disabled={busy || readOnly}
+          onClick={() => setRead(selected)}
+        >
+          {selected.read_at === null ? <MailOpen size={17} aria-hidden="true" /> : <Mail size={17} aria-hidden="true" />}
+        </button>
+        <button type="button" className="ibtn btn-danger-ghost" aria-label="Retirar aviso" disabled={busy || readOnly} onClick={() => dismiss(selected)}>
+          <Trash2 size={16} aria-hidden="true" />
+        </button>
+      </div>
+      <div className="ci-detail-person">
+        <IdentityAvatar name={selected.actor_name} decorative />
+        <div>
+          <strong>{selected.actor_name}</strong>
+          <p>{descriptions[selected.kind]}</p>
+          <time dateTime={selected.created_at}>{dateLabel(selected.created_at)}</time>
+        </div>
+      </div>
+      <div className="ci-detail-task">
+        <span className="ci-row-project">
+          <ProjectIcon icon={selected.project_icon} color={selected.project_color} />
+          {selected.project_name}
+        </span>
+        <h2>{selected.task_title}</h2>
+        <p>Abre la tarea para consultar la conversación y responder con su contexto.</p>
+      </div>
+      <button type="button" className="btn btn-primary" disabled={busy} onClick={() => open(selected)}>
+        Abrir tarea y responder
+        <ArrowUpRight size={15} aria-hidden="true" />
+      </button>
+    </section>
+  ) : null;
   return (
     <section className="page ci-page" aria-label={mode === 'inbox' ? 'Bandeja de entrada' : 'Notificaciones'}>
       <div className="ph">
@@ -170,8 +217,8 @@ function ScopedInboxPage({ api, mode = 'inbox', onOpenTask, readOnly = false, on
         </label>
       </div>
       {query.isPending && <Busy>Cargando tus avisos…</Busy>}
-      {(error || query.error) && <ErrorNotice>{error ?? errorMessage(query.error)}</ErrorNotice>}
-      {notice && (
+      {!(compact && selected) && (error || query.error) && <ErrorNotice>{error ?? errorMessage(query.error)}</ErrorNotice>}
+      {!(compact && selected) && notice && (
         <p className="tc-notice" role="status">
           <CheckCheck size={14} aria-hidden="true" />
           {notice}
@@ -215,50 +262,14 @@ function ScopedInboxPage({ api, mode = 'inbox', onOpenTask, readOnly = false, on
                 );
               })}
             </div>
-            {selected && (
-              <section className="ci-detail" aria-label="Detalle del aviso">
-                <div className="ci-detail-actions">
-                  <button
-                    type="button"
-                    className="ibtn"
-                    aria-label={selected.read_at === null ? 'Marcar aviso como leído' : 'Marcar aviso como no leído'}
-                    disabled={busy || readOnly}
-                    onClick={() => setRead(selected)}
-                  >
-                    {selected.read_at === null ? <MailOpen size={17} aria-hidden="true" /> : <Mail size={17} aria-hidden="true" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="ibtn btn-danger-ghost"
-                    aria-label="Retirar aviso"
-                    disabled={busy || readOnly}
-                    onClick={() => dismiss(selected)}
-                  >
-                    <Trash2 size={16} aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="ci-detail-person">
-                  <IdentityAvatar name={selected.actor_name} decorative />
-                  <div>
-                    <strong>{selected.actor_name}</strong>
-                    <p>{descriptions[selected.kind]}</p>
-                    <time dateTime={selected.created_at}>{dateLabel(selected.created_at)}</time>
-                  </div>
-                </div>
-                <div className="ci-detail-task">
-                  <span className="ci-row-project">
-                    <ProjectIcon icon={selected.project_icon} color={selected.project_color} />
-                    {selected.project_name}
-                  </span>
-                  <h2>{selected.task_title}</h2>
-                  <p>Abre la tarea para consultar la conversación y responder con su contexto.</p>
-                </div>
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => open(selected)}>
-                  Abrir tarea y responder
-                  <ArrowUpRight size={15} aria-hidden="true" />
-                </button>
-              </section>
-            )}
+            {selected &&
+              (compact ? (
+                <Dialog title="Detalle del aviso" className="ci-mobile-detail" onClose={() => setSelectedId(null)} busy={busy}>
+                  {detail}
+                </Dialog>
+              ) : (
+                detail
+              ))}
           </div>
         ) : (
           <EmptyState title={unreadOnly ? 'Todo al día' : filter === 'all' ? 'Tu bandeja está al día' : 'No hay avisos de este tipo'}>

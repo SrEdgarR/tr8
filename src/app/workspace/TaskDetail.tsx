@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import {
   Archive,
   ArrowRightLeft,
@@ -6,6 +6,7 @@ import {
   Check,
   CheckCheck,
   Copy,
+  Ellipsis,
   ListChecks,
   Pencil,
   Plus,
@@ -27,6 +28,7 @@ import { errorMessage } from './helpers';
 import TaskForm from './TaskForm';
 import RecurrencePanel from './RecurrencePanel';
 import './task-detail.css';
+import './mobile-form-communication.css';
 
 export interface TaskDetailProps {
   task: Task;
@@ -106,6 +108,9 @@ function ScopedTaskDetail({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [moreActions, setMoreActions] = useState(false);
+  const moreActionsId = useId();
+  const moreActionsToggle = useRef<HTMLButtonElement>(null);
   const lock = useRef(false);
   const active = useRef(true);
   useEffect(() => {
@@ -428,43 +433,70 @@ function ScopedTaskDetail({
             <Check size={14} aria-hidden="true" />
             {current.status === 'done' ? 'Reabrir tarea' : 'Completar tarea'}
           </button>
-          {api && (
-            <>
-              <button type="button" className="btn btn-ghost btn-sm" disabled={disabled || !mayDuplicate} onClick={() => openAction('duplicate')}>
-                <Copy size={14} aria-hidden="true" />
-                Duplicar
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                disabled={disabled || !mayEdit || dirty || !destinations.some(item => item.id !== current.project_id)}
-                onClick={() => openAction('move')}
-              >
-                <ArrowRightLeft size={14} aria-hidden="true" />
-                Mover
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                disabled={disabled || readOnly || !canEdit || projectArchived || dirty}
-                onClick={() => openAction(archived ? 'restore' : 'archive')}
-              >
-                {archived ? <RotateCcw size={14} aria-hidden="true" /> : <Archive size={14} aria-hidden="true" />}
-                {archived ? 'Restaurar' : 'Archivar'}
-              </button>
-            </>
-          )}
-          {canDelete && (
+          {(api || canDelete) && (
             <button
+              ref={moreActionsToggle}
               type="button"
-              className="btn btn-ghost btn-sm td-danger"
-              disabled={disabled || readOnly || projectArchived}
-              onClick={() => openAction('delete')}
+              className="btn btn-secondary btn-sm td-more-toggle"
+              aria-expanded={moreActions}
+              aria-controls={moreActionsId}
+              onClick={() => setMoreActions(value => !value)}
             >
-              <Trash2 size={14} aria-hidden="true" />
-              Eliminar
+              <Ellipsis size={17} aria-hidden="true" />
+              Más acciones
             </button>
           )}
+          <div
+            id={moreActionsId}
+            className={`td-secondary-actions${moreActions ? ' is-open' : ''}`}
+            role="group"
+            aria-label="Más acciones de tarea"
+            onKeyDown={event => {
+              if (event.key === 'Escape' && moreActions) {
+                event.stopPropagation();
+                setMoreActions(false);
+                if (moreActionsToggle.current && getComputedStyle(moreActionsToggle.current).display !== 'none') moreActionsToggle.current.focus();
+              }
+            }}
+          >
+            {api && (
+              <>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={disabled || !mayDuplicate} onClick={() => openAction('duplicate')}>
+                  <Copy size={14} aria-hidden="true" />
+                  Duplicar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  disabled={disabled || !mayEdit || dirty || !destinations.some(item => item.id !== current.project_id)}
+                  onClick={() => openAction('move')}
+                >
+                  <ArrowRightLeft size={14} aria-hidden="true" />
+                  Mover
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  disabled={disabled || readOnly || !canEdit || projectArchived || dirty}
+                  onClick={() => openAction(archived ? 'restore' : 'archive')}
+                >
+                  {archived ? <RotateCcw size={14} aria-hidden="true" /> : <Archive size={14} aria-hidden="true" />}
+                  {archived ? 'Restaurar' : 'Archivar'}
+                </button>
+              </>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm td-danger"
+                disabled={disabled || readOnly || projectArchived}
+                onClick={() => openAction('delete')}
+              >
+                <Trash2 size={14} aria-hidden="true" />
+                Eliminar
+              </button>
+            )}
+          </div>
         </div>
         {dirty && <p className="faint">Guarda o descarta los cambios de detalle antes de mover o archivar la tarea.</p>}
         <dl className="td-properties">
@@ -605,13 +637,15 @@ function ScopedTaskDetail({
             <div className="td-subtasks">
               {subtasks.map((item, index) => (
                 <div className={`td-subtask${item.done ? ' is-done' : ''}`} key={item.id}>
-                  <input
-                    type="checkbox"
-                    checked={item.done}
-                    disabled={metadataDisabled}
-                    aria-label={`${item.done ? 'Reabrir' : 'Completar'} subtarea ${item.title || index + 1}`}
-                    onChange={event => patchSubtask(item.id, { done: event.target.checked })}
-                  />
+                  <label className="td-subtask-check">
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      disabled={metadataDisabled}
+                      aria-label={`${item.done ? 'Reabrir' : 'Completar'} subtarea ${item.title || index + 1}`}
+                      onChange={event => patchSubtask(item.id, { done: event.target.checked })}
+                    />
+                  </label>
                   <input
                     className="td-subtask-title"
                     aria-label={`Título de subtarea ${index + 1}`}

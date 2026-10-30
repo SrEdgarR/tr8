@@ -91,6 +91,30 @@ const vault: FinanceApi = {
 };
 
 describe('acciones de movimientos', () => {
+  it('pliega los filtros móviles sin cambiar el resultado ni guardar movimientos y devuelve el foco al cerrar con Escape', () => {
+    const h = mount();
+    const toggle = screen.getByRole('button', { name: 'Filtrar movimientos' });
+    const filters = screen.getByRole('group', { name: 'Filtros de movimientos' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', filters.id);
+    fireEvent.click(toggle);
+    expect(filters).toHaveClass('is-open');
+    fireEvent.change(within(filters).getByLabelText('Cuenta'), { target: { value: 'bank' } });
+    expect(screen.getByRole('button', { name: 'Editar movimiento Transferencia QA' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Editar movimiento Ingreso QA' })).not.toBeInTheDocument();
+    fireEvent.keyDown(within(filters).getByLabelText('Cuenta'), { key: 'Escape' });
+    expect(toggle).toHaveAccessibleName('Filtrar movimientos, 1 filtro activo');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveFocus();
+    expect(filters).not.toHaveClass('is-open');
+    fireEvent.click(toggle);
+    expect(within(filters).getByLabelText('Cuenta')).toHaveValue('bank');
+    fireEvent.click(within(filters).getByRole('button', { name: 'Limpiar filtros de movimientos' }));
+    expect(within(filters).getByLabelText('Cuenta')).toHaveValue('');
+    expect(toggle).toHaveAccessibleName('Filtrar movimientos');
+    expect(screen.getByRole('button', { name: 'Editar movimiento Ingreso QA' })).toBeInTheDocument();
+    expect(h.save).not.toHaveBeenCalled();
+  });
   it('permite corregir un ingreso con DOP y vuelve al historial sin duplicar el movimiento', async () => {
     const original = snapshot(),
       h = mount(original);

@@ -1,0 +1,427 @@
+.pm-options,
+.pm-options-panel {
+  display: contents;
+}
+.pm-options-toggle,
+.pw-calendar-mobile-day,
+.pw-settings-mobile-category {
+  display: none;
+}
+.pwt-toolbar .pwt-filters {
+  flex: 1 0 100%;
+}
+
+@media (max-width: 700px) {
+  .pm-options {
+    display: block;
+    min-width: 0;
+    margin: 10px 0;
+  }
+  .pm-options .pm-options-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+  .pm-options-toggle > svg:last-child {
+    margin-left: auto;
+  }
+  .pm-options-toggle[aria-expanded='true'] > svg:last-child {
+    transform: rotate(180deg);
+  }
+  .pm-options-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    min-height: 20px;
+    border-radius: 5px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12px;
+  }
+  .pm-options .pm-options-panel {
+    display: none;
+  }
+  .pm-options .pm-options-panel.is-open {
+    display: grid;
+    min-width: 0;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    background: var(--surface-2);
+  }
+  .pw-calendar .pw-calendar-controls {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+  }
+  .pw-calendar .pw-calendar-navigation {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px auto;
+    gap: 2px;
+    width: 100%;
+  }
+  .pw-calendar .pw-calendar-navigation h2 {
+    min-width: 0;
+    text-align: center;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .pw-calendar .pw-calendar-navigation > button,
+  .pw-calendar .pw-segment > button,
+  .pw-calendar-refresh > button,
+  .pw-calendar-unscheduled > button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .pw-calendar .pw-segment {
+    justify-self: start;
+  }
+  .pw-calendar .pm-options-panel .pw-calendar-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    margin: 0;
+  }
+  .pw-calendar .pm-options-panel .pw-field {
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+  }
+  .pw-calendar .pw-field select,
+  .pw-calendar .pw-field input,
+  .pw-calendar .pw-calendar-check {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .pw-calendar .pw-calendar-check {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .pw-calendar-check input {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .pw-calendar .pm-options-panel .pw-calendar-caption {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .pw-calendar .pw-calendar-responsive-month {
+    display: block;
+    margin-top: 8px;
+  }
+  .pw-calendar-responsive-month .pw-calendar-day {
+    position: relative;
+    min-height: 46px;
+    padding: 0;
+  }
+  .pw-calendar-responsive-month .pw-calendar-day > .pw-calendar-day-number,
+  .pw-calendar-responsive-month .pw-calendar-day > .pw-calendar-entry,
+  .pw-calendar-responsive-month .pw-calendar-day > .pw-text-link {
+    display: none;
+  }
+  .pw-calendar-responsive-month .pw-calendar-mobile-day {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    min-height: 46px;
+    padding: 5px 2px;
+    color: var(--text);
+    font-size: 13px;
+    border-radius: 0;
+  }
+  .pw-calendar-mobile-day:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -3px;
+  }
+  .pw-calendar-responsive-month .outside .pw-calendar-mobile-day {
+    color: var(--text-3);
+  }
+  .pw-calendar-responsive-month .today .pw-calendar-mobile-day > span:first-child {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .pw-calendar-responsive-month .pw-calendar-mobile-day[aria-pressed='true'] {
+    background: var(--accent-soft);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .pw-calendar-mobile-day-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .pw-calendar-mobile-agenda-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .pw-calendar-mobile-agenda-heading h3 {
+    margin: 0;
+    font-size: 14px;
+  }
+  .pw-calendar-mobile-agenda-heading > button {
+    min-height: 44px;
+  }
+  .pw-calendar-agenda-day {
+    padding: 12px 0;
+  }
+  .pw-calendar-agenda-day h3 {
+    margin: 0;
+    font-size: 13px;
+  }
+  .pw-calendar .pw-calendar-entry strong {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .pw-calendar-refresh {
+    gap: 8px;
+  }
+  .pw-calendar-unscheduled {
+    margin-top: 16px;
+  }
+  .pwt-page {
+    --pwt-label-width: min(46vw, 190px);
+    gap: 10px;
+    max-width: 100%;
+  }
+  .pwt-page .pwt-toolbar,
+  .pwt-page .pwt-period {
+    width: 100%;
+    min-width: 0;
+  }
+  .pwt-page .pwt-toolbar > .pm-options {
+    flex: 1 0 100%;
+    margin: 0;
+  }
+  .pwt-period > button,
+  .pwt-controls > .btn,
+  .pwt-page .pwt-scale > button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .pwt-page .pwt-range {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .pwt-page .pm-options-panel .pwt-controls,
+  .pwt-page .pm-options-panel .pwt-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    gap: 10px;
+  }
+  .pwt-page .pwt-scale {
+    justify-content: stretch;
+  }
+  .pwt-page .pwt-scale > button {
+    flex: 1;
+  }
+  .pwt-page .pwt-search,
+  .pwt-page .pwt-controls select,
+  .pwt-page .pwt-filters select {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .pwt-page .pwt-search input {
+    min-width: 0;
+    min-height: 42px;
+    font-size: 16px;
+  }
+  .pwt-page .pwt-scroll {
+    min-width: 0;
+    max-width: 100%;
+    overscroll-behavior: contain;
+  }
+  .pwt-page .pwt-task-open,
+  .pwt-page .pwt-label > .ibtn {
+    min-height: 40px;
+  }
+  .pwt-page .pwt-label {
+    gap: 4px;
+    padding: 0 6px;
+  }
+  .pwt-page .pwt-label > .ibtn {
+    min-width: 32px;
+    width: 32px;
+    height: 40px;
+    min-height: 40px;
+  }
+  .pwt-page .pwt-task-title {
+    font-size: 12px;
+  }
+  .pwt-page .pwt-note {
+    font-size: 12px;
+  }
+  .pw-settings .pw-settings-nav {
+    display: none;
+  }
+  .pw-settings .pw-settings-layout {
+    gap: 18px;
+    margin-top: 18px;
+  }
+  .pw-settings-mobile-category {
+    display: grid;
+    min-width: 0;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+  .pw-settings-mobile-category-input {
+    display: flex;
+    align-items: center;
+    position: relative;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    background: var(--surface-2);
+    color: var(--accent);
+  }
+  .pw-settings-mobile-category-input > svg {
+    position: absolute;
+    left: 12px;
+    pointer-events: none;
+  }
+  .pw-settings-mobile-category-input > svg:last-child {
+    left: auto;
+    right: 12px;
+    color: var(--text-3);
+  }
+  .pw-settings-mobile-category-input select {
+    appearance: none;
+    min-width: 0;
+    width: 100%;
+    min-height: 44px;
+    padding: 9px 38px;
+    background: transparent;
+    border: 0;
+    color: var(--text);
+    border-radius: inherit;
+    font: inherit;
+    font-size: 16px;
+  }
+  .pw-settings-mobile-category-input:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .pw-settings-mobile-category-input select:focus-visible {
+    outline: none;
+  }
+  .pw-settings .pw-settings-disclosure-body {
+    padding: 12px;
+  }
+  .pw-settings .pw-settings-disclosure-toggle {
+    padding: 12px;
+    min-height: 60px;
+  }
+  .pw-settings .pw-settings-item-copy > span {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .pw-settings :is(.btn, .ibtn),
+  .pw-settings .pw-appearance-segment label > span {
+    min-height: 44px;
+  }
+  .pw-settings .ibtn {
+    min-width: 44px;
+  }
+  .pw-settings :is(input:not([type='checkbox']):not([type='radio']), select, textarea),
+  .pw-calendar-zone :is(input:not([type='checkbox']), select) {
+    min-height: 44px;
+    max-width: 100%;
+    font-size: 16px;
+  }
+  .pw-settings :is(.pw-calendar-zone-heading, .pw-calendar-zone-footer, .pw-google-heading, .pw-google-actions, .pw-appearance-row, .pw-processes-heading) {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .pw-settings .pw-calendar-zone-heading {
+    align-items: flex-start;
+  }
+  .pw-settings .pw-time-zone-picker {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .pw-time-zone-results [role='option'] {
+    min-height: 56px;
+    gap: 6px;
+    padding: 10px 8px;
+  }
+  .pw-time-zone-place {
+    overflow-wrap: anywhere;
+  }
+  .pw-settings :is(.pw-google, .pw-google-body, .pw-mcp-panel, .pw-processes, .pw-appearance) {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .pw-settings .pw-appearance-row > select,
+  .pw-settings .pw-appearance-segment {
+    width: 100%;
+    max-width: none;
+  }
+  .pw-settings .pw-appearance-segment label {
+    flex: 1;
+  }
+  .pw-settings .pw-appearance-segment label > span {
+    display: grid;
+    place-items: center;
+    padding: 8px 4px;
+  }
+  .pw-settings .pw-mcp-credential > .btn {
+    margin-left: 0;
+  }
+  .pw-settings .pw-mcp-help summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .pw-settings .pw-mcp-help pre {
+    max-width: 100%;
+    font-size: 12px;
+    overscroll-behavior-x: contain;
+  }
+}
+
+@media (max-width: 420px) {
+  .pw-settings .pw-theme-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pw-settings .pw-theme-option:last-child {
+    grid-column: 1 / -1;
+  }
+  .pw-settings .pw-theme-option-label {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+@media (max-height: 500px) and (max-width: 900px) {
+  .pwt-page .pwt-scroll {
+    min-height: 150px;
+    max-height: 55dvh;
+  }
+  .pw-time-zone-results {
+    max-height: 45dvh;
+  }
+}

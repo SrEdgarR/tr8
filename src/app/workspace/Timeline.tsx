@@ -23,6 +23,7 @@ import {
   type TimelineScale,
 } from './timeline-model';
 import './timeline.css';
+import PlanningViewOptions from './PlanningViewOptions';
 
 interface Props {
   data: WorkspaceProps;
@@ -270,109 +271,111 @@ function ScopedTimeline({ data, planning, project, onOpen, onReschedule, milesto
             {formatDate(window.start)} — {formatDate(window.end)} {window.end.slice(0, 4)}
           </span>
         </div>
-        <div className="pwt-controls">
-          <div className="pwt-scale" role="group" aria-label="Escala del cronograma">
-            {(['week', 'month'] as const).map(value => (
-              <button type="button" key={value} className={scale === value ? 'active' : ''} aria-pressed={scale === value} onClick={() => setScale(value)}>
-                {value === 'week' ? 'Semanas' : 'Meses'}
-              </button>
-            ))}
-          </div>
-          <select
-            aria-label="Agrupar cronograma"
-            value={grouping === 'assignee' && !model.directoryAvailable ? 'status' : grouping}
-            onChange={event => {
-              setGrouping(event.target.value as TimelineGrouping);
-              setCollapsed(new Set());
-            }}
-          >
-            <option value="status">Agrupar: Estado</option>
-            <option value="project">Agrupar: Proyecto</option>
-            {model.directoryAvailable && <option value="assignee">Agrupar: Responsable</option>}
-            <option value="none">Sin agrupar</option>
-          </select>
-          {milestoneContent && (
-            <button
-              type="button"
-              className={`btn btn-secondary btn-sm${showMilestones ? ' is-active' : ''}`}
-              aria-expanded={showMilestones}
-              aria-controls="pwt-milestone-panel"
-              onClick={() => setShowMilestones(value => !value)}
+        <PlanningViewOptions label="Opciones del cronograma" activeCount={Object.values(filters).filter(Boolean).length}>
+          <div className="pwt-controls">
+            <div className="pwt-scale" role="group" aria-label="Escala del cronograma">
+              {(['week', 'month'] as const).map(value => (
+                <button type="button" key={value} className={scale === value ? 'active' : ''} aria-pressed={scale === value} onClick={() => setScale(value)}>
+                  {value === 'week' ? 'Semanas' : 'Meses'}
+                </button>
+              ))}
+            </div>
+            <select
+              aria-label="Agrupar cronograma"
+              value={grouping === 'assignee' && !model.directoryAvailable ? 'status' : grouping}
+              onChange={event => {
+                setGrouping(event.target.value as TimelineGrouping);
+                setCollapsed(new Set());
+              }}
             >
-              <Diamond size={14} aria-hidden="true" />
-              Hitos
-              <ChevronDown size={12} aria-hidden="true" />
-            </button>
-          )}
-        </div>
+              <option value="status">Agrupar: Estado</option>
+              <option value="project">Agrupar: Proyecto</option>
+              {model.directoryAvailable && <option value="assignee">Agrupar: Responsable</option>}
+              <option value="none">Sin agrupar</option>
+            </select>
+            {milestoneContent && (
+              <button
+                type="button"
+                className={`btn btn-secondary btn-sm${showMilestones ? ' is-active' : ''}`}
+                aria-expanded={showMilestones}
+                aria-controls="pwt-milestone-panel"
+                onClick={() => setShowMilestones(value => !value)}
+              >
+                <Diamond size={14} aria-hidden="true" />
+                Hitos
+                <ChevronDown size={12} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          <div className="pwt-filters">
+            <label className="pwt-search">
+              <Search size={14} aria-hidden="true" />
+              <input
+                aria-label="Buscar en el cronograma"
+                placeholder="Buscar tareas…"
+                value={filters.query}
+                onChange={event => updateFilter('query', event.target.value)}
+              />
+            </label>
+            <select
+              aria-label="Estado en el cronograma"
+              value={filters.status}
+              onChange={event => updateFilter('status', event.target.value as TimelineFilters['status'])}
+            >
+              <option value="">Todos los estados</option>
+              {STATUSES.map(status => (
+                <option key={status.id} value={status.id}>
+                  {status.name}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Prioridad en el cronograma"
+              value={filters.priority}
+              onChange={event => updateFilter('priority', event.target.value as TimelineFilters['priority'])}
+            >
+              <option value="">Todas las prioridades</option>
+              {PRIORITIES.map(priority => (
+                <option key={priority.id} value={priority.id}>
+                  {priority.name}
+                </option>
+              ))}
+            </select>
+            {!project && (
+              <select aria-label="Proyecto en el cronograma" value={filters.projectId} onChange={event => updateFilter('projectId', event.target.value)}>
+                <option value="">Todos los proyectos</option>
+                {model.projects.map(value => (
+                  <option key={value.id} value={value.id}>
+                    {value.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {model.directoryAvailable && (
+              <select aria-label="Responsable en el cronograma" value={filters.assigneeId} onChange={event => updateFilter('assigneeId', event.target.value)}>
+                <option value="">Todos los responsables</option>
+                <option value="__unassigned">Sin responsable</option>
+                {model.members.map(member => (
+                  <option key={member.id} value={member.id}>
+                    {member.display_name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {Object.values(filters).some(Boolean) && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFilters(emptyTimelineFilters())}>
+                <X size={12} aria-hidden="true" />
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+        </PlanningViewOptions>
       </div>
       {showMilestones && milestoneContent && (
         <div className="pwt-milestone-panel" id="pwt-milestone-panel">
           {milestoneContent}
         </div>
       )}
-      <div className="pwt-filters">
-        <label className="pwt-search">
-          <Search size={14} aria-hidden="true" />
-          <input
-            aria-label="Buscar en el cronograma"
-            placeholder="Buscar tareas…"
-            value={filters.query}
-            onChange={event => updateFilter('query', event.target.value)}
-          />
-        </label>
-        <select
-          aria-label="Estado en el cronograma"
-          value={filters.status}
-          onChange={event => updateFilter('status', event.target.value as TimelineFilters['status'])}
-        >
-          <option value="">Todos los estados</option>
-          {STATUSES.map(status => (
-            <option key={status.id} value={status.id}>
-              {status.name}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Prioridad en el cronograma"
-          value={filters.priority}
-          onChange={event => updateFilter('priority', event.target.value as TimelineFilters['priority'])}
-        >
-          <option value="">Todas las prioridades</option>
-          {PRIORITIES.map(priority => (
-            <option key={priority.id} value={priority.id}>
-              {priority.name}
-            </option>
-          ))}
-        </select>
-        {!project && (
-          <select aria-label="Proyecto en el cronograma" value={filters.projectId} onChange={event => updateFilter('projectId', event.target.value)}>
-            <option value="">Todos los proyectos</option>
-            {model.projects.map(value => (
-              <option key={value.id} value={value.id}>
-                {value.name}
-              </option>
-            ))}
-          </select>
-        )}
-        {model.directoryAvailable && (
-          <select aria-label="Responsable en el cronograma" value={filters.assigneeId} onChange={event => updateFilter('assigneeId', event.target.value)}>
-            <option value="">Todos los responsables</option>
-            <option value="__unassigned">Sin responsable</option>
-            {model.members.map(member => (
-              <option key={member.id} value={member.id}>
-                {member.display_name}
-              </option>
-            ))}
-          </select>
-        )}
-        {Object.values(filters).some(Boolean) && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFilters(emptyTimelineFilters())}>
-            <X size={12} aria-hidden="true" />
-            Limpiar filtros
-          </button>
-        )}
-      </div>
       {planning.error && (
         <ErrorNotice>
           {planning.error}

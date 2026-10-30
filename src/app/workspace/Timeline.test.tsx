@@ -73,6 +73,25 @@ afterEach(() => {
 });
 
 describe('Timeline', () => {
+  it('conserva los filtros al plegar opciones móviles sin modificar tareas ni fechas', async () => {
+    const user = userEvent.setup();
+    const value = props();
+    render(<Timeline {...value} />);
+    const toggle = screen.getByRole('button', { name: 'Opciones del cronograma' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(toggle);
+    await user.type(screen.getByRole('textbox', { name: 'Buscar en el cronograma' }), 'No coincide');
+    expect(screen.queryByRole('button', { name: 'Preparar' })).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveFocus();
+    await user.click(toggle);
+    expect(screen.getByRole('textbox', { name: 'Buscar en el cronograma' })).toHaveValue('No coincide');
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
+    expect(screen.getByRole('button', { name: 'Preparar' })).toBeInTheDocument();
+    expect(value.onReschedule).not.toHaveBeenCalled();
+  });
+
   it('renders civil date bars, an explicit date alternative, and both demo scales', async () => {
     const user = userEvent.setup();
     const value = props();

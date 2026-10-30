@@ -23,6 +23,7 @@ import {
   Table2,
   Users,
   Wallet,
+  X,
 } from 'lucide-react';
 import { Link, NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import type { Project, WorkspaceProps } from '../types';
@@ -42,6 +43,8 @@ interface Props {
   onFavoriteProject?: (project: Project) => void;
   data: WorkspaceProps;
   collapsed: boolean;
+  mobile?: boolean;
+  mobileOpen?: boolean;
   pending: boolean;
   showFinance: boolean;
   onToggle: () => void;
@@ -53,6 +56,8 @@ interface Props {
 export default function WorkspaceSidebar({
   data,
   collapsed,
+  mobile = false,
+  mobileOpen = false,
   pending,
   showFinance,
   onToggle,
@@ -89,7 +94,14 @@ export default function WorkspaceSidebar({
   }
 
   return (
-    <aside className="side" id="tr8-sidebar" aria-label="Navegación principal">
+    <aside
+      className="side"
+      id="tr8-sidebar"
+      aria-label="Navegación principal"
+      role={mobileOpen ? 'dialog' : undefined}
+      aria-modal={mobileOpen ? true : undefined}
+      inert={mobile && !mobileOpen}
+    >
       <div className="side-top pw-side-brand">
         <Link to={`/${scope}`} className="ws" aria-label="Inicio de TR8" title="TR8" onClick={onNavigate}>
           <span className="ws-logo brand">
@@ -108,6 +120,9 @@ export default function WorkspaceSidebar({
         >
           {collapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}
         </button>
+        <button type="button" className="ibtn pw-mobile-nav-close" aria-label="Cerrar menú de navegación" data-mobile-nav-close onClick={onNavigate}>
+          <X size={20} aria-hidden="true" />
+        </button>
       </div>
       {data.workspace && data.workspaces && (
         <div className="pw-workspace-picker">
@@ -115,6 +130,7 @@ export default function WorkspaceSidebar({
             key={String(collapsed)}
             workspaces={data.workspaces}
             selectedId={data.workspace.id}
+            modal={mobileOpen}
             disabled={pending}
             onSelect={data.onSelectWorkspace}
           />

@@ -24,7 +24,7 @@ export default function PersonalFinancePage({
   if (vault)
     return (
       <>
-        <button className="btn btn-secondary" onClick={() => setVault(false)}>
+        <button className="btn btn-secondary tf-vault-back" onClick={() => setVault(false)}>
           <ArrowLeft size={15} aria-hidden="true" />
           Volver a Finanzas
         </button>
@@ -175,7 +175,7 @@ function AccountFinancePage({
   }
   const blocked = busy || pending !== null;
   return (
-    <section className="tf-page" aria-label="Finanzas personales">
+    <section className="tf-page tf-account-page" aria-label="Finanzas personales">
       <header className="tf-heading">
         <div>
           <span className="tf-eyebrow">

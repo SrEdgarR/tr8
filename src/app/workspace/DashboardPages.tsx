@@ -33,13 +33,8 @@ function byDue(left: Task, right: Task) {
 }
 
 function ScopeNote({ partial = false }: { partial?: boolean }) {
-  return (
-    <p className="dp-scope-note">
-      {partial
-        ? 'Algunos proyectos no permiten consultar sus tareas. Los totales incluyen únicamente las tareas visibles.'
-        : 'Solo se incluyen los proyectos y las tareas que puedes consultar en este espacio.'}
-    </p>
-  );
+  if (!partial) return null;
+  return <p className="dp-scope-note">Algunos proyectos no permiten consultar sus tareas. Los totales incluyen únicamente las tareas visibles.</p>;
 }
 
 function Stat({

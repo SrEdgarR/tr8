@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Activity, Check, CircleCheck, Globe2, LoaderCircle, Palette, Plug, Save, SlidersHorizontal, UserRound } from 'lucide-react';
+import { Activity, Check, ChevronDown, CircleCheck, Globe2, LoaderCircle, Palette, Plug, Save, SlidersHorizontal, UserRound } from 'lucide-react';
 import type { CalendarApi } from '../types';
 import { validTimeZone } from './CalendarTime';
 import TimeZonePicker from './TimeZonePicker';
@@ -10,6 +10,7 @@ import SettingsDisclosure from './SettingsDisclosure';
 import AppearanceSettings from './AppearanceSettings';
 import type { AppearanceController } from './useAppearance';
 import './settings.css';
+import './planning-mobile.css';
 
 type ZoneState = ReturnType<typeof useCalendarZonePreferences>;
 
@@ -133,6 +134,11 @@ export default function CalendarSettings({
 }) {
   const [category, setCategory] = useState<SettingsCategory>('general');
   const [visited, setVisited] = useState<SettingsCategory[]>(['general']);
+  const CurrentCategoryIcon = categories.find(item => item.id === category)?.icon ?? SlidersHorizontal;
+  function changeCategory(next: SettingsCategory) {
+    setCategory(next);
+    setVisited(previous => (previous.includes(next) ? previous : [...previous, next]));
+  }
   return (
     <div className="page pw-settings">
       <div className="ph">
@@ -146,6 +152,20 @@ export default function CalendarSettings({
         </div>
       </div>
       <div className="pw-settings-layout">
+        <label className="pw-settings-mobile-category">
+          <span>Sección de configuración</span>
+          <span className="pw-settings-mobile-category-input">
+            <CurrentCategoryIcon size={18} aria-hidden="true" />
+            <select value={category} onChange={event => changeCategory(event.target.value as SettingsCategory)}>
+              {categories.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={15} aria-hidden="true" />
+          </span>
+        </label>
         <nav className="pw-settings-nav" aria-label="Categorías de configuración">
           {['Personal', 'Integraciones'].map(group => (
             <div className="pw-settings-nav-group" key={group}>
@@ -159,10 +179,7 @@ export default function CalendarSettings({
                     className={category === id ? 'is-current' : ''}
                     aria-current={category === id ? 'page' : undefined}
                     aria-controls={`tr8-settings-${id}`}
-                    onClick={() => {
-                      setCategory(id);
-                      setVisited(previous => (previous.includes(id) ? previous : [...previous, id]));
-                    }}
+                    onClick={() => changeCategory(id)}
                   >
                     <Icon size={16} aria-hidden="true" />
                     <span>{label}</span>
