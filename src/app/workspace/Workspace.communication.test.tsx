@@ -93,12 +93,22 @@ describe('comunicación integrada por cuenta y proyecto', () => {
     expect(screen.getByRole('link', { name: 'Notificaciones, 1 sin leer' })).toBeInTheDocument();
     expect(api.thread).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Abrir tarea y responder' }));
-    await screen.findByText(comment.body);
+    // Opening the drawer mounts a lazy section before its thread query renders.
+    // Wait for that whole UI boundary, including cold module loading on CI.
+    await waitFor(
+      () => {
+        const dialog = screen.getByRole('dialog', { name: 'Detalle de tarea' });
+        const conversation = within(dialog).getByRole('region', { name: 'Comentarios' });
+        expect(api.thread).toHaveBeenCalledWith(summaryTask, null, expect.any(AbortSignal));
+        expect(within(conversation).getByText(comment.body)).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
     expect(api.setRead).toHaveBeenCalledWith(notification.id, true);
     expect(api.thread).toHaveBeenCalledWith(summaryTask, null, expect.any(AbortSignal));
     expect(screen.getByRole('dialog', { name: 'Detalle de tarea' })).toBeInTheDocument();
     expect(api.create).not.toHaveBeenCalled();
-  });
+  }, 10000);
   it('navega entre bandeja y notificaciones con una única página y sin modificar las tareas', async () => {
     const user = userEvent.setup(),
       api = communication(),
