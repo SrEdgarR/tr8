@@ -8,7 +8,11 @@ export function validateWorkspaceOperation(value: unknown, accounts: FinancialAc
   const kind = value && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, 'kind')?.value : undefined;
   const categorized = kind === 'income' || kind === 'expense';
   const refund = kind === 'refund';
+  const hasDestinationFields =
+    !!value && typeof value === 'object' && (Object.hasOwn(value, 'destinationCurrency') || Object.hasOwn(value, 'destinationAmountMinor'));
   if (refund && domainVersion < 3) throw new Error('Los reembolsos requieren la versión 3 del dominio.');
+  if (hasDestinationFields && (kind !== 'card-payment' || domainVersion < 5))
+    throw new Error('Los pagos entre monedas requieren la versión 5 del dominio financiero.');
   const entry = closedRecord(value, [
     'id',
     'currency',
@@ -18,6 +22,7 @@ export function validateWorkspaceOperation(value: unknown, accounts: FinancialAc
     'description',
     'note',
     ...(categorized ? ['accountId', 'category'] : refund ? ['originalExpenseId', 'destinationAccountId'] : ['fromAccountId', 'toAccountId']),
+    ...(hasDestinationFields ? ['destinationCurrency', 'destinationAmountMinor'] : []),
   ]);
   const operation = normalizeFinancialOperation(entry, accounts, definitions);
   const referenceFields = categorized ? ['accountId'] : refund ? ['originalExpenseId', 'destinationAccountId'] : ['fromAccountId', 'toAccountId'];

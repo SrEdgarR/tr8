@@ -18,9 +18,10 @@ export function validateFinancialSpace(candidate: unknown): FinancialSpace {
     'currencyDefinitions',
     'accounts',
     'operations',
-    ...(version === 4 ? ['plans'] : []),
+    ...(version === 4 || version === 5 ? ['plans'] : []),
   ]);
-  if (![2, 3, 4].includes(version) || typeof space.currencyCatalogVersion !== 'string') throw new Error('La versión del dominio financiero no es compatible.');
+  if (![2, 3, 4, 5].includes(version) || typeof space.currencyCatalogVersion !== 'string')
+    throw new Error('La versión del dominio financiero no es compatible.');
   const definitions = catalogDefinitions(space.currencyCatalogVersion);
   const actual = collection(space.currencyDefinitions, definitions.length);
   if (actual.length !== definitions.length) throw new Error('El catálogo no coincide con su versión.');
@@ -55,6 +56,6 @@ export function validateFinancialSpace(candidate: unknown): FinancialSpace {
     currencyDefinitions: definitions.map(entry => ({ ...entry })),
     accounts,
     operations,
-    ...(version === 4 ? { plans: validatePlans(space.plans, accounts, operations, definitions) } : {}),
+    ...(version === 4 || version === 5 ? { plans: validatePlans(space.plans, accounts, operations, definitions, version) } : {}),
   };
 }

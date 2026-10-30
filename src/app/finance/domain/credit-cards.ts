@@ -1,6 +1,7 @@
 import type { FinancialAccount, FinancialOperation } from './types';
 import { closedRecord, collection, financialText } from './workspace-records';
 import { requireDate, requireMinor, safeMinor } from './validation';
+import { operationDestinationAmount, operationDestinationCurrency } from './operations';
 
 export interface CreditCardBaseline {
   asOfDate: string;
@@ -129,9 +130,11 @@ function debtDelta(account: CreditCardAccount, operation: FinancialOperation): b
     else if (operation.fromAccountId === account.id) direction = 1;
   }
   if (direction === null) return null;
-  if (operation.currency !== account.currency) throw new Error('Los movimientos de la tarjeta deben conservar su moneda.');
+  const incoming = (operation.kind === 'transfer' || operation.kind === 'card-payment') && operation.toAccountId === account.id;
+  const currency = incoming ? operationDestinationCurrency(operation) : operation.currency;
+  if (currency !== account.currency) throw new Error('Los movimientos de la tarjeta deben conservar su moneda.');
   requireDate(operation.date);
-  const amount = requireMinor(operation.amountMinor);
+  const amount = requireMinor(incoming ? operationDestinationAmount(operation) : operation.amountMinor);
   if (amount <= 0) throw new Error('El movimiento debe ser mayor que cero.');
   return BigInt(amount) * BigInt(direction);
 }

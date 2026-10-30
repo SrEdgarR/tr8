@@ -1,5 +1,6 @@
 import type { FinancialAccount, FinancialOperation } from './types';
 import { safeMinor } from './validation';
+import { operationDestinationAmount } from './operations';
 
 /** Validate every calendar-day closing balance, including dates hidden by later offsets. */
 export function validateBalanceRange(accounts: readonly FinancialAccount[], operations: readonly FinancialOperation[]): void {
@@ -19,7 +20,7 @@ export function validateBalanceRange(accounts: readonly FinancialAccount[], oper
             ? [[operation.destinationAccountId, amount]]
             : [
                 [operation.fromAccountId, -amount],
-                [operation.toAccountId, amount],
+                [operation.toAccountId, BigInt(operationDestinationAmount(operation))],
               ];
       return {
         date: operation.date,

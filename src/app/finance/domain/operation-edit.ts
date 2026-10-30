@@ -4,6 +4,7 @@ import { validateFinancialSnapshot } from './snapshot';
 import { validateFinancialSpace } from './workspace-validation';
 import { validateWorkspaceOperation } from './workspace-operations';
 import { requireDate } from './validation';
+import { operationDestinationCurrency } from './operations';
 
 function touchesAccount(operation: FinancialOperation, accountId: string) {
   return 'accountId' in operation
@@ -50,7 +51,12 @@ function financialIdentity(operation: WorkspaceOperation) {
 export function updateFinancialOperation(snapshot: FinancialSnapshot, previous: WorkspaceOperation, candidate: unknown): FinancialSnapshot {
   const { space, current } = currentOperation(snapshot, previous);
   const next = validateWorkspaceOperation(candidate, space.accounts, space.currencyDefinitions, space.domainSchemaVersion);
-  if (next.id !== current.id || next.kind !== current.kind || next.currency !== current.currency)
+  if (
+    next.id !== current.id ||
+    next.kind !== current.kind ||
+    next.currency !== current.currency ||
+    operationDestinationCurrency(next) !== operationDestinationCurrency(current)
+  )
     throw Error('El ID, el tipo y la moneda del movimiento se conservan al editar.');
   if (financialIdentity(current) !== financialIdentity(next) && (capturedCards(snapshot, current).length || capturedCards(snapshot, next).length))
     throw Error(capturedMessage);

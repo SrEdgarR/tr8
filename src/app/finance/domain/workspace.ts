@@ -22,15 +22,15 @@ export function emptyFinancialSnapshot(): FinancialSnapshot {
 /** Local, explicit migration. It does not write remotely or drop unknown fields. */
 export function upgradeSnapshot(candidate: unknown): FinancialSnapshot {
   const snapshot = validatePlaintext(candidate);
-  if (snapshot.financialSpace.domainSchemaVersion === 4 && snapshot.financialSpace.currencyCatalogVersion === CURRENCY_CATALOG_VERSION)
+  if (snapshot.financialSpace.domainSchemaVersion >= 4 && snapshot.financialSpace.currencyCatalogVersion === CURRENCY_CATALOG_VERSION)
     return snapshot as FinancialSnapshot;
   const old = snapshot.financialSpace;
   return {
     schemaVersion: 1,
     financialSpace: validateFinancialSpace({
       ...old,
-      domainSchemaVersion: 4,
-      plans: old.domainSchemaVersion === 4 ? old.plans : [],
+      domainSchemaVersion: old.domainSchemaVersion === 5 ? 5 : 4,
+      plans: old.domainSchemaVersion === 4 || old.domainSchemaVersion === 5 ? old.plans : [],
       currencyCatalogVersion: CURRENCY_CATALOG_VERSION,
       currencyDefinitions: CURRENCY_CATALOG.map(entry => ({ ...entry })),
       operations:

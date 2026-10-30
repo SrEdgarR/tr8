@@ -6,6 +6,7 @@ import { parseAmountMinor, formatMoneyMinor } from '../domain/money';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../domain/categories';
 import { Dialog, ErrorNotice } from '../../workspace/ui';
 import Field from './FinanceField';
+import CardPaymentAmounts from './CardPaymentAmounts';
 
 const labels = { income: 'Ingreso', expense: 'Gasto', transfer: 'Transferencia', 'card-payment': 'Pago de tarjeta', refund: 'Reembolso' };
 const categories: Record<string, string> = {
@@ -40,6 +41,16 @@ export default function MovementEditor({ snapshot, operation, busy: pending, onC
   const units = BigInt(operation.amountMinor);
   const initialAmount = definition.minorUnitDigits ? `${units / divisor}.${String(units % divisor).padStart(definition.minorUnitDigits, '0')}` : String(units);
   const [amount, setAmount] = useState(initialAmount);
+  const destinationCurrency = operation.kind === 'card-payment' ? operation.destinationCurrency : undefined;
+  const destinationDefinition = space.currencyDefinitions.find(currency => currency.code === destinationCurrency);
+  const [destinationAmount, setDestinationAmount] = useState(() => {
+    if (operation.kind !== 'card-payment' || !destinationDefinition || operation.destinationAmountMinor === undefined) return '';
+    const value = BigInt(operation.destinationAmountMinor),
+      scale = 10n ** BigInt(destinationDefinition.minorUnitDigits);
+    return destinationDefinition.minorUnitDigits
+      ? `${value / scale}.${String(value % scale).padStart(destinationDefinition.minorUnitDigits, '0')}`
+      : String(value);
+  });
   const [date, setDate] = useState(operation.date);
   const [description, setDescription] = useState(operation.description);
   const [note, setNote] = useState(operation.note);
@@ -60,10 +71,11 @@ export default function MovementEditor({ snapshot, operation, busy: pending, onC
     }
   }, [snapshot, operation]);
   const paired = operation.kind === 'transfer' || operation.kind === 'card-payment';
+  const foreignPayment = operation.kind === 'card-payment' && destinationDefinition !== undefined;
   const accounts = space.accounts.filter(account => account.currency === operation.currency && (!paired || account.type !== 'credit'));
   const destinations = space.accounts.filter(
     account =>
-      account.currency === operation.currency &&
+      account.currency === (destinationCurrency ?? operation.currency) &&
       account.id !== accountId &&
       (operation.kind === 'card-payment' ? account.type === 'credit' : account.type !== 'credit'),
   );
@@ -74,7 +86,14 @@ export default function MovementEditor({ snapshot, operation, busy: pending, onC
     setSubmitting(true);
     setError('');
     try {
-      const base = { ...operation, amountMinor: parseAmountMinor(amount, definition.minorUnitDigits), date, description, note };
+      const base = {
+        ...operation,
+        amountMinor: parseAmountMinor(amount, definition.minorUnitDigits),
+        date,
+        description,
+        note,
+        ...(foreignPayment ? { destinationAmountMinor: parseAmountMinor(destinationAmount, destinationDefinition.minorUnitDigits) } : {}),
+      };
       const next = updateFinancialOperation(
         snapshot,
         operation,
@@ -103,7 +122,8 @@ export default function MovementEditor({ snapshot, operation, busy: pending, onC
                 <ArrowLeftRight size={22} aria-hidden="true" />
               </span>
               <p>
-                {labels[operation.kind]} · {operation.currency}. El tipo y la moneda se conservan.
+                {labels[operation.kind]} · {operation.currency}
+                {destinationCurrency ? ` → ${destinationCurrency}` : ''}. El tipo y las monedas se conservan.
               </p>
             </div>
             {unavailable && <ErrorNotice>{unavailable}</ErrorNotice>}
@@ -161,9 +181,22 @@ export default function MovementEditor({ snapshot, operation, busy: pending, onC
                 conserva.
               </p>
             )}
-            <Field label={`Importe · ${operation.currency}`} icon={<Coins size={14} aria-hidden="true" />}>
+            <Field label={`${foreignPayment ? 'Importe debitado' : 'Importe'} · ${operation.currency}`} icon={<Coins size={14} aria-hidden="true" />}>
               <input required inputMode="decimal" disabled={info?.captured} value={amount} onChange={event => setAmount(event.target.value)} />
             </Field>
+            {operation.kind === 'card-payment' && (
+              <CardPaymentAmounts
+                snapshot={snapshot}
+                source={space.accounts.find(account => account.id === accountId)}
+                destination={space.accounts.find(account => account.id === toAccountId)}
+                sourceAmount={amount}
+                destinationAmount={destinationAmount}
+                onDestinationAmount={setDestinationAmount}
+                date={date}
+                excludedOperationId={operation.id}
+                disabled={info?.captured}
+              />
+            )}
             <Field label="Fecha del movimiento" icon={<CalendarDays size={14} aria-hidden="true" />}>
               <input required type="date" disabled={info?.captured} value={date} onChange={event => setDate(event.target.value)} />
             </Field>

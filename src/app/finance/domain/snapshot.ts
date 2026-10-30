@@ -59,7 +59,7 @@ export function validateFinancialPlaintext(candidate: unknown): FinancialPlainte
     if (
       root.financialSpace &&
       typeof root.financialSpace === 'object' &&
-      [2, 3, 4].includes(Object.getOwnPropertyDescriptor(root.financialSpace, 'domainSchemaVersion')?.value)
+      [2, 3, 4, 5].includes(Object.getOwnPropertyDescriptor(root.financialSpace, 'domainSchemaVersion')?.value)
     ) {
       const space = validateFinancialSpace(root.financialSpace);
       const result = { schemaVersion: 1 as const, financialSpace: space };

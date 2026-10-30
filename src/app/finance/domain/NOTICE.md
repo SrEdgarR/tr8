@@ -43,14 +43,24 @@ Commands and selectors validate the whole snapshot root rather than silently
 discarding unknown root fields. Scalar helpers also reject negative zero and
 unsafe object descriptors. The generic 6B.2 crypto plaintext remains unchanged.
 
-Current financial snapshots use domain versions 2/3/4 with exact versioned
-currency definitions; version 4 has plans. New snapshots use `currency-catalog-v1`
+Current financial snapshots use domain versions 2/3/4/5 with exact versioned
+currency definitions; version 4 has plans and version 5 supports explicit
+cross-currency card payments. New snapshots use `currency-catalog-v1`
 with DOP/USD/EUR/BOB, all with two minor digits, and no global currency or FX rate.
 The historical v1 public fixture remains readable only through the explicitly
-legacy-capable validator. `upgradeSnapshot` is a local explicit upgrade to v4,
+legacy-capable validator. `upgradeSnapshot` is a local explicit upgrade to v4
+(preserving an existing v5),
 not a write or automatic data repair: unknown fields or records invalid under
 the target invariants are rejected rather than dropped. IDs and integer amounts
 are preserved. Adding descriptions/categories for v1 follows the pinned source.
+
+A cross-currency card payment is one ledger operation with the source debit in
+`currency`/`amountMinor` and the actual card credit in
+`destinationCurrency`/`destinationAmountMinor`. Both amounts are explicit safe
+integer minor units. The command promotes to v5 only when this payment or its
+plan is saved; opening an older snapshot does not rewrite it. Ordinary transfers
+remain single-currency. There is no inferred or externally fetched exchange rate.
+Card credits reduce the oldest unpaid statement before the unbilled balance.
 
 Balances use signed safe integer minor units and BigInt arithmetic internally.
 Credit debt, liquid money and available capacity remain distinct and separate

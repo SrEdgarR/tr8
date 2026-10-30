@@ -9,7 +9,8 @@ import { decryptSnapshot } from '../crypto/payload';
 import { validatePlaintext } from '../crypto/plaintext';
 import { rekeyVault } from '../crypto/rotations';
 import { encodeRecoverySecret, formatRecoverySecret } from '../crypto/recovery';
-import { upgradeSnapshot } from '../domain/workspace';
+import { addAccount, emptyFinancialSnapshot, upgradeSnapshot } from '../domain/workspace';
+import { addPairedOperation } from '../domain/connected-operations';
 import { openEncryptedBackup, prepareBackupImport, prepareBackupRestore, previewOpenedBackup, type ImportDestination } from './backup';
 import { parseEncryptedBackup, parseEncryptedBackupBytes, serializeEncryptedBackup } from './format';
 import { validateImportPreview } from './preview';
@@ -124,7 +125,9 @@ describe('private backup preview', () => {
       { ...preview, plaintext: vector.plaintext },
       { ...preview, accounts: -0 },
       { ...preview, operations: 10_001 },
-      { ...preview, sourceDomainSchemaVersion: 5 },
+      { ...preview, sourceDomainSchemaVersion: 6 },
+      { ...preview, sourceDomainSchemaVersion: 5, targetDomainSchemaVersion: 4 },
+      { ...preview, targetDomainSchemaVersion: 5 },
       { ...preview, requiresUpgrade: false },
       { ...preview, currencies: ['DOP', 'DOP'] },
       { ...preview, currencies: ['dop'] },
@@ -148,6 +151,51 @@ describe('private backup preview', () => {
 });
 
 describe('explicit import acceptance inside the Worker', () => {
+  it('preserves a version 5 cross-currency card payment through encrypted export, preview and import without downgrading', async () => {
+    let snapshot = emptyFinancialSnapshot();
+    snapshot = addAccount(snapshot, {
+      id: 'dop-savings',
+      name: 'Ahorro de prueba',
+      type: 'debit',
+      currency: 'DOP',
+      openingBalanceMinor: 1000000,
+      openingDate: '2026-10-01',
+    });
+    snapshot = addAccount(snapshot, {
+      id: 'usd-card',
+      name: 'Tarjeta de prueba',
+      type: 'credit',
+      currency: 'USD',
+      openingBalanceMinor: 20000,
+      creditLimitMinor: 100000,
+      openingDate: '2026-10-01',
+    });
+    snapshot = addPairedOperation(snapshot, {
+      id: 'fx-card-payment',
+      kind: 'card-payment',
+      fromAccountId: 'dop-savings',
+      toAccountId: 'usd-card',
+      amountMinor: 600000,
+      destinationCurrency: 'USD',
+      destinationAmountMinor: 10000,
+      date: '2026-10-30',
+      description: 'Pago entre monedas de prueba',
+      note: '',
+    });
+    expect(snapshot.financialSpace.domainSchemaVersion).toBe(5);
+    const old = await createVault({ ...sourceContext, password: oldPassword, plaintext: validatePlaintext(snapshot) });
+    const opened = await openEncryptedBackup(serializeEncryptedBackup(old.envelope), { kind: 'password', value: oldPassword });
+    const preview = previewOpenedBackup(opened);
+    expect(preview).toMatchObject({ sourceDomainSchemaVersion: 5, targetDomainSchemaVersion: 5, requiresUpgrade: false, accounts: 2, operations: 1 });
+    expect(validateImportPreview(preview)).toEqual(preview);
+    const target = destination();
+    const imported = await prepareBackupImport(opened, target);
+    const reopened = await unlockVault(imported.envelope, target, { kind: 'password', value: newPassword });
+    expect(reopened.plaintext).toEqual(validatePlaintext(snapshot));
+    expect(reopened.plaintext.financialSpace.domainSchemaVersion).toBe(5);
+    expect(opened.plaintext).toEqual(validatePlaintext(snapshot));
+  }, 20_000);
+
   it('imports a current financial backup with refund and pending plan references unchanged', async () => {
     const snapshot = upgradeSnapshot(vector.plaintext);
     snapshot.financialSpace.operations.push({

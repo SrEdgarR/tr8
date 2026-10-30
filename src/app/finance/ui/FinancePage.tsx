@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -39,6 +39,7 @@ import PaymentAvailabilitySummary from './PaymentAvailabilitySummary';
 import FinancialProjection from './FinancialProjection';
 import MovementEditor from './MovementEditor';
 import MovementDeleteDialog from './MovementDeleteDialog';
+import CardPaymentAmounts from './CardPaymentAmounts';
 import { creditCardGroups } from '../domain/credit-card-grouping';
 import FinanceSectionNavigation from './FinanceSectionNavigation';
 import type { DataSyncState } from '../../types';
@@ -836,6 +837,15 @@ function OperationRow({
           o.amountMinor,
           s.currencyDefinitions.find(c => c.code === o.currency)!,
         )}
+        {o.kind === 'card-payment' && o.destinationCurrency && o.destinationAmountMinor !== undefined && (
+          <small className="tf-payment-credit">
+            →{' '}
+            {formatMoneyMinor(
+              o.destinationAmountMinor,
+              s.currencyDefinitions.find(c => c.code === o.destinationCurrency)!,
+            )}
+          </small>
+        )}
       </strong>
       {actions}
     </div>
@@ -870,10 +880,19 @@ function RecordForm({
     editingAccount?.currency ?? s.currencyDefinitions.find(c => c.code === 'DOP')?.code ?? s.currencyDefinitions[0].code,
   );
   const [planned, setPlanned] = useState(false);
+  const [toAccountId, setToAccountId] = useState('');
+  const [sourceAmount, setSourceAmount] = useState('');
+  const [destinationAmount, setDestinationAmount] = useState('');
+  const [movementDate, setMovementDate] = useState(localToday());
   const linked = Boolean(editingAccount && accountHasActivity(snapshot, editingAccount.id));
   const paired = operation === 'transfer' || operation === 'card-payment';
   const sourceAccounts = s.accounts.filter(a => !paired || a.type !== 'credit');
   const selected = sourceAccounts.find(a => a.id === account) ?? sourceAccounts[0];
+  const destinationAccounts = s.accounts.filter(
+    a => a.id !== selected?.id && (operation === 'card-payment' ? a.type === 'credit' : a.type !== 'credit' && a.currency === selected?.currency),
+  );
+  const destination = destinationAccounts.find(a => a.id === toAccountId);
+  const foreignPayment = kind === 'movement' && operation === 'card-payment' && destination && destination.currency !== selected?.currency;
   const digits = s.currencyDefinitions.find(c => c.code === (kind === 'account' ? currency : selected?.currency))?.minorUnitDigits ?? 2;
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -903,7 +922,21 @@ function RecordForm({
           const input =
             operation === 'income' || operation === 'expense'
               ? { ...base, kind: operation, accountId: selected?.id ?? '', category: text('category') }
-              : { ...base, kind: operation, fromAccountId: selected?.id ?? '', toAccountId: text('to') };
+              : {
+                  ...base,
+                  kind: operation,
+                  fromAccountId: selected?.id ?? '',
+                  toAccountId,
+                  ...(foreignPayment
+                    ? {
+                        destinationCurrency: destination.currency,
+                        destinationAmountMinor: parseAmountMinor(
+                          destinationAmount,
+                          s.currencyDefinitions.find(c => c.code === destination.currency)!.minorUnitDigits,
+                        ),
+                      }
+                    : {}),
+                };
           next = planned
             ? addPlan(snapshot, {
                 id: id(),
@@ -987,6 +1020,8 @@ function RecordForm({
                     onChange={e => {
                       setOperation(e.target.value as typeof operation);
                       setPlanned(false);
+                      setToAccountId('');
+                      setDestinationAmount('');
                     }}
                   >
                     {Object.entries(kinds).map(([key, label]) => (
@@ -1000,7 +1035,16 @@ function RecordForm({
                   <input name="description" maxLength={500} required data-initial-focus />
                 </Field>
                 <Field label={operation === 'refund' || operation === 'income' ? 'Cuenta de destino' : 'Cuenta de origen'}>
-                  <select required value={selected?.id ?? ''} onChange={e => setAccount(e.target.value)}>
+                  <select
+                    required
+                    value={selected?.id ?? ''}
+                    onChange={e => {
+                      setAccount(e.target.value);
+                      setToAccountId('');
+                      setDestinationAmount('');
+                      setSourceAmount('');
+                    }}
+                  >
                     {!sourceAccounts.length && <option value="">No hay cuentas de origen compatibles</option>}
                     {sourceAccounts.map(a => (
                       <option key={a.id} value={a.id}>
@@ -1011,20 +1055,21 @@ function RecordForm({
                 </Field>
                 {(operation === 'transfer' || operation === 'card-payment') && (
                   <Field label="Cuenta de destino">
-                    <select key={selected?.id} name="to" required>
+                    <select
+                      name="to"
+                      required
+                      value={toAccountId}
+                      onChange={e => {
+                        setToAccountId(e.target.value);
+                        setDestinationAmount('');
+                      }}
+                    >
                       <option value="">Selecciona una cuenta</option>
-                      {s.accounts
-                        .filter(
-                          a =>
-                            a.id !== selected?.id &&
-                            a.currency === selected?.currency &&
-                            (operation === 'transfer' ? a.type !== 'credit' : a.type === 'credit'),
-                        )
-                        .map(a => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
-                          </option>
-                        ))}
+                      {destinationAccounts.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} · {a.currency}
+                        </option>
+                      ))}
                     </select>
                   </Field>
                 )}
@@ -1065,7 +1110,7 @@ function RecordForm({
                   ? type === 'credit'
                     ? 'Deuda inicial (negativa si tienes saldo a favor)'
                     : 'Saldo inicial'
-                  : `Importe · ${selected?.currency ?? ''}`
+                  : `${foreignPayment ? 'Importe debitado' : 'Importe'} · ${selected?.currency ?? ''}`
               }
             >
               <input
@@ -1073,9 +1118,23 @@ function RecordForm({
                 required
                 inputMode="decimal"
                 defaultValue={kind === 'account' ? (editingAccount ? decimalAmount(editingAccount.openingBalanceMinor) : '0') : undefined}
+                {...(kind === 'movement'
+                  ? { value: sourceAmount, onChange: (event: ChangeEvent<HTMLInputElement>) => setSourceAmount(event.target.value) }
+                  : {})}
                 placeholder="0,00"
               />
             </Field>
+            {kind === 'movement' && operation === 'card-payment' && (
+              <CardPaymentAmounts
+                snapshot={snapshot}
+                source={selected}
+                destination={destination}
+                sourceAmount={sourceAmount}
+                destinationAmount={destinationAmount}
+                onDestinationAmount={setDestinationAmount}
+                date={movementDate}
+              />
+            )}
             {kind === 'account' && type === 'credit' && (
               <Field label="Límite de crédito">
                 <input
@@ -1093,6 +1152,7 @@ function RecordForm({
                 required
                 defaultValue={editingAccount?.openingDate ?? localToday()}
                 max={kind === 'account' ? localToday() : undefined}
+                onChange={event => setMovementDate(event.target.value)}
               />
             </Field>
             {kind === 'account' && editingAccount && (

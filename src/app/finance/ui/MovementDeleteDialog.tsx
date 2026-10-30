@@ -64,6 +64,16 @@ export default function MovementDeleteDialog({
                   operation.amountMinor,
                   snapshot.financialSpace.currencyDefinitions.find(currency => currency.code === operation.currency)!,
                 )}{' '}
+                {operation.kind === 'card-payment' && operation.destinationCurrency && operation.destinationAmountMinor !== undefined && (
+                  <>
+                    →{' '}
+                    {formatMoneyMinor(
+                      operation.destinationAmountMinor,
+                      snapshot.financialSpace.currencyDefinitions.find(currency => currency.code === operation.destinationCurrency)!,
+                    )}{' '}
+                    ·{' '}
+                  </>
+                )}
                 · {operation.date}
               </p>
               <p>Los saldos se recalcularán. Los demás movimientos se conservarán.</p>

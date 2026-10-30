@@ -2,6 +2,25 @@ import { normalizeFinancialAccounts } from './accounts';
 import type { CurrencyDefinition, FinancialAccount, FinancialOperation } from './types';
 import { requireCurrency, requireCurrencyDefinitions, requireDate, requireMinor, requireRecord, requireText } from './validation';
 
+/** Call on a normalized ledger operation. Both legs belong to one logical payment. */
+export function operationDestinationAmount(operation: FinancialOperation): number {
+  if (operation.kind !== 'card-payment') return operation.amountMinor;
+  const crossCurrency = Object.hasOwn(operation, 'destinationCurrency') || Object.hasOwn(operation, 'destinationAmountMinor');
+  if (!crossCurrency) return operation.amountMinor;
+  if (typeof operation.destinationCurrency !== 'string' || operation.destinationCurrency === operation.currency)
+    throw new Error('El pago entre monedas necesita una moneda de destino distinta.');
+  return requireMinor(operation.destinationAmountMinor, true);
+}
+
+export function operationDestinationCurrency(operation: FinancialOperation): string {
+  operationDestinationAmount(operation);
+  return operation.kind === 'card-payment' ? (operation.destinationCurrency ?? operation.currency) : operation.currency;
+}
+
+export function isCrossCurrencyPayment(operation: FinancialOperation): boolean {
+  return operation.kind === 'card-payment' && operation.destinationCurrency !== undefined;
+}
+
 export function normalizeFinancialOperation(
   candidate: unknown,
   accounts: readonly FinancialAccount[],
@@ -15,15 +34,24 @@ export function normalizeFinancialOperation(
     amountMinor: requireMinor(input.amountMinor, true),
     date: requireDate(input.date),
   };
-  const getAccount = (id: unknown): FinancialAccount => {
+  const getAccount = (id: unknown, currency = base.currency): FinancialAccount => {
     const normalizedId = requireText(id);
     const account = availableAccounts.find(item => item.id === normalizedId);
     if (!account) throw new Error('La operación hace referencia a una cuenta inexistente.');
-    if (account.currency !== base.currency) {
+    if (account.currency !== currency) {
       throw new Error('La operación y sus cuentas deben tener la misma moneda.');
     }
     return account;
   };
+
+  const hasDestinationCurrency = Object.hasOwn(input, 'destinationCurrency');
+  const hasDestinationAmount = Object.hasOwn(input, 'destinationAmountMinor');
+  const crossCurrency = hasDestinationCurrency || hasDestinationAmount;
+  if (crossCurrency && (input.kind !== 'card-payment' || !hasDestinationCurrency || !hasDestinationAmount))
+    throw new Error('El pago entre monedas necesita la moneda y el importe abonado a la tarjeta.');
+  const destinationCurrency = crossCurrency ? requireCurrency(input.destinationCurrency, requireCurrencyDefinitions(currencies)) : base.currency;
+  const destinationAmountMinor = crossCurrency ? requireMinor(input.destinationAmountMinor, true) : base.amountMinor;
+  if (crossCurrency && destinationCurrency === base.currency) throw new Error('Los importes separados solo corresponden a pagos entre monedas distintas.');
 
   if (input.kind === 'income' || input.kind === 'expense') {
     return {
@@ -44,7 +72,7 @@ export function normalizeFinancialOperation(
     throw new Error('El tipo de operación financiera no es válido.');
   }
   const fromAccount = getAccount(input.fromAccountId);
-  const toAccount = getAccount(input.toAccountId);
+  const toAccount = getAccount(input.toAccountId, destinationCurrency);
   if (fromAccount.id === toAccount.id) {
     throw new Error('El origen y el destino deben ser cuentas distintas.');
   }
@@ -59,6 +87,7 @@ export function normalizeFinancialOperation(
     kind: input.kind,
     fromAccountId: fromAccount.id,
     toAccountId: toAccount.id,
+    ...(crossCurrency ? { destinationCurrency, destinationAmountMinor } : {}),
   };
 }
 

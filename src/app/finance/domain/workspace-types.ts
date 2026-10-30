@@ -12,7 +12,7 @@ export type FinancialPlan = { id: string; operation: WorkspaceOperation } & (
 );
 
 export interface FinancialSpace {
-  domainSchemaVersion: 2 | 3 | 4;
+  domainSchemaVersion: 2 | 3 | 4 | 5;
   currencyCatalogVersion: string;
   currencyDefinitions: CurrencyDefinition[];
   accounts: FinancialAccount[];

@@ -42,6 +42,9 @@ export type FinancialOperation = OperationBase &
         kind: 'card-payment';
         fromAccountId: string;
         toAccountId: string;
+        /** Explicit bank credit in another currency; never an inferred exchange rate. */
+        destinationCurrency?: string;
+        destinationAmountMinor?: number;
       }
   );
 

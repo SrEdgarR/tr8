@@ -4,16 +4,20 @@ import { requireDate } from './validation';
 import { summarizeBalances } from './balances';
 import type { FinancialSnapshot } from './workspace-types';
 import { validateFinancialSnapshot } from './snapshot';
+import { isCrossCurrencyPayment, operationDestinationCurrency } from './operations';
+import { validateWorkspaceOperation } from './workspace-operations';
 
 export function addPlan(snapshot: FinancialSnapshot, candidate: unknown): FinancialSnapshot {
   const space = validateFinancialSnapshot(snapshot).financialSpace;
-  if (space.domainSchemaVersion !== 4) throw new Error('Actualiza el dominio financiero antes de crear planes.');
+  if (space.domainSchemaVersion < 4) throw new Error('Actualiza el dominio financiero antes de crear planes.');
   const input = closedRecord(candidate, ['id', 'operation']);
+  const operation = validateWorkspaceOperation(input.operation, space.accounts, space.currencyDefinitions, 5);
   return {
     schemaVersion: 1,
     financialSpace: validateFinancialSpace({
       ...space,
-      plans: [...space.plans!, { ...input, status: 'pending' }],
+      ...(isCrossCurrencyPayment(operation) ? { domainSchemaVersion: 5 } : {}),
+      plans: [...space.plans!, { ...input, operation, status: 'pending' }],
     }),
   };
 }
@@ -21,7 +25,7 @@ export function addPlan(snapshot: FinancialSnapshot, candidate: unknown): Financ
 /** Plan state and its real movement are one immutable snapshot command. */
 export function resolvePlan(snapshot: FinancialSnapshot, candidate: unknown): FinancialSnapshot {
   const space = validateFinancialSnapshot(snapshot).financialSpace;
-  if (space.domainSchemaVersion !== 4) throw new Error('Actualiza el dominio financiero antes de resolver planes.');
+  if (space.domainSchemaVersion < 4) throw new Error('Actualiza el dominio financiero antes de resolver planes.');
   const type = candidate && typeof candidate === 'object' ? Object.getOwnPropertyDescriptor(candidate, 'type')?.value : undefined;
   if (!['keep', 'postpone', 'cancel', 'confirm'].includes(type)) throw new Error('La acción del plan no es válida.');
   const input = closedRecord(candidate, ['type', 'planId', ...(type !== 'keep' ? ['date'] : [])]);
@@ -102,7 +106,7 @@ export function filterHistory(
             ? [operation.destinationAccountId]
             : [operation.fromAccountId, operation.toAccountId];
       return (
-        (!filters.currency || operation.currency === filters.currency) &&
+        (!filters.currency || operation.currency === filters.currency || operationDestinationCurrency(operation) === filters.currency) &&
         (!filters.accountId || accountIds.includes(filters.accountId)) &&
         (!filters.from || operation.date >= filters.from) &&
         (!filters.to || operation.date <= filters.to)

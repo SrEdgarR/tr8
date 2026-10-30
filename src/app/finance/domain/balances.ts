@@ -1,5 +1,5 @@
 import { normalizeFinancialAccounts } from './accounts';
-import { normalizeFinancialOperations } from './operations';
+import { normalizeFinancialOperations, operationDestinationAmount } from './operations';
 import type {
   CurrencyActivity,
   CurrencyDefinition,
@@ -29,7 +29,7 @@ export function createNormalizedBalanceSweep(accounts: readonly FinancialAccount
       else if (operation.kind === 'refund') applyDelta(operation.destinationAccountId, amount, operation.date);
       else {
         applyDelta(operation.fromAccountId, -amount, operation.date);
-        applyDelta(operation.toAccountId, amount, operation.date);
+        applyDelta(operation.toAccountId, BigInt(operationDestinationAmount(operation)), operation.date);
       }
     },
     at(date: string): FinancialBalances {

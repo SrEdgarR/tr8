@@ -2,8 +2,8 @@ import { encodeUtf8, isWellFormedUnicode, requireClosedRecord, vaultError } from
 import { CURRENCY_CATALOG, CURRENCY_CATALOG_VERSION, catalogDefinitions } from '../domain/catalog';
 
 export interface ImportPreview {
-  sourceDomainSchemaVersion: 1 | 2 | 3 | 4;
-  targetDomainSchemaVersion: 4;
+  sourceDomainSchemaVersion: 1 | 2 | 3 | 4 | 5;
+  targetDomainSchemaVersion: 4 | 5;
   sourceCurrencyCatalogVersion: string;
   targetCurrencyCatalogVersion: string;
   requiresUpgrade: boolean;
@@ -26,7 +26,11 @@ export function validateImportPreview(candidate: unknown): ImportPreview {
     'plans',
     'currencies',
   ]);
-  if (![1, 2, 3, 4].includes(record.sourceDomainSchemaVersion as number) || record.targetDomainSchemaVersion !== 4) throw vaultError('INVALID_FORMAT');
+  if (
+    ![1, 2, 3, 4, 5].includes(record.sourceDomainSchemaVersion as number) ||
+    record.targetDomainSchemaVersion !== (record.sourceDomainSchemaVersion === 5 ? 5 : 4)
+  )
+    throw vaultError('INVALID_FORMAT');
   for (const field of ['sourceCurrencyCatalogVersion', 'targetCurrencyCatalogVersion']) {
     const value = record[field];
     if (typeof value !== 'string' || !isWellFormedUnicode(value) || !/^[A-Za-z0-9._-]{1,128}$/.test(value)) throw vaultError('INVALID_FORMAT');
@@ -38,7 +42,8 @@ export function validateImportPreview(candidate: unknown): ImportPreview {
   } catch {
     throw vaultError('INVALID_FORMAT');
   }
-  const expectedUpgrade = record.sourceDomainSchemaVersion !== 4 || record.sourceCurrencyCatalogVersion !== record.targetCurrencyCatalogVersion;
+  const expectedUpgrade =
+    record.sourceDomainSchemaVersion !== record.targetDomainSchemaVersion || record.sourceCurrencyCatalogVersion !== record.targetCurrencyCatalogVersion;
   if (record.requiresUpgrade !== expectedUpgrade) throw vaultError('INVALID_FORMAT');
   for (const [field, maximum] of [
     ['accounts', 1000],
@@ -66,7 +71,7 @@ export function validateImportPreview(candidate: unknown): ImportPreview {
   }
   const result = {
     sourceDomainSchemaVersion: record.sourceDomainSchemaVersion as ImportPreview['sourceDomainSchemaVersion'],
-    targetDomainSchemaVersion: 4 as const,
+    targetDomainSchemaVersion: record.targetDomainSchemaVersion as ImportPreview['targetDomainSchemaVersion'],
     sourceCurrencyCatalogVersion: record.sourceCurrencyCatalogVersion as string,
     targetCurrencyCatalogVersion: record.targetCurrencyCatalogVersion as string,
     requiresUpgrade: expectedUpgrade,

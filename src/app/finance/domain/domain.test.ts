@@ -424,7 +424,7 @@ describe('financial domain: closed snapshots, history and explicit compatibility
       { currencyCatalogVersion: 'unknown' },
       { currencyDefinitions: [...CURRENCY_CATALOG].reverse() },
       { currencyDefinitions: CURRENCY_CATALOG.map((x, i) => ({ ...x, minorUnitDigits: i === 0 ? 3 : x.minorUnitDigits })) },
-      { domainSchemaVersion: 5 },
+      { domainSchemaVersion: 6 },
     ])
       expect(() =>
         validateFinancialSnapshot({ ...emptyFinancialSnapshot(), financialSpace: { ...emptyFinancialSnapshot().financialSpace, ...change } }),

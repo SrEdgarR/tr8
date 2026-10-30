@@ -9,6 +9,7 @@ export function validatePlans(
   accounts: FinancialAccount[],
   operations: WorkspaceOperation[],
   definitions: readonly CurrencyDefinition[],
+  domainVersion = 4,
 ): FinancialPlan[] {
   const ids = new Set<string>(),
     reserved = new Set<string>();
@@ -26,7 +27,7 @@ export function validatePlans(
     const id = financialText(input.id, 128);
     if (id.trim() !== id || ids.has(id)) throw new Error('El plan está duplicado o tiene un ID inválido.');
     ids.add(id);
-    const operation = validateWorkspaceOperation(input.operation, accounts, definitions, 3);
+    const operation = validateWorkspaceOperation(input.operation, accounts, definitions, domainVersion);
     if (operation!.kind === 'refund' || reserved.has(operation!.id)) throw new Error('El plan o su movimiento no es válido.');
     reserved.add(operation!.id);
     if (status !== 'confirmed' && byId.has(operation!.id)) throw new Error('El movimiento del plan ya existe.');

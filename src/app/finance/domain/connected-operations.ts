@@ -3,13 +3,16 @@ import { validateFinancialSnapshot } from './snapshot';
 import { closedRecord, validateFinancialSpace } from './workspace-validation';
 import { requireDate, safeMinor } from './validation';
 import { validateWorkspaceOperation } from './workspace-operations';
+import { isCrossCurrencyPayment } from './operations';
 
 function append(snapshot: FinancialSnapshot, operation: unknown): FinancialSnapshot {
   const space = validateFinancialSnapshot(snapshot).financialSpace;
+  const requiresVersion5 = operation !== null && typeof operation === 'object' && Object.hasOwn(operation, 'destinationCurrency');
   return {
     schemaVersion: 1,
     financialSpace: validateFinancialSpace({
       ...space,
+      ...(requiresVersion5 ? { domainSchemaVersion: 5, plans: space.plans ?? [] } : {}),
       operations: [...space.operations, operation],
     }),
   };
@@ -18,11 +21,30 @@ function append(snapshot: FinancialSnapshot, operation: unknown): FinancialSnaps
 /** Validated paired intent, without a fictitious real transfer/payment. */
 export function preparePairedOperation(snapshot: FinancialSnapshot, candidate: unknown) {
   const space = validateFinancialSnapshot(snapshot).financialSpace;
-  const input = closedRecord(candidate, ['id', 'kind', 'fromAccountId', 'toAccountId', 'amountMinor', 'date', 'description', 'note']);
+  const hasDestinationFields =
+    !!candidate && typeof candidate === 'object' && (Object.hasOwn(candidate, 'destinationCurrency') || Object.hasOwn(candidate, 'destinationAmountMinor'));
+  const input = closedRecord(candidate, [
+    'id',
+    'kind',
+    'fromAccountId',
+    'toAccountId',
+    'amountMinor',
+    'date',
+    'description',
+    'note',
+    ...(hasDestinationFields ? ['destinationCurrency', 'destinationAmountMinor'] : []),
+  ]);
   if (input.kind !== 'transfer' && input.kind !== 'card-payment') throw new Error('Selecciona una transferencia o un pago de tarjeta.');
   const from = space.accounts.find(account => account.id === input.fromAccountId);
   if (!from) throw new Error('Selecciona una cuenta de origen.');
-  return validateWorkspaceOperation({ ...input, currency: from.currency }, space.accounts, space.currencyDefinitions, space.domainSchemaVersion);
+  const operation = validateWorkspaceOperation(
+    { ...input, currency: from.currency },
+    space.accounts,
+    space.currencyDefinitions,
+    hasDestinationFields ? 5 : space.domainSchemaVersion,
+  );
+  if (hasDestinationFields && !isCrossCurrencyPayment(operation)) throw new Error('El pago entre monedas no es válido.');
+  return operation;
 }
 
 export function addPairedOperation(snapshot: FinancialSnapshot, candidate: unknown): FinancialSnapshot {
