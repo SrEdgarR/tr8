@@ -65,6 +65,34 @@ describe('productive task views', () => {
     await user.click(within(controls).getByRole('button', { name: 'Limpiar filtros' }));
     expect(within(controls).getByRole('status')).toHaveTextContent('3 tareas');
   });
+  it('opens compact view options, preserves filters when closed and returns focus with Escape', async () => {
+    const user = userEvent.setup();
+    const value = props({ onReorder: vi.fn().mockResolvedValue(undefined) });
+    mount(value);
+    const toggle = screen.getByRole('button', { name: 'Opciones de vista' });
+    const options = screen.getByRole('group', { name: 'Opciones de vista de tareas' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', options.id);
+    expect(options).not.toHaveClass('is-open');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(options).toHaveClass('is-open');
+    await user.selectOptions(within(options).getByRole('combobox', { name: 'Filtrar por prioridad' }), 'high');
+    expect(toggle).toHaveAccessibleName('Opciones de vista, 1 filtro activo');
+    expect(screen.getByRole('button', { name: 'Revisar notas' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(options).not.toHaveClass('is-open');
+    expect(screen.queryByRole('button', { name: 'Preparar portada' })).not.toBeInTheDocument();
+    await user.click(toggle);
+    await user.click(within(options).getByRole('button', { name: 'Limpiar filtros' }));
+    expect(screen.getByRole('button', { name: 'Preparar portada' })).toBeInTheDocument();
+    await user.click(within(options).getByText('Cómo ordenar las tareas'));
+    expect(within(options).getByText(/Orden manual: arrastra una tarea/)).toBeInTheDocument();
+    expect(value.onMove).not.toHaveBeenCalled();
+    expect(value.onReorder).not.toHaveBeenCalled();
+  });
   it('distinguishes selecting a task from completing it and identifies the row actions', async () => {
     const user = userEvent.setup();
     const toggle = vi.fn();

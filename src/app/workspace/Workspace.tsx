@@ -63,6 +63,7 @@ import ProjectSummary from './ProjectSummary';
 import { buildDashboardModel } from './dashboard-model';
 import './workspace.css';
 import './visual-navigation.css';
+import './mobile-workspace.css';
 
 const Calendar = deferSection(() => import('./Calendar'), 'el calendario');
 const CalendarSettings = deferSection(() => import('./CalendarZoneSettings'), 'Configuración');
@@ -294,7 +295,7 @@ function ProjectPage({
     : null;
   return (
     <div className="page flush pw-project-page">
-      <div className="proj-h">
+      <div className={`proj-h${!project.archived_at ? ' has-task-action' : ''}`}>
         <div className="t">
           <ProjectIcon color={project.color} icon={project.icon} large />
           <div className="grow">
@@ -312,14 +313,23 @@ function ProjectPage({
             }}
           />
           {!project.archived_at && (
-            <button className="btn btn-primary" disabled={actions.pending || !actions.can(project.id, 'task.create')} onClick={() => onNewTask(project)}>
+            <button
+              className="btn btn-primary pw-project-new-task"
+              disabled={actions.pending || !actions.can(project.id, 'task.create')}
+              onClick={() => onNewTask(project)}
+            >
               <Plus size={14} aria-hidden="true" />
               Nueva tarea
             </button>
           )}
-          <button className="btn btn-secondary" onClick={() => setSettingsProject(project.id)}>
+          <button
+            className="btn btn-secondary pw-project-settings-trigger"
+            aria-label="Configuración del proyecto"
+            title="Configuración del proyecto"
+            onClick={() => setSettingsProject(project.id)}
+          >
             <Settings2 size={14} aria-hidden="true" />
-            Configuración del proyecto
+            <span>Configuración del proyecto</span>
           </button>
         </div>
         <div className="row pw-project-meta">

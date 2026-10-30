@@ -1,0 +1,189 @@
+.tv-mobile-options-toggle,
+.tv-mobile-order-help {
+  display: none;
+}
+.tv-mobile-options {
+  display: contents;
+}
+
+@media (min-width: 701px) and (max-width: 1440px) {
+  .tv-mobile-options > .tv-compact-action {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 6px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 700px) {
+  .pw-tasks-area .tv-view-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px var(--gutter);
+    min-width: 0;
+  }
+  .pw-tasks-area .tv-quick-search {
+    width: 100%;
+    max-width: none;
+    min-height: 44px;
+  }
+  .pw-tasks-area .tv-quick-search input {
+    min-height: 42px;
+    font-size: 16px;
+  }
+  .pw-tasks-area .tv-mobile-options-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: var(--fs-xs);
+  }
+  .pw-tasks-area .tv-mobile-options-toggle.has-filters {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    color: var(--accent);
+  }
+  .pw-tasks-area .tv-mobile-options {
+    display: none;
+    min-width: 0;
+    grid-column: 1 / -1;
+  }
+  .pw-tasks-area .tv-mobile-options.is-open {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 12px;
+    background: var(--surface);
+  }
+  .pw-tasks-area .tv-mobile-options .tv-quick-filter {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 44px;
+  }
+  .pw-tasks-area .tv-mobile-options .tv-quick-filter select {
+    min-height: 42px;
+    font-size: 16px;
+  }
+  .pw-tasks-area .tv-mobile-options .tv-control-menu,
+  .pw-tasks-area .tv-mobile-options .tv-saved-select,
+  .pw-tasks-area .tv-mobile-order-help {
+    position: static;
+    grid-column: 1 / -1;
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+  }
+  .pw-tasks-area .tv-mobile-options .tv-control-menu > summary {
+    display: flex;
+    min-height: 44px;
+    width: 100%;
+    padding: 10px 12px;
+  }
+  .pw-tasks-area .tv-mobile-options .tv-control-body {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
+    margin-top: 7px;
+    padding: 12px;
+    box-shadow: none;
+  }
+  .pw-tasks-area .tv-mobile-options .tv-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .pw-tasks-area .tv-mobile-options .tv-control-body label {
+    min-height: 40px;
+  }
+  .pw-tasks-area .tv-mobile-options .tv-control-body select,
+  .pw-tasks-area .tv-mobile-options .tv-saved-select select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .pw-tasks-area .tv-mobile-options .tv-action-label,
+  .pw-tasks-area .tv-mobile-options .tv-menu-label {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+  .pw-tasks-area .tv-mobile-options .tv-compact-action,
+  .pw-tasks-area .tv-mobile-options > .ibtn {
+    width: auto;
+    min-width: 44px;
+    min-height: 44px;
+    height: auto;
+    padding: 8px;
+    justify-content: center;
+  }
+  .pw-tasks-area .tv-mobile-order-help {
+    display: block;
+    border-top: 1px solid var(--border);
+    color: var(--text-3);
+    font-size: var(--fs-xs);
+  }
+  .pw-tasks-area .tv-mobile-order-help > summary {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 44px;
+    cursor: pointer;
+    list-style: none;
+  }
+  .pw-tasks-area .tv-mobile-order-help > summary::-webkit-details-marker {
+    display: none;
+  }
+  .pw-tasks-area .tv-mobile-order-help > summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--r-sm);
+  }
+  .pw-tasks-area .tv-mobile-order-help p {
+    margin: 0 0 8px;
+    line-height: 1.6;
+  }
+  .pw-tasks-area .tv-order-note,
+  .pw-tasks-area .tv-view-controls > .pw-result-count {
+    display: none;
+  }
+  .pw-tasks-area .tv-mobile-options.is-open + .pw-result-count {
+    display: block;
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 2px;
+  }
+  .pw-tasks-area .tv-bulk-toolbar {
+    min-height: 40px;
+    margin: 0 0 6px;
+    padding: 5px 10px;
+    gap: 6px;
+    background: transparent;
+    border-color: transparent;
+  }
+  .pw-tasks-area .tv-bulk-toolbar:not(.has-selection) > .faint {
+    display: none;
+  }
+  .pw-tasks-area .tv-bulk-toolbar.has-selection {
+    background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  }
+  .pw-tasks-area .tv-bulk-select-all {
+    min-height: 34px;
+  }
+}
+
+@media (max-width: 370px) {
+  .pw-tasks-area .tv-mobile-options.is-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

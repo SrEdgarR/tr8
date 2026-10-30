@@ -1,0 +1,265 @@
+/* Bound view width at every flex boundary; wide views keep their own scroller. */
+.personal-workspace .content,
+.personal-workspace .page.flush,
+.pw-tasks-area,
+.pw-view-navigation {
+  min-width: 0;
+  max-width: 100%;
+}
+.personal-workspace .page.flush,
+.pw-tasks-area,
+.pw-view-navigation {
+  width: 100%;
+}
+.pw-view-tabs {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.pw-view-tab {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.pw-mobile-view-picker {
+  display: none;
+}
+.tv-table-scroll,
+.pwt-scroll,
+.pw-board {
+  min-width: 0;
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+
+@media (max-width: 700px) {
+  .pw-project-page .proj-h {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto 44px;
+    padding: 12px var(--gutter);
+    gap: 8px;
+    align-items: center;
+  }
+  .pw-project-page .proj-h > .t {
+    display: contents;
+  }
+  .pw-project-page .proj-h > .t > .pico {
+    grid-column: 1;
+    grid-row: 1;
+    width: 32px;
+    height: 32px;
+  }
+  .pw-project-page .proj-h > .t > .grow {
+    grid-column: 2 / 4;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .pw-project-page .proj-h h1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 18px;
+  }
+  /* Description lives in Resumen, and the same favorite action is in navigation. */
+  .pw-project-page .pw-project-description,
+  .pw-project-page .proj-h > .t > .pw-favorite {
+    display: none;
+  }
+  .pw-project-page .pw-project-settings-trigger {
+    grid-column: 4;
+    grid-row: 1;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+    border-color: transparent;
+    background: transparent;
+  }
+  .pw-project-settings-trigger > span {
+    display: none;
+  }
+  .pw-project-page .pw-project-new-task {
+    grid-column: 3 / -1;
+    grid-row: 2;
+    justify-self: end;
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .pw-project-page .pw-project-meta {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    gap: 6px;
+    font-size: 11px;
+    margin: 0;
+  }
+  .pw-project-page .proj-h.has-task-action .pw-project-meta {
+    grid-column: 1 / 3;
+  }
+  .pw-project-meta .pstatus {
+    padding: 2px 0;
+    border: 0;
+    background: transparent;
+  }
+  .pw-view-navigation > .pw-view-tabs {
+    display: none;
+  }
+  .pw-mobile-view-picker {
+    display: flex;
+    align-items: center;
+    position: relative;
+    margin: 0 var(--gutter);
+    min-width: 0;
+    min-height: 44px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    color: var(--accent);
+    background: var(--surface-2);
+  }
+  .pw-mobile-view-picker > svg {
+    position: absolute;
+    left: 12px;
+    pointer-events: none;
+  }
+  .pw-mobile-view-picker > svg:last-child {
+    left: auto;
+    right: 12px;
+    color: var(--text-3);
+  }
+  .pw-mobile-view-picker select {
+    appearance: none;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 36px 8px 40px;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .pw-mobile-view-picker:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .pw-mobile-view-picker select:focus-visible {
+    outline: 0;
+  }
+  .pw-task-list {
+    overflow: visible;
+    padding-bottom: 24px;
+  }
+  .pw-task-list .pw-task-row {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 2px 8px;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 10px;
+    margin-top: 8px;
+    align-items: center;
+  }
+  .pw-task-list .pw-task-list-head {
+    display: none;
+  }
+  .pw-task-list .pw-task-row > .tv-list-task-actions {
+    grid-column: 1;
+    grid-row: 1 / 5;
+    display: flex;
+    flex-direction: column;
+    align-self: start;
+    padding: 0;
+    gap: 4px;
+  }
+  .pw-task-list .tv-list-title-cell {
+    display: contents;
+  }
+  .pw-task-list .tv-list-content {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    min-width: 0;
+  }
+  .pw-task-list .pw-task-title {
+    min-height: 36px;
+    font-size: 14px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .pw-project-page .pw-task-subtitle,
+  .pw-task-list .tv-drag-hint {
+    display: none;
+  }
+  .pw-task-list .tv-list-row-actions {
+    grid-column: 3;
+    grid-row: 1 / 5;
+    display: flex;
+    flex-direction: column;
+    align-self: center;
+    gap: 0;
+  }
+  .pw-task-list .tv-reorder-actions {
+    flex-direction: column;
+    gap: 0;
+    opacity: 1;
+  }
+  .pw-task-list .tv-list-row-actions svg {
+    width: 14px;
+    height: 14px;
+  }
+  .pw-task-list .tv-list-row-actions .ibtn,
+  .pw-task-list .tv-complete-task,
+  .pw-task-list .tv-select-task {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
+  .pw-task-list .pw-task-row .pw-state-cell {
+    grid-column: 2;
+    grid-row: 2;
+    margin: 0;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .pw-task-list .pw-status-select {
+    min-height: 40px;
+    min-width: 0;
+    font-size: 16px;
+  }
+  .pw-task-list .pw-task-row > .pw-priority {
+    grid-column: 2;
+    grid-row: 3;
+    font-size: 11px;
+    min-height: 20px;
+  }
+  .pw-task-list .pw-task-row > .pw-due {
+    grid-column: 2;
+    grid-row: 4;
+    font-size: 11px;
+    min-height: 20px;
+  }
+  .pw-board-help {
+    display: none;
+  }
+  .personal-workspace .topbar .pw-menu,
+  .personal-workspace .topbar .topsearch,
+  .personal-workspace .topbar .pw-sync-button {
+    min-width: 40px;
+    min-height: 40px;
+    justify-content: center;
+  }
+  .personal-workspace .topbar .pw-sync-button > span[role='status'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .personal-workspace .topbar .pw-sync-button {
+    padding: 8px;
+  }
+}

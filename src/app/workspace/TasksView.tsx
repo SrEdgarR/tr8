@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState, type ReactNode, type DragEvent } from 'react';
-import { Activity, Archive, CalendarDays, ChartGantt, ChevronRight, SquareKanban, LayoutDashboard, List, Paperclip, Plus, Table2 } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import type { Project, Task, TaskPatch, TaskStatus, WorkspaceMember } from '../types';
 import type { TaskViewConfig } from '../productivity-types';
 import { EmptyState, ErrorNotice } from './ui';
 import { errorMessage, localDate } from './helpers';
+import TaskViewNavigation from './TaskViewNavigation';
 import TaskViewControls, { type SavedViewsProps } from './TaskViewControls';
 import TaskTable from './TaskTable';
 import TaskList from './TaskList';
@@ -124,6 +125,13 @@ function ScopedTasksView({
   const mayEdit = (task: Task) => !task.archived_at && !readOnly && (canEditTask?.(task) ?? true);
   const busy = pending || localBusy || bulkBusy;
   const reorderEnabled = Boolean(onReorder && config.sort === 'manual' && config.direction === 'asc' && !readOnly);
+  const orderHelp = onReorder
+    ? readOnly
+      ? 'El orden de las tareas se conserva en esta vista de solo lectura.'
+      : reorderEnabled
+        ? 'Orden manual: arrastra una tarea sobre otra o usa las flechas para cambiar su posición dentro del mismo proyecto.'
+        : 'Selecciona orden manual ascendente para reordenar las tareas.'
+    : undefined;
 
   async function run(operation: () => Promise<void>) {
     if (pending || bulkBusy || actionLock.current) return;
@@ -303,95 +311,17 @@ function ScopedTasksView({
 
   return (
     <div className="pw-tasks-area">
-      <div className="pw-view-tabs" aria-label="Vista de tareas">
-        {summaryContent && (
-          <button
-            className={`pw-view-tab${view === 'overview' ? ' on' : ''}`}
-            aria-pressed={view === 'overview'}
-            disabled={bulkBusy}
-            onClick={() => changeView('overview')}
-          >
-            <LayoutDashboard size={15} aria-hidden="true" />
-            Resumen
-          </button>
-        )}
-        <button className={`pw-view-tab${view === 'list' ? ' on' : ''}`} aria-pressed={view === 'list'} disabled={bulkBusy} onClick={() => changeView('list')}>
-          <List size={15} aria-hidden="true" />
-          Lista
-        </button>
-        <button
-          className={`pw-view-tab${view === 'board' ? ' on' : ''}`}
-          aria-pressed={view === 'board'}
-          disabled={bulkBusy}
-          onClick={() => changeView('board')}
-        >
-          <SquareKanban size={15} aria-hidden="true" />
-          Tablero
-        </button>
-        <button
-          className={`pw-view-tab${view === 'table' ? ' on' : ''}`}
-          aria-pressed={view === 'table'}
-          disabled={bulkBusy}
-          onClick={() => changeView('table')}
-        >
-          <Table2 size={15} aria-hidden="true" />
-          Tabla
-        </button>
-        {calendarContent && (
-          <button
-            className={`pw-view-tab${view === 'calendar' ? ' on' : ''}`}
-            aria-pressed={view === 'calendar'}
-            disabled={bulkBusy}
-            onClick={() => changeView('calendar')}
-          >
-            <CalendarDays size={15} aria-hidden="true" />
-            Calendario
-          </button>
-        )}
-        {timelineContent && (
-          <button
-            className={`pw-view-tab${view === 'timeline' ? ' on' : ''}`}
-            aria-pressed={view === 'timeline'}
-            disabled={bulkBusy}
-            onClick={() => changeView('timeline')}
-          >
-            <ChartGantt size={15} aria-hidden="true" />
-            Timeline
-          </button>
-        )}
-        {filesContent && (
-          <button
-            className={`pw-view-tab${view === 'files' ? ' on' : ''}`}
-            aria-pressed={view === 'files'}
-            disabled={bulkBusy}
-            onClick={() => changeView('files')}
-          >
-            <Paperclip size={15} aria-hidden="true" /> Archivos
-          </button>
-        )}
-        {activityContent && (
-          <button
-            className={`pw-view-tab${view === 'activity' ? ' on' : ''}`}
-            aria-pressed={view === 'activity'}
-            disabled={bulkBusy}
-            onClick={() => changeView('activity')}
-          >
-            <Activity size={15} aria-hidden="true" />
-            Actividad
-          </button>
-        )}
-        {archivedContent && (
-          <button
-            className={`pw-view-tab wm-archive-tab${view === 'archived' ? ' on' : ''}`}
-            aria-pressed={view === 'archived'}
-            disabled={bulkBusy}
-            onClick={() => changeView('archived')}
-          >
-            <Archive size={14} aria-hidden="true" />
-            Archivadas
-          </button>
-        )}
-      </div>
+      <TaskViewNavigation
+        view={view}
+        disabled={bulkBusy}
+        onChange={changeView}
+        summary={Boolean(summaryContent)}
+        calendar={Boolean(calendarContent)}
+        timeline={Boolean(timelineContent)}
+        files={Boolean(filesContent)}
+        activity={Boolean(activityContent)}
+        archived={Boolean(archivedContent)}
+      />
       {view === 'files' ? (
         filesContent
       ) : view === 'timeline' ? (
@@ -428,17 +358,10 @@ function ScopedTasksView({
               resultCount={visible.length}
               hasFilters={hasFilters}
               onResetFilters={resetFilters}
+              orderHelp={orderHelp}
             />
           </fieldset>
-          {onReorder && (
-            <p className="tv-order-note">
-              {readOnly
-                ? 'El orden de las tareas se conserva en esta vista de solo lectura.'
-                : reorderEnabled
-                  ? 'Orden manual: arrastra una tarea sobre otra o usa las flechas para cambiar su posición dentro del mismo proyecto.'
-                  : 'Selecciona orden manual ascendente para reordenar las tareas.'}
-            </p>
-          )}
+          {orderHelp && <p className="tv-order-note">{orderHelp}</p>}
           {bulkTasks && canBulkTask && !readOnly && (view === 'list' || view === 'table') ? (
             <BulkTaskActions
               key={JSON.stringify([view, config, collapsedGroups, bulkTasks.scopeKey])}
