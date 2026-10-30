@@ -4,6 +4,7 @@ import type { FinancialSnapshot } from '../domain/workspace-types';
 import { creditCardCycleStatus } from '../domain/credit-cards';
 import { formatMoneyMinor, parseAmountMinor } from '../domain/money';
 import Field from './FinanceField';
+import AmountInput from './AmountInput';
 
 export default function CardPaymentAmounts({
   snapshot,
@@ -64,14 +65,16 @@ export default function CardPaymentAmounts({
     <>
       {foreign && (
         <Field label={`Abono a la tarjeta · ${to.code}`} icon={<Coins size={14} aria-hidden="true" />}>
-          <input
+          <AmountInput
+            key={destination.id}
+            digits={to.minorUnitDigits}
             name="destinationAmount"
             required
             inputMode="decimal"
             placeholder="0,00"
             disabled={disabled}
             value={destinationAmount}
-            onChange={event => onDestinationAmount(event.target.value)}
+            onValueChange={onDestinationAmount}
           />
         </Field>
       )}

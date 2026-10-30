@@ -1,0 +1,73 @@
+.tf-amount-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  padding: 7px 9px;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: var(--fs-xs);
+}
+.tf-amount-result output {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tf-amount-result output > span {
+  color: var(--text-2);
+}
+.tf-amount-result.has-error {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.tf-amount-apply {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+.tf-amount-apply:hover {
+  background: var(--surface-3);
+}
+.tf-amount-tools {
+  display: none;
+}
+.tf-input-wrap:has(> .tf-amount-result, > .tf-amount-tools) > .tf-input-icon {
+  top: 18px;
+}
+@media (max-width: 700px) {
+  .tf-amount-apply {
+    width: 44px;
+    height: 44px;
+  }
+  .tf-amount-tools {
+    display: flex;
+    gap: 6px;
+    margin-top: 7px;
+  }
+  .tf-amount-tools > button {
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 20px;
+  }
+  .tf-amount-tools > button:active {
+    background: var(--surface-3);
+  }
+  .tf-input-wrap:has(> .tf-amount-result, > .tf-amount-tools) > .tf-input-icon {
+    top: 22px;
+  }
+}

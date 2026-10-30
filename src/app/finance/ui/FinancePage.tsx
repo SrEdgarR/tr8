@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -40,6 +40,7 @@ import FinancialProjection from './FinancialProjection';
 import MovementEditor from './MovementEditor';
 import MovementDeleteDialog from './MovementDeleteDialog';
 import CardPaymentAmounts from './CardPaymentAmounts';
+import AmountInput from './AmountInput';
 import { creditCardGroups } from '../domain/credit-card-grouping';
 import FinanceSectionNavigation from './FinanceSectionNavigation';
 import type { DataSyncState } from '../../types';
@@ -1113,14 +1114,14 @@ function RecordForm({
                   : `${foreignPayment ? 'Importe debitado' : 'Importe'} · ${selected?.currency ?? ''}`
               }
             >
-              <input
+              <AmountInput
+                key={kind === 'account' ? currency : `${operation}:${selected?.id}`}
+                digits={digits}
                 name="amount"
                 required
                 inputMode="decimal"
                 defaultValue={kind === 'account' ? (editingAccount ? decimalAmount(editingAccount.openingBalanceMinor) : '0') : undefined}
-                {...(kind === 'movement'
-                  ? { value: sourceAmount, onChange: (event: ChangeEvent<HTMLInputElement>) => setSourceAmount(event.target.value) }
-                  : {})}
+                {...(kind === 'movement' ? { value: sourceAmount, onValueChange: setSourceAmount } : {})}
                 placeholder="0,00"
               />
             </Field>
@@ -1137,7 +1138,8 @@ function RecordForm({
             )}
             {kind === 'account' && type === 'credit' && (
               <Field label="Límite de crédito">
-                <input
+                <AmountInput
+                  digits={digits}
                   name="limit"
                   inputMode="decimal"
                   required

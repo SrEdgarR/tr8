@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { CalendarDays, Coins, CreditCard, Landmark, Link2, Plus, Tag, Trash2 } from 'lucide-react';
 import { Dialog, ErrorNotice } from '../../workspace/ui';
 import Field from './FinanceField';
+import AmountInput from './AmountInput';
 import type { FinancialSnapshot } from '../domain/workspace-types';
 import type { FinancialAccount } from '../domain/types';
 import { calculateFinancialBalances } from '../domain/balances';
@@ -206,24 +207,28 @@ export default function CreditCardForm({
                           </select>
                         </Field>
                         <Field label={`Límite de crédito · ${r.currency}`} icon={<CreditCard size={14} />}>
-                          <input required inputMode="decimal" value={r.limit} onChange={e => change(r.key, { limit: e.target.value })} />
+                          <AmountInput key={r.currency} digits={2} required value={r.limit} onValueChange={value => change(r.key, { limit: value })} />
                         </Field>
                         <Field label={`Deuda total actual · ${r.currency}`} icon={<Coins size={14} />}>
-                          <input
+                          <AmountInput
+                            key={r.currency}
+                            digits={2}
                             required
                             readOnly={Boolean(r.accountId)}
                             inputMode="decimal"
                             value={r.total}
-                            onChange={e => change(r.key, { total: e.target.value })}
+                            onValueChange={value => change(r.key, { total: value })}
                           />
                         </Field>
                         <Field label={`Pendiente del corte ${dates?.lastStatementDate ?? ''} · ${r.currency}`} icon={<CalendarDays size={14} />}>
-                          <input
+                          <AmountInput
+                            key={r.currency}
+                            digits={2}
                             required={!r.defer}
                             disabled={r.defer}
                             inputMode="decimal"
                             value={r.pending}
-                            onChange={e => change(r.key, { pending: e.target.value })}
+                            onValueChange={value => change(r.key, { pending: value })}
                             placeholder="0,00"
                           />
                         </Field>

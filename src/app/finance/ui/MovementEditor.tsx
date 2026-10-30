@@ -7,6 +7,7 @@ import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../domain/categories';
 import { Dialog, ErrorNotice } from '../../workspace/ui';
 import Field from './FinanceField';
 import CardPaymentAmounts from './CardPaymentAmounts';
+import AmountInput from './AmountInput';
 
 const labels = { income: 'Ingreso', expense: 'Gasto', transfer: 'Transferencia', 'card-payment': 'Pago de tarjeta', refund: 'Reembolso' };
 const categories: Record<string, string> = {
@@ -182,7 +183,7 @@ export default function MovementEditor({ snapshot, operation, busy: pending, onC
               </p>
             )}
             <Field label={`${foreignPayment ? 'Importe debitado' : 'Importe'} · ${operation.currency}`} icon={<Coins size={14} aria-hidden="true" />}>
-              <input required inputMode="decimal" disabled={info?.captured} value={amount} onChange={event => setAmount(event.target.value)} />
+              <AmountInput digits={definition.minorUnitDigits} required disabled={info?.captured} value={amount} onValueChange={setAmount} />
             </Field>
             {operation.kind === 'card-payment' && (
               <CardPaymentAmounts
