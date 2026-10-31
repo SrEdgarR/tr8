@@ -9,7 +9,9 @@ async function handle(request: Request): Promise<Response> {
       { error: { code: 'UNAVAILABLE', message: 'La conexión MCP no está configurada.' } },
       { status: 503, headers: { 'Cache-Control': 'no-store' } },
     );
-  return handleMcpRequest(request, { dispatch: token => createMcpDispatch(token, { url, key }) });
+  // OAuth finance rollout must not widen the existing project/task PAT catalog.
+  const financeEnabled = process.env.TR8_MCP_LEGACY_FINANCE_ENABLED === 'true';
+  return handleMcpRequest(request, { dispatch: token => createMcpDispatch(token, { url, key, financeEnabled }), financeEnabled });
 }
 export const POST = handle;
 export const GET = handle;

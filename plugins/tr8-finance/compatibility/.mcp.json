@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "tr8-finance-readonly": {
+      "url": "https://tr8.vercel.app/api/mcp/finance",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "provided",
+              "clientId": "tr8-dot-readonly",
+              "tokenEndpointAuthMethod": "none"
+            },
+            "authorizationServerBase": "https://tr8.vercel.app",
+            "authorizationUrl": "https://tr8.vercel.app/api/oauth/authorize",
+            "tokenUrl": "https://tr8.vercel.app/api/oauth/token",
+            "resource": "https://tr8.vercel.app/api/mcp/finance",
+            "baseScopes": ["finance:read"],
+            "defaultScopes": ["finance:read"],
+            "oidcEnabled": false
+          }
+        }
+      }
+    }
+  }
+}

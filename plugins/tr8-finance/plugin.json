@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "tr8-finance",
+  "version": "0.1.0",
+  "description": "Consulta privada de cuentas y movimientos autorizados de TR8, exclusivamente de solo lectura.",
+  "homepage": "https://tr8.vercel.app",
+  "keywords": ["tr8", "finance", "read-only"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "TR8 · Finanzas (solo lectura)",
+        "shortDescription": "Consulta tus finanzas autorizadas de TR8.",
+        "longDescription": "Consulta cuentas, categorías, movimientos y avisos pendientes de revisión mediante OAuth limitado a finance:read. No registra movimientos, no importa Gmail y no accede a la bóveda cifrada.",
+        "developerName": "TR8",
+        "capabilities": ["Read"],
+        "websiteURL": "https://tr8.vercel.app",
+        "defaultPrompt": ["Consulta mis cuentas autorizadas de TR8 en modo de solo lectura, sin registrar movimientos ni importar correos."],
+        "brandColor": "#8E9AF3"
+      }
+    }
+  }
+}

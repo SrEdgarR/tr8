@@ -4,6 +4,12 @@ TR8 ofrece un servidor **MCP estándar**, independiente de Codex. Un cliente pue
 consultar proyectos, tareas y calendario, y crear o actualizar contenido si su
 conexión tiene permiso de escritura.
 
+La ampliación financiera dispone de un [recurso OAuth independiente](./oauth-review.md).
+El despliegue autorizado del 31 de octubre de 2026 limita el acceso del DOT a
+lectura. La importación automática permanece desactivada. La conexión cloud
+requiere su instalación y consentimiento en ChatGPT; el MCP de proyectos que se
+describe aquí conserva sus 11 herramientas y sus claves anteriores.
+
 - Endpoint: `https://tr8.vercel.app/api/mcp`
 - Transporte remoto: **Streamable HTTP**.
 - Autenticación: `Authorization: Bearer <clave de conexión TR8>`.
@@ -44,10 +50,11 @@ política, pero no sustituyen las comprobaciones de permisos del servidor.
 | Claude Desktop   | Adaptador stdio local                                                                  |
 | Otro cliente MCP | Streamable HTTP si admite Bearer configurado; stdio si permite lanzar un proceso local |
 
-Esta versión utiliza claves personales de TR8 y **no ofrece un inicio de sesión
-OAuth automático**. Un cliente remoto que solo permita OAuth no puede conectarse
-introduciendo únicamente la URL. Si ese cliente admite procesos MCP locales,
-utiliza el adaptador stdio. La compatibilidad se apoya en el protocolo MCP y se
+Este endpoint de proyectos utiliza claves personales de TR8. El recurso OAuth
+financiero separado es `/api/mcp/finance`; no convierte las claves anteriores en
+sesiones OAuth ni concede acceso financiero al MCP de proyectos. Si un cliente
+de proyectos admite procesos MCP locales, puede utilizar el adaptador stdio.
+La compatibilidad se apoya en el protocolo MCP y se
 verifica con los clientes oficiales del SDK; cada aplicación puede imponer
 requisitos adicionales o cambiar su interfaz de configuración.
 

@@ -17,6 +17,7 @@ export class McpBackendError extends Error {
 
 function backendError(code: unknown) {
   if (typeof code === 'string') {
+    if (code === 'PT400') return new McpBackendError('INVALID_INPUT');
     if (['PT401', 'PT403', 'PT404', 'PT409', 'PT429', 'INVALID_INPUT', 'UNAVAILABLE'].includes(code)) return new McpBackendError(code);
     if (code === '42501') return new McpBackendError('PT403');
     if (/^22[A-Z0-9]{3}$/.test(code) || code === '23514') return new McpBackendError('INVALID_INPUT');
@@ -29,14 +30,34 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Public Supabase key only. Delegation is checked again inside every RPC. */
-export function createMcpDispatch(token: string, options: { url: string; key: string; fetch?: typeof fetch }): McpDispatch {
+export function createMcpDispatch(
+  token: string,
+  options: { url: string; key: string; fetch?: typeof fetch; financeEnabled?: boolean; oauthFinance?: boolean },
+): McpDispatch {
   const base = new URL(options.url);
   if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) throw new McpBackendError('UNAVAILABLE');
   const request = options.fetch ?? fetch;
   return async (action, input) => {
+    const financeAction = action.startsWith('finance_');
+    if (options.oauthFinance && !/^tr8_oauth_a_[a-f0-9]{64}$/.test(token)) throw new McpBackendError('PT401');
+    if (options.oauthFinance && !financeAction) throw new McpBackendError('PT403');
+    if (financeAction && !options.financeEnabled) throw new McpBackendError('PT403');
+    if (
+      financeAction &&
+      ![
+        'finance_context',
+        'finance_list_accounts',
+        'finance_list_categories',
+        'finance_list_movements',
+        'finance_submit_notice',
+        'finance_list_reviews',
+      ].includes(action)
+    )
+      throw new McpBackendError('INVALID_INPUT');
     let response: Response;
     try {
-      response = await request(new URL('/rest/v1/rpc/tr8_mcp_dispatch', base), {
+      const rpc = options.oauthFinance ? 'tr8_mcp_oauth_finance_dispatch' : financeAction ? 'tr8_mcp_finance_dispatch' : 'tr8_mcp_dispatch';
+      response = await request(new URL(`/rest/v1/rpc/${rpc}`, base), {
         method: 'POST',
         headers: { apikey: options.key, 'Content-Type': 'application/json' },
         body: JSON.stringify({ p_token: token, p_action: action, p_input: input }),
