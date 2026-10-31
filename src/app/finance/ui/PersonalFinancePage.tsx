@@ -1,9 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import FinanceMcpSettings from '../integration/FinanceMcpSettings';
-import type { FinanceMcpApi } from '../integration/api';
-import type { McpCredentialsApi } from '../../data/mcp';
-import type { OAuthConsentApi } from '../oauth/consent-api';
-import OAuthConnectionsPanel from '../oauth/OAuthConnectionsPanel';
 import { ArrowLeft, Download, FileUp, ShieldCheck, Wallet } from 'lucide-react';
 import FinancePage, { FinancialDashboard } from './FinancePage';
 import type { FinanceApi } from './api';
@@ -14,24 +9,16 @@ import { MAX_PLAINTEXT_BYTES, parseStrictJson } from '../compatibility/protocol'
 import type { FinancialSnapshot } from '../domain/workspace-types';
 import { Busy, ErrorNotice } from '../../workspace/ui';
 import './finance.css';
-interface McpSettings {
-  api: FinanceMcpApi;
-  connectionsApi: McpCredentialsApi;
-  workspaceId: string;
-  oauthApi?: OAuthConsentApi;
-}
 export default function PersonalFinancePage({
   accountApi,
   vaultApi,
   onSyncState,
   onRefreshReady,
-  mcpSettings,
 }: {
   accountApi: AccountFinanceApi;
   vaultApi: FinanceApi;
   onSyncState?: (state: DataSyncState) => void;
   onRefreshReady?: (refresh: (() => void) | null) => void;
-  mcpSettings?: McpSettings;
 }) {
   const [vault, setVault] = useState(false);
   if (vault)
@@ -44,9 +31,7 @@ export default function PersonalFinancePage({
         <FinancePage api={vaultApi} onSyncState={onSyncState} />
       </>
     );
-  return (
-    <AccountFinancePage api={accountApi} onVault={() => setVault(true)} onSyncState={onSyncState} onRefreshReady={onRefreshReady} mcpSettings={mcpSettings} />
-  );
+  return <AccountFinancePage api={accountApi} onVault={() => setVault(true)} onSyncState={onSyncState} onRefreshReady={onRefreshReady} />;
 }
 function errorMessage(error: unknown) {
   return error && typeof error === 'object' && 'code' in error && error.code === 'PT409'
@@ -58,13 +43,11 @@ function AccountFinancePage({
   onVault,
   onSyncState,
   onRefreshReady,
-  mcpSettings,
 }: {
   api: AccountFinanceApi;
   onVault: () => void;
   onSyncState?: (state: DataSyncState) => void;
   onRefreshReady?: (refresh: (() => void) | null) => void;
-  mcpSettings?: McpSettings;
 }) {
   const [record, setRecord] = useState<AccountFinanceRecord | null>(null),
     [dashboardEpoch, setDashboardEpoch] = useState(0),
@@ -231,20 +214,7 @@ function AccountFinancePage({
             key={dashboardEpoch}
             snapshot={record.snapshot}
             finance={{ busy: blocked, save }}
-            security={
-              <>
-                <AccountSecurity key={record.version} snapshot={record.snapshot} busy={blocked} onSave={save} onVault={onVault} />
-                {mcpSettings && (
-                  <FinanceMcpSettings
-                    key={`${mcpSettings.api.ownerId}:${mcpSettings.workspaceId}`}
-                    {...mcpSettings}
-                    accounts={record.snapshot.financialSpace.accounts.map(({ id, name, currency }) => ({ id, name, currency }))}
-                    enabled
-                  />
-                )}
-                {mcpSettings?.oauthApi && <OAuthConnectionsPanel api={mcpSettings.oauthApi} />}
-              </>
-            }
+            security={<AccountSecurity key={record.version} snapshot={record.snapshot} busy={blocked} onSave={save} onVault={onVault} />}
           />
         </>
       )}

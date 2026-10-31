@@ -37,14 +37,11 @@ import { dataError, DataError } from './data/errors';
 import type { CalendarApi, CollaborationApi, DataSyncState, Project, Task, WorkspaceProps, WorkspaceSummary } from './types';
 import { createFinanceApi, changeFinanceAccountPassword } from './finance/ui/api';
 import { createAccountFinanceApi } from './finance/ui/account-api';
-import { createFinanceMcpApi } from './finance/integration/api';
-import { createOAuthConsentApi } from './finance/oauth/consent-api';
 
 const FinancePage = deferSection(() => import('./finance/ui/PersonalFinancePage'), 'Finanzas');
 const ProcessesPanel = deferSection(() => import('./workspace/ProcessesPanel'), 'los procesos');
 const GoogleCalendarPanel = deferSection(() => import('./workspace/GoogleCalendarPanel'), 'la conexión con Google');
 const McpConnectionsPanel = deferSection(() => import('./workspace/McpConnectionsPanel'), 'las conexiones MCP');
-const OAuthConsentRoute = deferSection(() => import('./finance/oauth/OAuthConsentRoute'), 'el permiso del asistente');
 
 function LoadingScreen() {
   return (
@@ -58,14 +55,6 @@ function LoadingScreen() {
 
 export default function App() {
   const location = useLocation();
-  if (location.pathname === '/oauth/consent' && import.meta.env.VITE_TR8_MCP_OAUTH_REVIEW_ENABLED !== 'true')
-    return (
-      <main className="app-status">
-        <LockKeyhole size={30} aria-hidden="true" />
-        <h1>La conexión de asistentes está en revisión</h1>
-        <p>Este acceso todavía no está habilitado. La importación automática permanece desactivada.</p>
-      </main>
-    );
   if (location.pathname === '/google-calendar/callback') return <GoogleCalendarReturn />;
   if (location.pathname === '/privacy' || location.pathname === '/about')
     return <PublicInformation page={location.pathname === '/privacy' ? 'privacy' : 'about'} />;
@@ -82,7 +71,6 @@ export default function App() {
 }
 
 function ConnectedApp({ client }: { client: SupabaseClient }) {
-  const location = useLocation();
   const [session, setSession] = useState<Session | null>(null);
   const [checking, setChecking] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -168,7 +156,6 @@ function ConnectedApp({ client }: { client: SupabaseClient }) {
         onUpdatePassword={password => changeFinanceAccountPassword(client, configuration!.url, configuration!.publishableKey, password)}
       />
     );
-  if (location.pathname === '/oauth/consent') return <OAuthConsentRoute key={session.user.id} client={client} ownerId={session.user.id} />;
   return <WorkspaceContext key={session.user.id} client={client} session={session} />;
 }
 
@@ -385,8 +372,6 @@ function ScopedWorkspace({
   );
   const accountFinanceApi = useMemo(() => createAccountFinanceApi(client, session.user.id), [client, session.user.id]);
   const mcpApi = useMemo(() => createMcpRepository(client, session.user.id), [client, session.user.id]);
-  const financeMcpApi = useMemo(() => createFinanceMcpApi(client, session.user.id), [client, session.user.id]);
-  const oauthMcpApi = useMemo(() => createOAuthConsentApi(client, session.user.id), [client, session.user.id]);
   const [financeSyncState, setFinanceSyncState] = useState<DataSyncState>('checking');
   const [financeRefresh, setFinanceRefresh] = useState<(() => void) | null>(null);
   const registerFinanceRefresh = useCallback((refresh: (() => void) | null) => setFinanceRefresh(() => refresh), []);
@@ -816,16 +801,6 @@ function ScopedWorkspace({
             accountApi={accountFinanceApi}
             onSyncState={setFinanceSyncState}
             onRefreshReady={registerFinanceRefresh}
-            mcpSettings={
-              import.meta.env.VITE_TR8_MCP_FINANCE_REVIEW_ENABLED === 'true'
-                ? {
-                    api: financeMcpApi,
-                    connectionsApi: mcpApi,
-                    workspaceId: selected.id,
-                    oauthApi: import.meta.env.VITE_TR8_MCP_OAUTH_REVIEW_ENABLED === 'true' ? oauthMcpApi : undefined,
-                  }
-                : undefined
-            }
           />
         ) : undefined
       }

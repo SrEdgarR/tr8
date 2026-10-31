@@ -1,27 +1,19 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { McpBackendError, type McpDispatch } from './backend.js';
 import { createTr8McpServer } from './server.js';
-import { createTr8FinanceMcpServer } from './finance-server.js';
 
 export interface McpHttpOptions {
   dispatch: (token: string) => McpDispatch;
   allowedOrigins?: string[];
-  /** Local review only until database migration and publication are approved. */
-  financeEnabled?: boolean;
-  /** Distinct opaque tokens and a finance-only tool catalog; never a browser JWT. */
-  oauthFinance?: { challenge: string };
 }
 const MAX_BODY = 256 * 1024;
 const BODY_READ_TIMEOUT_MS = 5000;
 class BodyReadInterrupted extends Error {}
 const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
-function failure(status: number, code: string, message: string, challenge?: string) {
+function failure(status: number, code: string, message: string) {
   return Response.json(
     { error: { code, message } },
-    {
-      status,
-      headers: { ...headers, ...(status === 401 || (status === 403 && challenge) ? { 'WWW-Authenticate': challenge ?? 'Bearer realm="TR8 MCP"' } : {}) },
-    },
+    { status, headers: { ...headers, ...(status === 401 ? { 'WWW-Authenticate': 'Bearer realm="TR8 MCP"' } : {}) } },
   );
 }
 async function body(request: Request) {
@@ -93,25 +85,16 @@ export async function handleMcpRequest(request: Request, options: McpHttpOptions
       },
     });
   const authorization = request.headers.get('authorization') ?? '';
-  const credential = options.oauthFinance ? /^Bearer tr8_oauth_a_[a-f0-9]{64}$/ : /^Bearer tr8_mcp_[a-f0-9]{64}$/;
-  if (!credential.test(authorization)) return failure(401, 'PT401', 'Se requiere una conexión MCP de TR8.', options.oauthFinance?.challenge);
-  if (options.oauthFinance && ['access_token', 'token', 'authorization'].some(name => new URL(request.url).searchParams.has(name)))
-    return failure(400, 'INVALID_REQUEST', 'La credencial solo se admite en la cabecera Authorization.');
+  if (!/^Bearer tr8_mcp_[a-f0-9]{64}$/.test(authorization)) return failure(401, 'PT401', 'Se requiere una conexión MCP de TR8.');
   if (!['POST', 'GET', 'DELETE'].includes(request.method)) return failure(405, 'METHOD_NOT_ALLOWED', 'Método no admitido.');
   let dispatch: McpDispatch;
-  let readOnly = false;
   try {
     dispatch = options.dispatch(authorization.slice(7));
-    const context = await dispatch(options.oauthFinance ? 'finance_context' : 'context', {});
-    if (options.oauthFinance) {
-      if (!context || typeof context !== 'object' || !('access' in context) || !['read', 'write'].includes(String(context.access)))
-        throw new McpBackendError('UNAVAILABLE');
-      readOnly = context.access === 'read';
-    }
+    await dispatch('context', {});
   } catch (cause) {
     const error = cause instanceof McpBackendError ? cause : new McpBackendError('UNAVAILABLE');
     const status = error.code === 'PT401' ? 401 : error.code === 'PT403' ? 403 : error.code === 'PT429' ? 429 : 503;
-    return failure(status, error.code, error.message, options.oauthFinance?.challenge);
+    return failure(status, error.code, error.message);
   }
   let parsedBody: unknown;
   if (request.method === 'POST') {
@@ -123,9 +106,7 @@ export async function handleMcpRequest(request: Request, options: McpHttpOptions
       return failure(cause instanceof RangeError ? 413 : 400, 'INVALID_REQUEST', 'Solicitud MCP inválida o demasiado grande.');
     }
   }
-  const server = options.oauthFinance
-    ? createTr8FinanceMcpServer(dispatch, { readOnly })
-    : createTr8McpServer(dispatch, { financeEnabled: options.financeEnabled });
+  const server = createTr8McpServer(dispatch);
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   try {
     await server.connect(transport);
