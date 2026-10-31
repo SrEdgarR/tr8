@@ -133,6 +133,34 @@ const post = (url: string, data: Record<string, string>) =>
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data), redirect: 'manual' });
 
 describe('independent financial OAuth protocol with the maintained MCP SDK handlers', () => {
+  it('ignores spoofed Forwarded and X-Forwarded-For identities while sharing the socket-IP limiter without diagnostics', async () => {
+    const { dispatch } = fixture();
+    const diagnostics = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const base = await listen(dispatch);
+      for (let n = 0; n <= 50; n++) {
+        const response = await fetch(`${base}/api/oauth/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Forwarded: `for="198.51.100.${n + 1}";proto=https;host=tr8.example`,
+            'X-Forwarded-For': `203.0.113.${n + 1}`,
+          },
+          body: new URLSearchParams(exchange({ client_id: 'unknown-client' })),
+        });
+        // All requests share the loopback socket IP despite different claimed
+        // forwarding identities. The 51st is blocked before client lookup.
+        if (n < 50) expect(response.status).not.toBe(429);
+        else expect(response.status).toBe(429);
+        await response.arrayBuffer();
+      }
+      expect(dispatch.mock.calls.filter(([action]) => action === 'get_client')).toHaveLength(50);
+      expect(diagnostics).not.toHaveBeenCalled();
+    } finally {
+      diagnostics.mockRestore();
+    }
+  });
+
   it('interoperates with the official MCP OAuth client discovery and PKCE code exchange', async () => {
     const { dispatch } = fixture();
     const base = await listen(dispatch);

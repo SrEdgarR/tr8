@@ -27,7 +27,7 @@
     "typecheck:mcp": "tsc -p tsconfig.mcp.json --noEmit"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.12.0 <25"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

@@ -123,7 +123,7 @@ distribuido y las cuotas del proyecto.
 | Concurrencia OAuth                         | 82 comprobaciones, 12 escenarios, 16 barreras observadas.                                    |
 | SDK OAuth → HTTP loopback → MCP → SQL real | 30 comprobaciones, 39 llamadas RPC, cuatro reintentos concurrentes y un movimiento.          |
 | Regresión MCP PAT → HTTP → SQL             | 22 comprobaciones.                                                                           |
-| Aplicación / servidor                      | 1.729 / 746 pruebas aprobadas.                                                               |
+| Aplicación / servidor                      | 1.729 / 747 pruebas aprobadas.                                                               |
 | Interfaz de consentimiento                 | 19 pruebas incluidas; revisión visual de escritorio y 390 px, sin desbordamiento horizontal. |
 
 Las carreras verifican uso único del código, PKCE incorrecto seguido del correcto,

@@ -244,7 +244,7 @@ de ejecuciones.
 | Comprobación                       | Resultado local                                                                                                     |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Suite de aplicación                | 1.729 pruebas aprobadas.                                                                                            |
-| Suite de servidor/Edge             | 746 pruebas aprobadas, incluidas política financiera, protocolo OAuth y recurso separado.                           |
+| Suite de servidor/Edge             | 747 pruebas aprobadas, incluidas política financiera, protocolo OAuth y recurso separado.                           |
 | RPC PostgreSQL/PGlite              | 129 comprobaciones financieras y 68 OAuth aprobadas en ambos motores.                                               |
 | Concurrencia PostgreSQL nativo     | 149 comprobaciones adicionales, 25 escenarios y 33 bloqueos entre sesiones observados; 346 contando las suites SQL. |
 | Cliente MCP → HTTP → RPC SQL       | 22 comprobaciones PAT y 30 del flujo OAuth completo; la conexión PostgREST se adapta a SQL local.                   |

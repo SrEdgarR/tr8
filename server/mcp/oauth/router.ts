@@ -52,7 +52,9 @@ export function createOAuthProtocolRouter(options: { enabled?: boolean; dispatch
   const provider = createOAuthProvider(options.dispatch);
   // Do not trust forwarded IPs supplied by callers. SQL holds the durable
   // budgets; this SDK limiter is additional process-local protection only.
-  const rateLimit = { validate: { xForwardedForHeader: false } };
+  // Vercel adds Forwarded too. Both headers are intentionally ignored: keep
+  // socket-IP keys rather than trusting caller-supplied proxy identities.
+  const rateLimit = { validate: { xForwardedForHeader: false, forwardedHeader: false } };
   app.use('/api/oauth/authorize', authorizationHandler({ provider, rateLimit }));
   app.use('/api/oauth/token', tokenHandler({ provider, rateLimit }));
   app.use('/api/oauth/revoke', revocationHandler({ provider, rateLimit }));
