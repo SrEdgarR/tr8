@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
 import type { PlanningState, ProjectMilestone, TaskDependency } from '../planning-types';
 import type { Task } from '../types';
+import { formatDate } from '../constants';
 import type { PlanningController } from './usePlanning';
 import Timeline from './Timeline';
 import { summaryMember, summaryProject, summaryProps, summaryTask } from './summary-test-fixtures';
@@ -81,15 +82,101 @@ describe('Timeline', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await user.click(toggle);
     await user.type(screen.getByRole('textbox', { name: 'Buscar en el cronograma' }), 'No coincide');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Ordenar cronograma' }), 'priority');
     expect(screen.queryByRole('button', { name: 'Preparar' })).not.toBeInTheDocument();
     await user.keyboard('{Escape}');
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle).toHaveFocus();
     await user.click(toggle);
     expect(screen.getByRole('textbox', { name: 'Buscar en el cronograma' })).toHaveValue('No coincide');
+    expect(screen.getByRole('combobox', { name: 'Ordenar cronograma' })).toHaveValue('priority');
     await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
     expect(screen.getByRole('button', { name: 'Preparar' })).toBeInTheDocument();
     expect(value.onReschedule).not.toHaveBeenCalled();
+  });
+
+  it('changes priority order within groups and keeps filters active without saving task changes', async () => {
+    const user = userEvent.setup();
+    const tasks = [
+      task('Baja por hacer', { priority: 'low', start_date: '2026-10-26' }),
+      task('Baja en revisión', { status: 'review', priority: 'low', start_date: '2026-10-26' }),
+      task('Urgente por hacer', { priority: 'urgent' }),
+      task('Alta en revisión', { status: 'review', priority: 'high' }),
+    ];
+    const original = structuredClone(tasks);
+    const value = props({ data: summaryProps({ tasks }) });
+    render(<Timeline {...value} />);
+    const taskNames = () =>
+      screen.getAllByRole('button', { name: /^(Baja por hacer|Baja en revisión|Urgente por hacer|Alta en revisión)$/ }).map(button => button.textContent);
+    const sort = screen.getByRole('combobox', { name: 'Ordenar cronograma' });
+    expect(sort).toHaveValue('start_date');
+    expect(taskNames()).toEqual(['Baja por hacer', 'Urgente por hacer', 'Baja en revisión', 'Alta en revisión']);
+    await user.selectOptions(sort, 'priority');
+    expect(taskNames()).toEqual(['Urgente por hacer', 'Baja por hacer', 'Alta en revisión', 'Baja en revisión']);
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Estado en el cronograma' }), 'review');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Agrupar cronograma' }), 'project');
+    expect(sort).toHaveValue('priority');
+    expect(taskNames()).toEqual(['Alta en revisión', 'Baja en revisión']);
+    await user.selectOptions(sort, 'start_date');
+    expect(taskNames()).toEqual(['Baja en revisión', 'Alta en revisión']);
+    expect(screen.getByRole('combobox', { name: 'Estado en el cronograma' })).toHaveValue('review');
+    expect(value.data.tasks).toEqual(original);
+    expect(value.onReschedule).not.toHaveBeenCalled();
+    expect(value.data.onUpdateTask).not.toHaveBeenCalled();
+  });
+
+  it('applies priority ordering to undated tasks and restores their input order with date sorting', async () => {
+    const user = userEvent.setup();
+    const value = props({
+      data: summaryProps({
+        tasks: [
+          task('Sin fecha baja', { start_date: null, due_date: null, priority: 'low' }),
+          task('Sin fecha urgente', { start_date: null, due_date: null, priority: 'urgent' }),
+        ],
+      }),
+    });
+    render(<Timeline {...value} />);
+    await user.click(screen.getByText('Sin programar', { selector: 'summary' }));
+    const taskNames = () => screen.getAllByRole('button', { name: /^Sin fecha (baja|urgente)$/ }).map(button => button.textContent);
+    expect(taskNames()).toEqual(['Sin fecha baja', 'Sin fecha urgente']);
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Ordenar cronograma' }), 'priority');
+    expect(taskNames()).toEqual(['Sin fecha urgente', 'Sin fecha baja']);
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Ordenar cronograma' }), 'start_date');
+    expect(taskNames()).toEqual(['Sin fecha baja', 'Sin fecha urgente']);
+    expect(value.onReschedule).not.toHaveBeenCalled();
+  });
+
+  it('marks only unfinished tasks with a past due date as overdue, including rows outside the visible dates', () => {
+    const tasks = [
+      task('Pendiente vencida', { start_date: '2026-10-26', due_date: '2026-10-27' }),
+      task('Antigua fuera de vista', { start_date: '2026-09-01', due_date: '2026-09-02' }),
+      task('Completada vencida', { status: 'done', start_date: '2026-10-26', due_date: '2026-10-27' }),
+      task('Vence hoy', { due_date: today }),
+      task('Vence después'),
+      task('Solo inicio pasado', { start_date: '2026-10-26', due_date: null }),
+    ];
+    const original = structuredClone(tasks);
+    const value = props({ data: summaryProps({ tasks }) });
+    render(<Timeline {...value} />);
+    for (const [title, dueDate] of [
+      ['Pendiente vencida', '2026-10-27'],
+      ['Antigua fuera de vista', '2026-09-02'],
+    ]) {
+      const row = screen.getByRole('button', { name: title }).closest('.pwt-row')!;
+      const badge = within(row as HTMLElement)
+        .getByText('Vencida')
+        .closest('[title]');
+      expect(badge).toHaveAttribute('title', expect.stringContaining(`Vencida el ${formatDate(dueDate)}`));
+    }
+    for (const title of ['Completada vencida', 'Vence hoy', 'Vence después', 'Solo inicio pasado']) {
+      const row = screen.getByRole('button', { name: title }).closest('.pwt-row')!;
+      expect(within(row as HTMLElement).queryByText('Vencida')).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole('button', { name: /^Antigua fuera de vista, .*Abrir tarea$/ })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Vencida')).toHaveLength(2);
+    expect(value.data.tasks).toEqual(original);
+    expect(value.onReschedule).not.toHaveBeenCalled();
+    expect(value.data.onUpdateTask).not.toHaveBeenCalled();
   });
 
   it('renders civil date bars, an explicit date alternative, and both demo scales', async () => {
@@ -349,11 +436,13 @@ describe('Timeline', () => {
     const value = props({ milestoneContent: <p>Administración de hitos</p> });
     const rendered = render(<Timeline {...value} />);
     await user.type(screen.getByLabelText('Buscar en el cronograma'), 'Preparar');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Ordenar cronograma' }), 'priority');
     await user.click(screen.getByRole('button', { name: 'Hitos' }));
     await user.click(screen.getByRole('button', { name: 'Reprogramar Preparar' }));
     const other = { ...value.data.workspace!, id: 'other-space' };
     rendered.rerender(<Timeline {...value} data={{ ...value.data, workspace: other, projects: [], tasks: [] }} />);
     expect(screen.getByLabelText('Buscar en el cronograma')).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Ordenar cronograma' })).toHaveValue('start_date');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByText('Administración de hitos')).not.toBeInTheDocument();
     expect(screen.queryByText('Preparar')).not.toBeInTheDocument();

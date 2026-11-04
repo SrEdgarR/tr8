@@ -7,6 +7,8 @@ import { canInProject } from './permissions';
 const DAY_MS = 86_400_000;
 export type TimelineScale = 'week' | 'month';
 export type TimelineGrouping = 'status' | 'project' | 'assignee' | 'none';
+export type TimelineSort = 'start_date' | 'priority';
+const PRIORITY_ORDER: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
 export interface TimelineFilters {
   query: string;
   status: TaskStatus | '';
@@ -101,6 +103,7 @@ export function buildTimelineModel(
   filters: TimelineFilters = emptyTimelineFilters(),
   grouping: TimelineGrouping = 'status',
   selectedProject?: Project,
+  sort: TimelineSort = 'start_date',
 ) {
   const dashboard = buildDashboardModel(data, today);
   // The general view excludes archived projects; a project opened explicitly may be read-only.
@@ -137,8 +140,16 @@ export function buildTimelineModel(
   );
   const scheduled = tasks
     .filter(task => taskInterval(task))
-    .sort((a, b) => taskInterval(a)!.start.localeCompare(taskInterval(b)!.start) || a.position - b.position || a.id.localeCompare(b.id));
+    .sort(
+      (a, b) =>
+        (sort === 'priority' ? PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] : 0) ||
+        taskInterval(a)!.start.localeCompare(taskInterval(b)!.start) ||
+        a.position - b.position ||
+        a.id.localeCompare(b.id),
+    );
   const undated = tasks.filter(task => !taskInterval(task));
+  if (sort === 'priority')
+    undated.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] || a.position - b.position || a.id.localeCompare(b.id));
   const effectiveGrouping = grouping === 'assignee' && !dashboard.directoryAvailable ? 'status' : grouping;
   const groups: TimelineGroup[] = [];
   const append = (id: string, label: string, task: Task, color?: string, status?: TaskStatus) => {

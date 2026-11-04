@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
-import { AlertTriangle, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Crosshair, Diamond, GripVertical, Search, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowDownWideNarrow,
+  CalendarClock,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Crosshair,
+  Diamond,
+  GripVertical,
+  Search,
+  X,
+} from 'lucide-react';
 import type { Project, Task, TaskPatch, WorkspaceProps } from '../types';
 import { formatDate, PRIORITIES, STATUSES } from '../constants';
 import type { PlanningController } from './usePlanning';
@@ -21,6 +33,7 @@ import {
   type TimelineFilters,
   type TimelineGrouping,
   type TimelineScale,
+  type TimelineSort,
 } from './timeline-model';
 import './timeline.css';
 import PlanningViewOptions from './PlanningViewOptions';
@@ -77,6 +90,7 @@ function ScopedTimeline({ data, planning, project, onOpen, onReschedule, milesto
   const [anchor, setAnchor] = useState(today);
   const [scale, setScale] = useState<TimelineScale>('week');
   const [grouping, setGrouping] = useState<TimelineGrouping>('status');
+  const [sort, setSort] = useState<TimelineSort>('start_date');
   const [filters, setFilters] = useState<TimelineFilters>(emptyTimelineFilters);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [showMilestones, setShowMilestones] = useState(false);
@@ -90,8 +104,8 @@ function ScopedTimeline({ data, planning, project, onOpen, onReschedule, milesto
   const alive = useRef(true);
   const scroll = useRef<HTMLDivElement>(null);
   const model = useMemo(
-    () => buildTimelineModel(data, today, planning.state, filters, grouping, project),
-    [data, today, planning.state, filters, grouping, project],
+    () => buildTimelineModel(data, today, planning.state, filters, grouping, project, sort),
+    [data, today, planning.state, filters, grouping, project, sort],
   );
   const window = useMemo(() => timelineWindow(anchor, scale), [anchor, scale]);
   const chartWidth = window.days * window.dayWidth;
@@ -293,6 +307,13 @@ function ScopedTimeline({ data, planning, project, onOpen, onReschedule, milesto
               {model.directoryAvailable && <option value="assignee">Agrupar: Responsable</option>}
               <option value="none">Sin agrupar</option>
             </select>
+            <label className="pwt-sort">
+              <ArrowDownWideNarrow size={14} aria-hidden="true" />
+              <select aria-label="Ordenar cronograma" value={sort} onChange={event => setSort(event.target.value as TimelineSort)}>
+                <option value="start_date">Ordenar: Fecha de inicio</option>
+                <option value="priority">Ordenar: Prioridad</option>
+              </select>
+            </label>
             {milestoneContent && (
               <button
                 type="button"
@@ -529,6 +550,7 @@ function ScopedTimeline({ data, planning, project, onOpen, onReschedule, milesto
                     ? STATUSES.find(status => status.id === task.status)!.color
                     : taskProject.color;
                 const canEdit = editable(task);
+                const overdue = task.status !== 'done' && Boolean(task.due_date && task.due_date < today);
                 const member = task.assignee_member_id ? model.memberMap.get(task.assignee_member_id) : undefined;
                 return (
                   <div key={row.id} className="pwt-row">
@@ -537,6 +559,12 @@ function ScopedTimeline({ data, planning, project, onOpen, onReschedule, milesto
                         <TaskStatusIcon status={task.status} />
                         <span className={task.status === 'done' ? 'is-completed' : ''}>{task.title}</span>
                       </button>
+                      {overdue && (
+                        <span className="pwt-overdue" title={`Vencida el ${formatDate(task.due_date)}. Abre la tarea para completarla o reprogramarla.`}>
+                          <AlertTriangle size={12} aria-hidden="true" />
+                          <span>Vencida</span>
+                        </span>
+                      )}
                       <PriorityIcon priority={task.priority} />
                       {member && (
                         <span className="pwt-assignee" title={member.display_name}>

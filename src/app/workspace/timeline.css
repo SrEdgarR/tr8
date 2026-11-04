@@ -92,6 +92,21 @@
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
+.pwt-sort {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.pwt-sort > svg {
+  position: absolute;
+  left: 9px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+.pwt-sort select {
+  padding-left: 29px;
+}
 .pwt-filters {
   padding: 10px 0;
   border-top: 1px solid var(--divider);
@@ -341,6 +356,18 @@
   font-size: 8px;
   font-weight: 700;
 }
+.pwt-overdue {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 3px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+  font-size: 10px;
+  line-height: 1.4;
+}
 .pwt-schedule {
   flex-shrink: 0;
   opacity: 0.25;
@@ -559,6 +586,14 @@
   }
   .pwt-assignee {
     display: none;
+  }
+  .pwt-overdue > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .pwt-scroll {
     max-height: 62vh;

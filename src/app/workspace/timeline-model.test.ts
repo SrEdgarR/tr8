@@ -76,6 +76,90 @@ describe('timeline civil dates and scheduling', () => {
 });
 
 describe('timeline authorized view model', () => {
+  it('sorts scheduled tasks by start date by default and by every priority when selected without changing task data', () => {
+    const tasks = [
+      task('none', { priority: 'none', start_date: '2026-10-24' }),
+      task('low', { priority: 'low', start_date: '2026-10-25' }),
+      task('medium', { priority: 'medium', start_date: '2026-10-26' }),
+      task('high', { priority: 'high', start_date: '2026-10-27' }),
+      task('urgent', { priority: 'urgent', start_date: today }),
+    ];
+    const original = structuredClone(tasks);
+    tasks.forEach(Object.freeze);
+    Object.freeze(tasks);
+    const data = summaryProps({ tasks });
+    const chronological = buildTimelineModel(data, today, empty, emptyTimelineFilters(), 'none');
+    expect(chronological.scheduled.map(value => value.id)).toEqual(['none', 'low', 'medium', 'high', 'urgent']);
+    expect(buildTimelineModel(data, today, empty, emptyTimelineFilters(), 'none', undefined, 'start_date').scheduled).toEqual(chronological.scheduled);
+    const prioritized = buildTimelineModel(data, today, empty, emptyTimelineFilters(), 'none', undefined, 'priority');
+    expect(prioritized.groups[0].tasks.map(value => value.id)).toEqual(['urgent', 'high', 'medium', 'low', 'none']);
+    expect(data.tasks).toEqual(original);
+    expect(prioritized.scheduled[0]).toBe(tasks[4]);
+  });
+  it('breaks equal priorities by effective start date, then position, then id', () => {
+    const tasks = [
+      task('late', { priority: 'high', start_date: '2026-10-29', position: 0 }),
+      task('z-same-position', { priority: 'high', position: 3 }),
+      task('a-same-position', { priority: 'high', position: 3 }),
+      task('earlier-position', { priority: 'high', position: 2 }),
+      task('due-only', { priority: 'high', start_date: null, due_date: '2026-10-27', position: 99 }),
+    ];
+    const result = buildTimelineModel(summaryProps({ tasks }), today, empty, emptyTimelineFilters(), 'none', undefined, 'priority');
+    expect(result.scheduled.map(value => value.id)).toEqual(['due-only', 'earlier-position', 'a-same-position', 'z-same-position', 'late']);
+  });
+  it('preserves undated input order for date sorting and orders undated tasks by priority with deterministic ties', () => {
+    const undated = (id: string, patch: Partial<Task>) => task(id, { start_date: null, due_date: null, ...patch });
+    const tasks = [
+      undated('none', { priority: 'none' }),
+      undated('low', { priority: 'low' }),
+      undated('z-high', { priority: 'high', position: 2 }),
+      undated('medium', { priority: 'medium' }),
+      undated('urgent', { priority: 'urgent' }),
+      undated('a-high', { priority: 'high', position: 2 }),
+      undated('first-high', { priority: 'high', position: 1 }),
+    ];
+    const data = summaryProps({ tasks });
+    expect(buildTimelineModel(data, today, empty).undated).toEqual(tasks);
+    expect(buildTimelineModel(data, today, empty, emptyTimelineFilters(), 'status', undefined, 'priority').undated.map(value => value.id)).toEqual([
+      'urgent',
+      'first-high',
+      'a-high',
+      'z-high',
+      'medium',
+      'low',
+      'none',
+    ]);
+    expect(buildTimelineModel(data, today, empty, emptyTimelineFilters(), 'status', undefined, 'start_date').undated).toEqual(tasks);
+  });
+  it('orders tasks within each status group and combines priority sorting with the existing filters', () => {
+    const otherProject = { ...summaryProject, id: 'second-project', name: 'Distribución' };
+    const tasks = [
+      task('todo-low', { title: 'Preparar baja', priority: 'low', start_date: '2026-10-26' }),
+      task('review-low', { title: 'Revisar baja', status: 'review', priority: 'low', start_date: '2026-10-26' }),
+      task('todo-urgent', { title: 'Preparar urgente', priority: 'urgent' }),
+      task('review-high', { title: 'Revisar alta', status: 'review', priority: 'high' }),
+      task('wrong-project', { title: 'Preparar otro proyecto', project_id: otherProject.id }),
+      task('wrong-assignee', { title: 'Preparar sin responsable', assignee_member_id: null }),
+    ];
+    const data = summaryProps({ projects: [summaryProject, otherProject], tasks });
+    const grouped = buildTimelineModel(data, today, empty, emptyTimelineFilters(), 'status', undefined, 'priority');
+    expect(grouped.groups.map(group => ({ id: group.id, tasks: group.tasks.map(value => value.id) }))).toEqual([
+      { id: 'todo', tasks: ['todo-urgent', 'wrong-assignee', 'wrong-project', 'todo-low'] },
+      { id: 'review', tasks: ['review-high', 'review-low'] },
+    ]);
+    const filtered = buildTimelineModel(
+      data,
+      today,
+      empty,
+      { query: 'PREPARAR', status: 'todo', priority: '', projectId: summaryProject.id, assigneeId: summaryMember.id },
+      'project',
+      undefined,
+      'priority',
+    );
+    expect(filtered.groups.map(group => ({ id: group.id, tasks: group.tasks.map(value => value.id) }))).toEqual([
+      { id: summaryProject.id, tasks: ['todo-urgent', 'todo-low'] },
+    ]);
+  });
   it('excludes other workspaces, archived projects/tasks, and inaccessible project data', () => {
     const archived = { ...summaryProject, id: 'archived', archived_at: summaryTask.updated_at };
     const hidden = { ...summaryProject, id: 'hidden', name: 'Secreto' };
