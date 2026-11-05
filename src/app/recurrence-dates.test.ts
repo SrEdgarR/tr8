@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecurrenceRule } from './recurrence-types';
-import { nextRecurrenceDate, previewRecurrenceDates, validRecurrenceRule } from './recurrence-dates';
+import { nextRecurrenceDate, previewRecurrenceDates, previewTaskRecurrenceDates, validRecurrenceRule } from './recurrence-dates';
 const daily: RecurrenceRule = { frequency: 'daily', interval: 1, weekdays: [], time_zone: 'America/La_Paz', until_date: null };
 const weekly: RecurrenceRule = { ...daily, frequency: 'weekly', weekdays: [1, 5] };
 const monthly: RecurrenceRule = { ...daily, frequency: 'monthly' };
@@ -57,5 +57,59 @@ describe('civil recurrence previews', () => {
     previewRecurrenceDates(weekly, '2026-01-05', '2026-01-05');
     expect(weekly).toEqual(before);
     expect(previewRecurrenceDates(daily, '2026-01-01', '2026-01-01', 21)).toEqual([]);
+  });
+});
+
+describe('task recurrence previews', () => {
+  it('skips daily due dates whose carried start would be today or earlier', () => {
+    const dates = previewTaskRecurrenceDates(daily, '2026-11-02', '2026-11-04', { start_date: '2026-11-02', due_date: '2026-11-04' }, '2026-11-05');
+    expect(dates).toEqual(['2026-11-08', '2026-11-09', '2026-11-10']);
+  });
+
+  it('uses the current duration and rescheduled due date without moving the daily anchor', () => {
+    const recurringRule = { ...daily, interval: 3 };
+    const preview = (start_date: string, due_date: string) =>
+      previewTaskRecurrenceDates(recurringRule, '2026-10-31', '2026-11-03', { start_date, due_date }, '2026-11-04', 1);
+    expect(preview('2026-10-31', '2026-11-03')).toEqual(['2026-11-09']);
+    expect(preview('2026-11-03', '2026-11-03')).toEqual(['2026-11-06']);
+    expect(preview('2026-11-12', '2026-11-13')).toEqual(['2026-11-15']);
+  });
+
+  it('keeps the original weeks and weekdays when the next start would be in the past', () => {
+    const dates = previewTaskRecurrenceDates(
+      { ...weekly, interval: 2 },
+      '2026-11-02',
+      '2026-11-02',
+      { start_date: '2026-11-01', due_date: '2026-11-05' },
+      '2026-11-05',
+    );
+    expect(dates).toEqual(['2026-11-16', '2026-11-20', '2026-11-30']);
+  });
+
+  it('skips a clamped month whose carried start would be today and honors the last date', () => {
+    const dates = previewTaskRecurrenceDates(
+      { ...monthly, interval: 2, until_date: '2026-11-30' },
+      '2026-01-31',
+      '2026-07-31',
+      { start_date: '2026-07-21', due_date: '2026-08-10' },
+      '2026-09-10',
+    );
+    expect(dates).toEqual(['2026-11-30']);
+  });
+
+  it.each([
+    { start_date: null, due_date: '2026-11-03' },
+    { start_date: '2026-10-31', due_date: null },
+    { start_date: '2026-11-04', due_date: '2026-11-03' },
+    { start_date: '2026-02-30', due_date: '2026-11-03' },
+  ])('skips duration when there is no valid start and due pair (%#)', task => {
+    expect(previewTaskRecurrenceDates(daily, '2026-11-01', '2026-11-03', task, '2026-11-02', 1)).toEqual(['2026-11-04']);
+  });
+
+  it('returns no preview if the next future start would require a due date outside the calendar', () => {
+    const task = { start_date: '9999-12-20', due_date: '9999-12-23' };
+    expect(previewTaskRecurrenceDates(daily, '9999-12-23', '9999-12-23', task, '9999-12-27')).toEqual(['9999-12-31']);
+    expect(previewTaskRecurrenceDates(daily, '9999-12-23', '9999-12-23', task, '9999-12-28')).toEqual([]);
+    expect(previewTaskRecurrenceDates(daily, '9999-12-23', '9999-12-23', task, '9999-12-29')).toEqual([]);
   });
 });

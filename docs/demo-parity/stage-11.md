@@ -10,8 +10,9 @@ Las anteriores permanecen como historial de la serie.
 
 La decisión del propietario es crear la siguiente al completar la actual.
 No se generan pendientes por reloj ni se acumula una lista de fechas atrasadas.
-Se busca una fecha estrictamente posterior a la ocurrencia actual y al día de
-finalización en la zona elegida, respetando el intervalo original.
+El próximo vencimiento respeta la frecuencia original y queda después de la
+ocurrencia actual, de su vencimiento reprogramado y del día de finalización en
+la zona elegida. Si hay fecha de inicio, también debe quedar después de ese día.
 
 El día original se conserva en las reglas mensuales: 31 de enero pasa al último
 día de febrero y vuelve al 31 en marzo. La fecha final es inclusiva. Las reglas
@@ -20,8 +21,8 @@ mensuales 1–12 meses. Las fechas son civiles y no se desplazan por cambios de
 horario de verano.
 
 La primera entrega copia título, descripción, prioridad, etiquetas, estimación
-y subtareas con casillas restablecidas. Conserva el desplazamiento válido de la
-fecha inicial respecto al vencimiento. No copia bloques horarios, comentarios,
+y subtareas con casillas restablecidas. Conserva la duración entre el inicio y
+el vencimiento actuales de la tarea completada. No copia bloques horarios, comentarios,
 archivos ni dependencias. Solo las tareas materializadas aparecen en calendario.
 Duplicar una tarea no duplica su regla de repetición.
 

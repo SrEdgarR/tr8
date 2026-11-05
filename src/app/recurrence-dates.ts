@@ -1,4 +1,5 @@
 import type { RecurrenceRule } from './recurrence-types';
+import type { Task } from './types';
 import { validCivilDate, validTimeZone } from './workspace/CalendarTime';
 
 const DAY = 86_400_000;
@@ -89,4 +90,23 @@ export function previewRecurrenceDates(rule: RecurrenceRule, anchorDate: string,
     after = next;
   }
   return dates;
+}
+
+/** Match completion generation using the task's current dates and today in the rule's time zone. */
+export function previewTaskRecurrenceDates(
+  rule: RecurrenceRule,
+  anchorDate: string,
+  occurrenceDate: string | null,
+  task: Pick<Task, 'start_date' | 'due_date'>,
+  today: string,
+  count = 3,
+): string[] {
+  if (!validCivilDate(anchorDate) || !validCivilDate(today) || (occurrenceDate !== null && !validCivilDate(occurrenceDate))) return [];
+  const due = task.due_date && validCivilDate(task.due_date) ? ordinal(task.due_date) : null;
+  const start = task.start_date && validCivilDate(task.start_date) ? ordinal(task.start_date) : null;
+  const startOffset = start !== null && due !== null && start <= due ? start - due : null;
+  const todayOrdinal = ordinal(today);
+  // Raising the due cutoff by the duration keeps the carried start strictly after today.
+  const cutoff = civil(Math.max(ordinal(occurrenceDate ?? anchorDate), due ?? todayOrdinal, todayOrdinal, todayOrdinal - (startOffset ?? 0)));
+  return cutoff ? previewRecurrenceDates(rule, anchorDate, cutoff, count) : [];
 }

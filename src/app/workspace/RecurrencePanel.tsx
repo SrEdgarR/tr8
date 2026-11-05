@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, Check, ChevronDown, Clock3, LoaderCircle, Pause, Repeat2, Save } from 'lucide-react';
 import type { CalendarApi, Task } from '../types';
 import type { RecurrenceApi, RecurrenceRule, RecurrenceState } from '../recurrence-types';
-import { previewRecurrenceDates, validRecurrenceRule } from '../recurrence-dates';
+import { previewTaskRecurrenceDates, validRecurrenceRule } from '../recurrence-dates';
 import { dateInTimeZone, detectDeviceTimeZone, formatCivilDate, validCivilDate } from './CalendarTime';
 import { Busy, ErrorNotice } from './ui';
 import { errorMessage } from './helpers';
@@ -93,8 +93,7 @@ function ScopedRecurrencePanel({ task, api, calendar, disabled = false, canEdit,
   let preview: string[] = [];
   if (rule && valid && anchor) {
     const today = dateInTimeZone(new Date(), rule.time_zone);
-    const occurrence = state?.occurrence_date ?? task.due_date ?? anchor;
-    preview = previewRecurrenceDates(rule, anchor, occurrence > today ? occurrence : today);
+    preview = previewTaskRecurrenceDates(rule, anchor, state?.occurrence_date ?? null, task, today);
   }
 
   function edit() {
@@ -378,9 +377,9 @@ function ScopedRecurrencePanel({ task, api, calendar, disabled = false, canEdit,
                       ))}
                     </ul>
                   ) : (
-                    <p>No habrá nuevas ocurrencias después de la actual con esta fecha final.</p>
+                    <p>No hay fechas disponibles para una siguiente ocurrencia.</p>
                   )}
-                  <p>Se crea una al completar la actual; se saltan las fechas ya pasadas.</p>
+                  <p>Se crea como máximo una al completar la actual. El vencimiento y el inicio, cuando lo haya, quedan después de hoy.</p>
                 </div>
               )}
               <p className="faint">

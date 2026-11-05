@@ -134,7 +134,7 @@ insert into recurrence_values values('child2',pg_temp.r_state(pg_temp.r_id(2))->
 select pg_temp.r_assert(pg_temp.r_value('child1')<>'null'::jsonb,'edit-only completion generates under explicitly configured author');
 select pg_temp.r_assert((select owner_id='fa110000-0000-4000-8000-000000000001' and status='todo' and title='Synthetic recurring task 1' and description='Keep this description' and priority='high'
  and labels='["Personal"]' and estimate_minutes=20 and subtasks->0->>'done'='false' and subtasks->0->>'id'<>'0a110000-0000-4000-8000-000000000001'
- and due_date=(pg_temp.r_value('saved')->'series'->>'anchor_date')::date+1 and start_date=due_date-2
+ and due_date=(pg_temp.r_value('saved')->'series'->>'anchor_date')::date+2 and start_date=due_date-2
  and scheduled_start_at is null and scheduled_end_at is null and scheduled_time_zone is null
  and assignee_member_id=(pg_temp.r_value('owner_member')#>>'{}')::uuid
  from public.tr8_workspace_tasks where id=(pg_temp.r_value('child1')#>>'{}')::uuid),'successor copies content, resets checklist, shifts civil dates and omits blocks');

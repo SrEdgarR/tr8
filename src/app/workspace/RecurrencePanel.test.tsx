@@ -136,6 +136,29 @@ describe('recurring task configuration', () => {
     expect(screen.getByText(/sin copiar bloques horarios/)).toBeInTheDocument();
   });
 
+  it('previews due dates from the live task window and the rule zone without moving the series anchor', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-06T02:00:00Z'));
+    try {
+      const savedSeries = series({ rule: { ...rule, interval: 3 }, anchor_date: '2026-10-31', current_occurrence_date: '2026-11-03' });
+      const value = api({ ...existing(savedSeries), occurrence_date: savedSeries.current_occurrence_date });
+      const current = { ...task, start_date: '2026-11-04', due_date: '2026-11-07' };
+      const view = renderPanel(value, { task: current });
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Editar repetición' }));
+      const preview = screen.getByLabelText('Próximas fechas estimadas');
+      expect(within(preview).getAllByRole('listitem')[0]).toHaveTextContent('9 de noviembre de 2026');
+
+      view.rerenderPanel({ task: { ...current, start_date: '2026-11-12', due_date: '2026-11-13', version: 2 } });
+      await waitFor(() => {
+        const updatedPreview = screen.getByLabelText('Próximas fechas estimadas');
+        expect(within(updatedPreview).getAllByRole('listitem')[0]).toHaveTextContent('15 de noviembre de 2026');
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('cancels a local draft without contacting the write API', async () => {
     const value = api();
     renderPanel(value);
