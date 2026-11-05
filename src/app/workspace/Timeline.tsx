@@ -65,6 +65,8 @@ type ChartRow =
   | { kind: 'task'; id: string; task: Task };
 const ROW_HEIGHT = 40;
 const MONTH_NAMES = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const WEEKDAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const FULL_DATE = new Intl.DateTimeFormat('es', { dateStyle: 'full', timeZone: 'UTC' });
 function monthName(date: string) {
   return MONTH_NAMES.format(new Date(`${date}T12:00:00Z`));
 }
@@ -443,9 +445,16 @@ function ScopedTimeline({ data, planning, project, onOpen, onReschedule, milesto
                 </div>
                 <div className="pwt-days">
                   {(scale === 'week' ? dates : dates.filter((_, index) => index % 7 === 0)).map(date => (
-                    <div key={date} className={date === today ? 'is-today' : ''} style={{ width: window.dayWidth * (scale === 'week' ? 1 : 7) }}>
-                      {scale === 'week' ? date.slice(8).replace(/^0/, '') : formatDate(date)}
-                    </div>
+                    <time
+                      key={date}
+                      dateTime={date}
+                      title={FULL_DATE.format(new Date(`${date}T12:00:00Z`))}
+                      className={date === today ? 'is-today' : ''}
+                      style={{ width: window.dayWidth * (scale === 'week' ? 1 : 7) }}
+                    >
+                      <span className="pwt-weekday">{WEEKDAY_LABELS[civilWeekday(date)]}</span>
+                      <span>{scale === 'week' ? date.slice(8).replace(/^0/, '') : formatDate(date)}</span>
+                    </time>
                   ))}
                 </div>
               </div>
