@@ -20,6 +20,7 @@ import {
   Plus,
   Settings2,
   Star,
+  StickyNote,
   Table2,
   Users,
   Wallet,
@@ -82,7 +83,7 @@ export default function WorkspaceSidebar({
   const scope = data.workspace ? `?workspace=${data.workspace.id}` : '';
   const workspaceName = data.workspace?.kind === 'team' ? data.workspace.name : 'Mi espacio personal';
   const navClass = ({ isActive }: { isActive: boolean }) => `sitem${isActive ? ' on' : ''}`;
-  const view = ['overview', 'table', 'board', 'calendar', 'timeline', 'files', 'activity', 'archived'].includes(params.get('view') ?? '')
+  const view = ['overview', 'table', 'board', 'calendar', 'timeline', 'files', 'notes', 'activity', 'archived'].includes(params.get('view') ?? '')
     ? params.get('view')
     : 'list';
 
@@ -207,6 +208,12 @@ export default function WorkspaceSidebar({
                 <span>Timeline</span>
               </NavLink>
             )}
+            {data.notes && !data.accessUnavailable && (
+              <NavLink to={`/notes${scope}`} className={navClass} aria-label="Notas" title="Notas" onClick={onNavigate}>
+                <StickyNote className="i" size={16} aria-hidden="true" />
+                <span>Notas</span>
+              </NavLink>
+            )}
             {data.workspace?.kind === 'personal' && showFinance && (
               <NavLink to={`/finance${scope}`} className={navClass} aria-label="Finanzas" title="Finanzas" onClick={onNavigate}>
                 <Wallet className="i" size={16} aria-hidden="true" />
@@ -252,6 +259,7 @@ export default function WorkspaceSidebar({
                 ...(data.calendar ? [{ id: 'calendar', label: 'Calendario', icon: CalendarDays }] : []),
                 ...(data.planning ? [{ id: 'timeline', label: 'Timeline', icon: ChartGantt }] : []),
                 ...(data.projectFiles ? [{ id: 'files', label: 'Archivos', icon: Paperclip }] : []),
+                ...(data.notes && canInProject(data, project.id, 'project.read') ? [{ id: 'notes', label: 'Notas', icon: StickyNote }] : []),
                 ...(data.collaboration && canInProject(data, project.id, 'audit.read') ? [{ id: 'activity', label: 'Actividad', icon: Activity }] : []),
               ];
               return (

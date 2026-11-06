@@ -74,6 +74,7 @@ const Timeline = deferSection(() => import('./Timeline'), 'Timeline');
 const ProjectFiles = deferSection(() => import('./ProjectFiles'), 'los archivos');
 const TaskComments = deferSection(() => import('./TaskComments'), 'los comentarios');
 const InboxPage = deferSection(() => import('./InboxPage'), 'la bandeja');
+const NotesPage = deferSection(() => import('./NotesPage'), 'Notas');
 
 type ProjectActions = {
   productivity: ProductivityController;
@@ -289,6 +290,8 @@ function ProjectPage({
     );
   const projectTasks = tasks.filter(task => !task.archived_at && task.project_id === project.id);
   const archivedTasks = tasks.filter(task => task.archived_at && task.project_id === project.id);
+  const projectNotes = actions.can(project.id, 'project.read') ? data.notes : undefined;
+  const showNewTask = !project.archived_at && !(projectNotes && projectSearchParams.get('view') === 'notes');
   const nextTaskDate = actions.can(project.id, 'task.read')
     ? (projectTasks
         .filter(task => task.workspace_id === project.workspace_id && task.status !== 'done')
@@ -298,7 +301,7 @@ function ProjectPage({
     : null;
   return (
     <div className="page flush pw-project-page">
-      <div className={`proj-h${!project.archived_at ? ' has-task-action' : ''}`}>
+      <div className={`proj-h${showNewTask ? ' has-task-action' : ''}`}>
         <div className="t">
           <ProjectIcon color={project.color} icon={project.icon} large />
           <div className="grow">
@@ -315,7 +318,7 @@ function ProjectPage({
                 .catch(() => {});
             }}
           />
-          {!project.archived_at && (
+          {showNewTask && (
             <button
               className="btn btn-primary pw-project-new-task"
               disabled={actions.pending || !actions.can(project.id, 'task.create')}
@@ -428,6 +431,17 @@ function ProjectPage({
         archivedContent={data.workManagement ? <ArchivedTasks tasks={archivedTasks} onOpen={onOpen} /> : undefined}
         filesContent={
           data.projectFiles ? <ProjectFiles data={data} project={project} api={data.projectFiles} focusFileId={projectSearchParams.get('file')} /> : undefined
+        }
+        notesContent={
+          projectNotes ? (
+            <NotesPage
+              key={JSON.stringify([projectNotes.scopeKey, project.id])}
+              api={projectNotes}
+              projectId={project.id}
+              scopeLabel={project.name}
+              canCreate={!project.archived_at && actions.can(project.id, 'project.edit')}
+            />
+          ) : undefined
         }
         timelineContent={
           data.planning ? (
@@ -698,29 +712,31 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           ? 'Notificaciones'
           : location.pathname === '/finance'
             ? 'Finanzas'
-            : location.pathname === '/projects'
-              ? 'Proyectos'
-              : location.pathname === '/my-tasks'
-                ? 'Mis tareas'
-                : location.pathname === '/tasks'
-                  ? 'Tareas'
-                  : location.pathname === '/favorites'
-                    ? 'Favoritos'
-                    : location.pathname === '/settings'
-                      ? 'Configuración'
-                      : location.pathname === '/account'
-                        ? 'Mi cuenta'
-                        : location.pathname === '/team'
-                          ? 'Equipo'
-                          : location.pathname === '/overview'
-                            ? 'Vista general'
-                            : location.pathname === '/activity'
-                              ? 'Actividad'
-                              : location.pathname === '/calendar'
-                                ? 'Calendario'
-                                : location.pathname === '/timeline'
-                                  ? 'Timeline'
-                                  : 'Inicio');
+            : location.pathname === '/notes'
+              ? 'Notas'
+              : location.pathname === '/projects'
+                ? 'Proyectos'
+                : location.pathname === '/my-tasks'
+                  ? 'Mis tareas'
+                  : location.pathname === '/tasks'
+                    ? 'Tareas'
+                    : location.pathname === '/favorites'
+                      ? 'Favoritos'
+                      : location.pathname === '/settings'
+                        ? 'Configuración'
+                        : location.pathname === '/account'
+                          ? 'Mi cuenta'
+                          : location.pathname === '/team'
+                            ? 'Equipo'
+                            : location.pathname === '/overview'
+                              ? 'Vista general'
+                              : location.pathname === '/activity'
+                                ? 'Actividad'
+                                : location.pathname === '/calendar'
+                                  ? 'Calendario'
+                                  : location.pathname === '/timeline'
+                                    ? 'Timeline'
+                                    : 'Inicio');
 
   async function action(work: () => Promise<unknown>, message: string) {
     if (pending || actionLock.current) return;
@@ -1015,6 +1031,26 @@ export default function Workspace(props: WorkspaceProps & { processes?: ReactNod
           ) : (
             <Routes>
               <Route path="/search" element={search.page} />
+              <Route
+                path="/notes"
+                element={
+                  props.notes && !props.accessUnavailable ? (
+                    <div className="page">
+                      <NotesPage
+                        key={JSON.stringify(props.notes.scopeKey)}
+                        api={props.notes}
+                        projectId={null}
+                        scopeLabel={workspaceName}
+                        canCreate={!props.readOnly}
+                      />
+                    </div>
+                  ) : (
+                    <div className="page">
+                      <EmptyState title="Notas no disponibles">Selecciona un espacio al que tengas acceso.</EmptyState>
+                    </div>
+                  )
+                }
+              />
               {communicationEnabled && props.communication && (
                 <>
                   <Route

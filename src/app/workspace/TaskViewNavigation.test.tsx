@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import TaskViewNavigation from './TaskViewNavigation';
 
-const available = { summary: true, calendar: true, timeline: true, files: true, activity: true, archived: true };
+const available = { summary: true, calendar: true, timeline: true, files: true, notes: true, activity: true, archived: true };
 
 describe('navegación adaptable de tareas', () => {
   it('ofrece las mismas vistas autorizadas en el selector móvil y en escritorio', async () => {
@@ -11,7 +11,9 @@ describe('navegación adaptable de tareas', () => {
     const onChange = vi.fn();
     const result = render(<TaskViewNavigation {...available} view="list" disabled={false} onChange={onChange} />);
     const picker = screen.getByRole('combobox', { name: 'Cambiar vista de tareas' });
-    expect(screen.getAllByRole('option')).toHaveLength(9);
+    expect(screen.getAllByRole('option')).toHaveLength(10);
+    await user.selectOptions(picker, 'notes');
+    expect(onChange).toHaveBeenLastCalledWith('notes');
     await user.selectOptions(picker, 'calendar');
     expect(onChange).toHaveBeenLastCalledWith('calendar');
     result.rerender(<TaskViewNavigation {...available} view="calendar" disabled={false} onChange={onChange} />);
@@ -28,6 +30,7 @@ describe('navegación adaptable de tareas', () => {
         calendar={false}
         timeline={false}
         files={false}
+        notes={false}
         activity={false}
         archived={false}
         view="board"
@@ -37,6 +40,7 @@ describe('navegación adaptable de tareas', () => {
     );
     expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['Lista', 'Tablero', 'Tabla']);
     expect(screen.queryByRole('button', { name: 'Archivos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Notas' })).not.toBeInTheDocument();
     expect(screen.getByRole('combobox')).toHaveValue('board');
   });
 

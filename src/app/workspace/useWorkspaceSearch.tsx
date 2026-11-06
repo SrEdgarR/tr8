@@ -20,6 +20,7 @@ import {
   Settings2,
   SquareKanban,
   Star,
+  StickyNote,
   Table2,
   UserRound,
   Users,
@@ -103,6 +104,7 @@ export default function useWorkspaceSearch({ data, showFinance, canCreateProject
     },
     { id: 'calendar', path: '/calendar', label: 'Ir a Calendario', icon: CalendarDays, shortcut: 'G C', enabled: Boolean(data.calendar) },
     { id: 'timeline', path: '/timeline', label: 'Ir a Timeline', icon: ChartGantt, enabled: Boolean(data.planning && canInWorkspace(data, 'project.read')) },
+    { id: 'notes', path: '/notes', label: 'Ir a Notas', icon: StickyNote, enabled: Boolean(data.notes && !data.accessUnavailable) },
     { id: 'team', path: '/team', label: 'Ir a Equipo', icon: Users, shortcut: 'G M', enabled: data.workspace?.kind === 'team' },
     {
       id: 'activity',
@@ -127,6 +129,7 @@ export default function useWorkspaceSearch({ data, showFinance, canCreateProject
       { id: 'calendar', label: 'Calendario', icon: CalendarDays, enabled: taskReadable && Boolean(data.calendar) },
       { id: 'timeline', label: 'Timeline', icon: ChartGantt, enabled: taskReadable && Boolean(data.planning) },
       { id: 'files', label: 'Archivos', icon: Paperclip, enabled: Boolean(data.projectFiles) },
+      { id: 'notes', label: 'Notas', icon: StickyNote, enabled: Boolean(data.notes && !data.accessUnavailable) },
     ];
     for (const view of views)
       if (view.enabled)

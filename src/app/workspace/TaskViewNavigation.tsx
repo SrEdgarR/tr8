@@ -8,6 +8,7 @@ import {
   List,
   Paperclip,
   SquareKanban,
+  StickyNote,
   Table2,
   type LucideIcon,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ interface Props {
   calendar: boolean;
   timeline: boolean;
   files: boolean;
+  notes: boolean;
   activity: boolean;
   archived: boolean;
 }
@@ -33,6 +35,7 @@ export default function TaskViewNavigation({ view, disabled, onChange, ...availa
     { id: 'calendar', name: 'Calendario', icon: CalendarDays, enabled: available.calendar },
     { id: 'timeline', name: 'Timeline', icon: ChartGantt, enabled: available.timeline },
     { id: 'files', name: 'Archivos', icon: Paperclip, enabled: available.files },
+    { id: 'notes', name: 'Notas', icon: StickyNote, enabled: available.notes },
     { id: 'activity', name: 'Actividad', icon: Activity, enabled: available.activity },
     { id: 'archived', name: 'Archivadas', icon: Archive, enabled: available.archived },
   ].filter(item => item.enabled);

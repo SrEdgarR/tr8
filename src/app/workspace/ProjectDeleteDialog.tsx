@@ -46,8 +46,8 @@ export default function ProjectDeleteDialog({ project, taskCount, pending, onDel
           {error && <ErrorNotice>{error}</ErrorNotice>}
           <div id={`${prefix}-consequences`}>
             <p>
-              Vas a eliminar definitivamente <strong>{project.name}</strong>, todas sus tareas, sus conversaciones y su historial de actividad. Hay {taskCount}{' '}
-              {taskCount === 1 ? 'tarea visible' : 'tareas visibles'} en este proyecto.
+              Vas a eliminar definitivamente <strong>{project.name}</strong>, todas sus tareas, sus conversaciones, sus notas y su historial de actividad. Hay{' '}
+              {taskCount} {taskCount === 1 ? 'tarea visible' : 'tareas visibles'} en este proyecto.
             </p>
             <p>Esta acción no se puede deshacer. Los demás proyectos y sus tareas se conservarán.</p>
             <p className="faint">

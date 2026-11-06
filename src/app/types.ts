@@ -8,6 +8,7 @@ import type { GlobalSearchApi } from './search-types';
 import type { BulkTasksApi } from './bulk-task-types';
 import type { RecurrenceApi, RecurrenceSummary } from './recurrence-types';
 import type { ProfileApi } from './profile-types';
+import type { NotesApi } from './notes-types';
 
 export type TaskStatus = 'backlog' | 'todo' | 'progress' | 'review' | 'done';
 export type Priority = 'none' | 'low' | 'medium' | 'high' | 'urgent';
@@ -274,6 +275,7 @@ export interface WorkspaceProps {
   productivity?: ProductivityApi;
   planning?: PlanningApi;
   projectFiles?: ProjectFilesApi;
+  notes?: NotesApi;
   financeSyncState?: DataSyncState;
   onRefreshFinance?: () => void;
   workspace?: WorkspaceSummary;

@@ -30,6 +30,7 @@ interface Props extends SavedViewsProps {
   calendarContent?: ReactNode;
   timelineContent?: ReactNode;
   filesContent?: ReactNode;
+  notesContent?: ReactNode;
   activityContent?: ReactNode;
   summaryContent?: ReactNode;
   archivedContent?: ReactNode;
@@ -60,6 +61,7 @@ function ScopedTasksView({
   calendarContent,
   timelineContent,
   filesContent,
+  notesContent,
   activityContent,
   summaryContent,
   archivedContent,
@@ -79,23 +81,25 @@ function ScopedTasksView({
   const [searchParams, setSearchParams] = useSearchParams();
   const members = useMemo(() => receivedMembers.filter(member => member.status === 'active'), [receivedMembers]);
   const view =
-    searchParams.get('view') === 'files' && filesContent
-      ? 'files'
-      : searchParams.get('view') === 'timeline' && timelineContent
-        ? 'timeline'
-        : searchParams.get('view') === 'archived' && archivedContent
-          ? 'archived'
-          : searchParams.get('view') === 'overview' && summaryContent
-            ? 'overview'
-            : searchParams.get('view') === 'activity' && activityContent
-              ? 'activity'
-              : searchParams.get('view') === 'calendar' && calendarContent
-                ? 'calendar'
-                : searchParams.get('view') === 'board'
-                  ? 'board'
-                  : searchParams.get('view') === 'table'
-                    ? 'table'
-                    : 'list';
+    searchParams.get('view') === 'notes' && notesContent
+      ? 'notes'
+      : searchParams.get('view') === 'files' && filesContent
+        ? 'files'
+        : searchParams.get('view') === 'timeline' && timelineContent
+          ? 'timeline'
+          : searchParams.get('view') === 'archived' && archivedContent
+            ? 'archived'
+            : searchParams.get('view') === 'overview' && summaryContent
+              ? 'overview'
+              : searchParams.get('view') === 'activity' && activityContent
+                ? 'activity'
+                : searchParams.get('view') === 'calendar' && calendarContent
+                  ? 'calendar'
+                  : searchParams.get('view') === 'board'
+                    ? 'board'
+                    : searchParams.get('view') === 'table'
+                      ? 'table'
+                      : 'list';
   const [config, setConfig] = useState<TaskViewConfig>(() => ({
     ...defaultTaskView(),
     view: searchParams.get('view') === 'board' ? 'board' : searchParams.get('view') === 'table' ? 'table' : 'list',
@@ -203,6 +207,7 @@ function ScopedTasksView({
       next === 'calendar' ||
       next === 'timeline' ||
       next === 'files' ||
+      next === 'notes' ||
       next === 'activity' ||
       next === 'overview' ||
       next === 'archived'
@@ -319,10 +324,13 @@ function ScopedTasksView({
         calendar={Boolean(calendarContent)}
         timeline={Boolean(timelineContent)}
         files={Boolean(filesContent)}
+        notes={Boolean(notesContent)}
         activity={Boolean(activityContent)}
         archived={Boolean(archivedContent)}
       />
-      {view === 'files' ? (
+      {view === 'notes' ? (
+        notesContent
+      ) : view === 'files' ? (
         filesContent
       ) : view === 'timeline' ? (
         timelineContent

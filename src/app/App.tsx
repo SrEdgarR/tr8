@@ -17,6 +17,8 @@ import { createPlanningRepository } from './data/planning';
 import type { PlanningApi } from './planning-types';
 import { createProjectFilesRepository } from './data/project-files';
 import type { ProjectFilesApi } from './project-files-types';
+import { createNotesRepository } from './data/notes';
+import type { NotesApi } from './notes-types';
 import { createCommunicationRepository } from './data/communication';
 import type { CommunicationApi } from './communication-types';
 import { createGlobalSearchRepository } from './data/search';
@@ -381,6 +383,7 @@ function ScopedWorkspace({
   const productivityRepository = useMemo(() => createProductivityRepository(dataClient, selected.id), [dataClient, selected.id]);
   const planningRepository = useMemo(() => createPlanningRepository(dataClient, selected.id), [dataClient, selected.id]);
   const filesRepository = useMemo(() => createProjectFilesRepository(dataClient, selected.id), [dataClient, selected.id]);
+  const notesRepository = useMemo(() => createNotesRepository(dataClient, selected.id), [dataClient, selected.id]);
   const communicationRepository = useMemo(() => createCommunicationRepository(dataClient, selected.id), [dataClient, selected.id]);
   const searchRepository = useMemo(() => createGlobalSearchRepository(dataClient, selected.id), [dataClient, selected.id]);
   const workRepository = useMemo(() => createWorkManagementRepository(dataClient, selected.id), [dataClient, selected.id]);
@@ -579,7 +582,7 @@ function ScopedWorkspace({
     projects: [...data.projects.filter(project => project.id !== row.id), row],
   });
   const acceptTask = (data: WorkspaceData, row: Task): WorkspaceData => ({ ...data, tasks: [...data.tasks.filter(task => task.id !== row.id), row] });
-  async function readCollaboration<T>(operation: () => Promise<T>): Promise<T> {
+  async function readCollaboration<T>(operation: () => Promise<T>, missingRevokesAccess = true): Promise<T> {
     const requestScope = collaborationScope;
     if (!active.current || accessError) throw accessError ?? new DataError('Este espacio ya no está abierto.');
     try {
@@ -589,7 +592,7 @@ function ScopedWorkspace({
       return result;
     } catch (cause) {
       const error = dataError(cause);
-      if (active.current && ['42501', 'PT404', 'PGRST301', 'PGRST303'].includes(error.code ?? '')) {
+      if (active.current && (['42501', 'PGRST301', 'PGRST303'].includes(error.code ?? '') || (missingRevokesAccess && error.code === 'PT404'))) {
         setAccessError(error);
         await queryClient.cancelQueries({ queryKey });
         queryClient.removeQueries({ queryKey });
@@ -673,6 +676,13 @@ function ScopedWorkspace({
     download: file => readCollaboration(() => filesRepository.download(file)),
     rename: (file, name) => write(() => filesRepository.rename(file, name)),
     remove: file => write(() => filesRepository.remove(file)),
+  };
+  const notes: NotesApi = {
+    scopeKey: [...collaborationScope, 'notes'],
+    list: (projectId, options, signal) => readCollaboration(() => notesRepository.list(projectId, options, signal), false),
+    create: (projectId, id, input) => readCollaboration(() => notesRepository.create(projectId, id, input), false),
+    update: (projectId, note, input) => readCollaboration(() => notesRepository.update(projectId, note, input), false),
+    remove: (projectId, note) => readCollaboration(() => notesRepository.remove(projectId, note), false),
   };
   const communication: CommunicationApi = {
     scopeKey: [...collaborationScope, 'communication'],
@@ -782,6 +792,7 @@ function ScopedWorkspace({
       productivity={productivity}
       planning={planning}
       projectFiles={projectFiles}
+      notes={notes}
       communication={communication}
       globalSearch={globalSearch}
       workManagement={workManagement}
@@ -849,6 +860,7 @@ function ScopedWorkspace({
         mutation.reset();
         setAccessError(null);
         void query.refetch();
+        void queryClient.invalidateQueries({ queryKey: notes.scopeKey });
       }}
       onCreateProject={workManagement.createProject}
       onUpdateProject={workManagement.updateProject}
